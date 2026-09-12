@@ -1,0 +1,172 @@
+/*
+ * Channel Guide — a set-top-box style theme for Jellyfin's Live TV guide
+ * Target: Jellyfin Web 10.11.x
+ * https://github.com/endlessshrimp/jellyfin-channel-guide
+ *
+ * Everything is scoped to the guide page (.tvguide) so the rest of Jellyfin
+ * is untouched. Colors and sizes live in the variables below; override them
+ * after the @import in Jellyfin's Custom CSS box to customize.
+ */
+
+:root {
+    --cg-bg: #0a0e13;
+    --cg-header: rgba(10, 14, 19, 0.97);
+    --cg-cell: rgba(22, 27, 34, 0.94);
+    --cg-cell-now: rgba(34, 42, 53, 0.97);
+    --cg-rule: rgba(255, 255, 255, 0.06);
+    --cg-rule-strong: rgba(255, 255, 255, 0.13);
+    --cg-text: #eef1f4;
+    --cg-text-muted: #98a2ad;
+    --cg-accent: 58, 141, 222;          /* RGB triplet: the "now" / selection blue */
+    --cg-focus: #ffffff;
+    --cg-logo-filter: grayscale(1) brightness(1.35) contrast(1.1);
+    --cg-row-height: 3.4em;
+}
+
+/* ---------- Page ---------- */
+
+.tvguide,
+.tvguide .programContainer {
+    background: var(--cg-bg);
+    color: var(--cg-text);
+}
+
+/* While the guide tab is open, the page and app header join the guide's palette */
+.liveTvPage:has(.tvguide.is-active),
+html:has(.tvguide.is-active) .skinHeader {
+    background: var(--cg-header);
+}
+
+html:has(.tvguide.is-active) .skinHeader {
+    border-bottom: 1px solid var(--cg-rule);
+}
+
+html:has(.tvguide.is-active) .skinHeader .emby-tab-button {
+    color: var(--cg-text-muted);
+    font-weight: 600;
+}
+
+html:has(.tvguide.is-active) .skinHeader .emby-tab-button-active {
+    color: var(--cg-text);
+}
+
+/* ---------- Header: date tabs + time bar ---------- */
+
+.tvguide .tvGuideHeader {
+    background: var(--cg-header);
+    border-bottom: 1px solid var(--cg-rule-strong);
+}
+
+.tvguide .guide-date-tab-button {
+    color: var(--cg-text-muted);
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 0;
+}
+
+.tvguide .guide-date-tab-button.emby-tab-button-active {
+    color: var(--cg-text);
+    box-shadow: inset 0 -2px 0 rgb(var(--cg-accent));
+}
+
+.tvguide .timeslotHeader {
+    color: var(--cg-text-muted);
+    font-size: 0.95em;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    padding-left: 0.6em;
+    border-left: 1px solid var(--cg-rule-strong);
+}
+
+/* ---------- Channel column ---------- */
+
+.tvguide .guide-channelHeaderCell {
+    background: var(--cg-cell);
+    border: 0;
+    border-bottom: 1px solid var(--cg-rule);
+    border-right: 1px solid var(--cg-rule-strong);
+    height: var(--cg-row-height);
+}
+
+.tvguide .guideChannelNumber {
+    color: var(--cg-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.tvguide .guideChannelImage {
+    filter: var(--cg-logo-filter);
+    opacity: 0.9;
+}
+
+/* ---------- Program grid ---------- */
+
+.tvguide .channelPrograms {
+    height: var(--cg-row-height);
+    border-bottom: 1px solid var(--cg-rule);
+}
+
+.tvguide .programCell {
+    background: var(--cg-cell);
+    color: var(--cg-text-muted);
+    border: 0;
+    border-left: 1px solid var(--cg-rule-strong);
+    border-radius: 0;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* What's on now reads brighter than what's coming up */
+.tvguide .programCell-active {
+    background: var(--cg-cell-now);
+    color: var(--cg-text);
+}
+
+.tvguide .guideProgramNameText {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tvguide .guide-programNameCaret {
+    color: var(--cg-text-muted);
+    opacity: 0.7;
+}
+
+/* Selection: the set-top-box white outline (hover on desktop, focus on TV/remote) */
+.tvguide .programCell:focus,
+.layout-desktop .tvguide .programCell:hover {
+    background: rgba(var(--cg-accent), 0.22);
+    color: #fff;
+    outline: 2px solid var(--cg-focus);
+    outline-offset: -2px;
+    z-index: 1;
+}
+
+.tvguide .guide-channelHeaderCell:focus,
+.layout-desktop .tvguide .guide-channelHeaderCell:hover {
+    background: var(--cg-cell-now);
+    outline: 2px solid var(--cg-focus);
+    outline-offset: -2px;
+}
+
+/* ---------- Scrollbars ---------- */
+
+.tvguide .guideScroller {
+    scrollbar-width: thin;
+    scrollbar-color: var(--cg-rule-strong) transparent;
+}
+
+/* ---------- TV layout: a little larger for across-the-room viewing ---------- */
+
+.layout-tv .tvguide {
+    --cg-row-height: 3.8em;
+}
+
+.layout-tv .tvguide .guideProgramNameText {
+    font-size: 1.05em;
+}
