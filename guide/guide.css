@@ -496,6 +496,7 @@
 
 .cg-prog-title {
     font-size: 23px;
+    line-height: 1.15;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -506,6 +507,7 @@
     margin-top: 3px;
     font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
     font-size: 17px;
+    line-height: 1.2;
     font-weight: 600;
     color: var(--dim);
     white-space: nowrap;
@@ -604,3 +606,83 @@
 .cg-key.rec { color: var(--live); }
 
 .cg-legend .spacer { flex: 1; }
+
+.cg-legend [data-action] {
+    cursor: pointer;
+    transition: color 120ms ease;
+}
+
+.cg-legend [data-action]:hover { color: var(--text); }
+
+/* ---------- Recordings ---------- */
+
+.cg-prog.rec .cg-prog-title::before,
+.cg-chip.rec::before,
+.cg-toast.rec::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.7);
+    flex: none;
+}
+
+.cg-prog.rec .cg-prog-title::before {
+    margin-right: 10px;
+    vertical-align: 2px;
+}
+
+.cg-prog.rec.sel .cg-prog-title::before { box-shadow: 0 0 0 2px #fff; }
+
+.cg-chip.rec {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-color: rgba(255, 59, 59, 0.6);
+}
+
+.cg-chip.rec::before {
+    width: 9px;
+    height: 9px;
+}
+
+/* ---------- Toast ---------- */
+
+.cg-toast {
+    position: absolute;
+    left: 50%;
+    top: 50px;
+    z-index: 10;
+    max-width: 880px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.94);
+    box-shadow: 0 0 0 1px var(--line-strong), 0 16px 40px rgba(0, 0, 0, 0.55);
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: var(--text);
+    opacity: 0;
+    transform: translate(-50%, -10px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    pointer-events: none;
+}
+
+.cg-toast-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.cg-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }

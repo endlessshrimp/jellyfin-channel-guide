@@ -1,10 +1,33 @@
 /*
- * Channel Guide: full-screen set-top-box guide for Jellyfin (prototype).
- * Runs inside a signed-in Jellyfin Web page and uses that session's API access.
- * Remote/keyboard: arrows move, Enter opens the channel, Esc closes.
+ * Channel Guide: full-screen set-top-box guide for Jellyfin Web.
+ *
+ * Load this script on every Jellyfin Web page (e.g. with the JavaScript Injector
+ * plugin). Loading it does not open anything: it adds a "Guide" button to the
+ * header and binds the "g" key. It runs inside the signed-in Jellyfin Web page
+ * and uses that session's API access.
+ *
+ * Remote/keyboard: arrows move, OK/Enter watches the channel, R records the
+ * selected program, Esc/Back closes.
+ *
+ * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const BASE = (document.currentScript && document.currentScript.src.replace(/guide\.js.*$/, '')) || '';
+    const VERSION = '0.1.0';
+
+    // Loading twice (hot reload, or the injector plus a manual copy) replaces the
+    // previous instance instead of attaching a second button/key handler.
+    if (window.ChannelGuide && typeof window.ChannelGuide.destroy === 'function') {
+        window.ChannelGuide.destroy();
+    }
+
+    const scriptEl = document.currentScript
+        || [...document.querySelectorAll('script[src*="guide.js"]')].pop();
+    const scriptSrc = (scriptEl && scriptEl.src) || '';
+    const BASE = scriptSrc
+        ? scriptSrc.replace(/guide\.js(\?.*)?$/, '')
+        : `https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v${VERSION}/guide/`;
+    const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
+
     const WINDOW_MIN = 180;
     const STAGE_W = 1920;
     const GRID_W = STAGE_W - 72 * 2 - 300;
@@ -12,25 +35,49 @@
     const ROW_H = 76;
     const VISIBLE_ROWS = 5;
     const PLACEHOLDER = /\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/;
+    const BTN_CLASS = 'headerChannelGuideButton';
 
-    document.getElementById('cg-root')?.remove();
-    document.getElementById('cg-css')?.remove();
-    const css = document.createElement('link');
-    css.id = 'cg-css';
-    css.rel = 'stylesheet';
-    css.href = BASE + 'guide.css?t=' + Date.now();
-    document.head.appendChild(css);
+    // ---------- Jellyfin session ----------
 
-    const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
-    const server = (creds.Servers || [])[0];
-    if (!server || !server.AccessToken) {
-        console.warn('[Channel Guide] Not signed in to Jellyfin');
-        return;
-    }
-    const headers = {
-        Authorization: `MediaBrowser Client="Channel Guide", Device="Web", DeviceId="channel-guide", Version="0.1.0", Token="${server.AccessToken}"`
+    const getServer = () => {
+        try {
+            const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+            const server = (creds.Servers || [])[0];
+            return server && server.AccessToken && server.UserId ? server : null;
+        } catch {
+            return null;
+        }
     };
-    const api = (path) => fetch(path, { headers }).then((r) => r.json());
+
+    // Identify as Jellyfin Web itself. Jellyfin writes the Device/Version from the
+    // auth header onto the token's device record, so a different name here would
+    // rename this browser in the dashboard and split it into a second session.
+    const authHeader = (server) => {
+        const ac = window.ApiClient;
+        const parts = [];
+        try {
+            if (ac && ac.appName && ac.deviceId) {
+                parts.push(`Client="${ac.appName()}"`, `Device="${ac.deviceName()}"`,
+                    `DeviceId="${ac.deviceId()}"`, `Version="${ac.appVersion()}"`);
+            }
+        } catch { /* fall back to token only; the server fills in the rest */ }
+        parts.push(`Token="${server.AccessToken}"`);
+        return 'MediaBrowser ' + parts.join(', ');
+    };
+
+    const request = async (method, path, body) => {
+        const server = getServer();
+        if (!server) throw new Error('Not signed in');
+        const headers = { Authorization: authHeader(server) };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+        if (!res.ok) throw new Error(`${method} ${path.split('?')[0]} → ${res.status}`);
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    };
+    const api = (path) => request('GET', path);
+
+    // ---------- Small helpers ----------
 
     const el = (tag, cls, html) => {
         const e = document.createElement(tag);
@@ -41,87 +88,9 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const fmtShort = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?(AM|PM)$/i, '');
-
-    // ---------- Shell ----------
-    const root = el('div');
-    root.id = 'cg-root';
-    const stage = el('div');
-    stage.id = 'cg-stage';
-    root.appendChild(stage);
-    document.body.appendChild(root);
-
-    stage.innerHTML = `
-        <div class="cg-topbar">
-            <div class="cg-brand"><span class="cg-brand-mark"></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
-            <div class="cg-clock"><div class="cg-clock-time"></div><div class="cg-clock-date"></div></div>
-        </div>
-        <div class="cg-info">
-            <div class="cg-info-text">
-                <div class="cg-info-channel"></div>
-                <div class="cg-info-title">Loading guide…</div>
-                <div class="cg-info-meta"></div>
-                <div class="cg-info-desc"></div>
-            </div>
-            <div class="cg-preview">
-                <div class="cg-preview-art"></div>
-                <div class="cg-preview-logo"></div>
-                <div class="cg-preview-badge"></div>
-                <div class="cg-preview-bar"><span class="cg-preview-left"></span><span class="cg-preview-right"></span></div>
-                <div class="cg-progress"><i></i></div>
-            </div>
-        </div>
-        <div class="cg-grid">
-            <div class="cg-timebar"><div class="cg-timebar-day"><b>TODAY</b></div></div>
-            <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div></div>
-        </div>
-        <div class="cg-legend">
-            <span><span class="cg-key">▲▼</span>Channels</span>
-            <span><span class="cg-key">◀▶</span>Time</span>
-            <span><span class="cg-key">OK</span>Watch</span>
-            <span><span class="cg-key rec">●</span>Record</span>
-            <span class="spacer"></span>
-            <span><span class="cg-key">ESC</span>Exit guide</span>
-        </div>`;
-
-    const $ = (s) => stage.querySelector(s);
-
-    const fit = () => {
-        const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-        stage.style.transform = `translate(-50%, -50%) scale(${s})`;
-    };
-    fit();
-    window.addEventListener('resize', fit);
-
-    const tick = () => {
-        const d = new Date();
-        $('.cg-clock-time').textContent = fmtTime(d);
-        $('.cg-clock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-    };
-    tick();
-    const clockTimer = setInterval(tick, 1000);
-
-    // ---------- Time window ----------
-    const now = new Date();
-    const winStart = new Date(now);
-    winStart.setMinutes(now.getMinutes() < 30 ? 0 : 30, 0, 0);
-    const winEnd = new Date(winStart.getTime() + WINDOW_MIN * 60000);
-    const xFor = (d) => Math.max(0, Math.min(GRID_W, ((d - winStart) / 60000) * PX_PER_MIN));
-
-    const timebar = $('.cg-timebar');
-    for (let m = 0; m < WINDOW_MIN; m += 30) {
-        const slot = el('div', 'cg-slot', fmtShort(new Date(winStart.getTime() + m * 60000)));
-        slot.style.left = m * PX_PER_MIN + 'px';
-        timebar.appendChild(slot);
-    }
-
-    const needle = $('.cg-needle');
-    const placeNeedle = () => { needle.style.left = 300 + xFor(new Date()) + 'px'; };
-    placeNeedle();
-    const needleTimer = setInterval(placeNeedle, 30000);
-
-    // ---------- Helpers ----------
     const genreOf = (p) => (p.IsSports ? 'sports' : p.IsNews ? 'news' : p.IsMovie ? 'movie' : p.IsKids ? 'kids' : null);
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
+
     const logoChip = (ch) => {
         const chip = el('div', 'cg-logo-chip');
         if (ch.ImageTags && ch.ImageTags.Primary) {
@@ -136,165 +105,521 @@
         return chip;
     };
 
-    // ---------- Data + render ----------
-    let rows = [];
-    let sel = { row: 0, col: 0 };
-
-    const render = (channels, byChannel) => {
-        const inner = $('.cg-rows-inner');
-        rows = channels.map((ch) => {
-            const progs = (byChannel[ch.Id] || [])
-                .filter((p) => new Date(p.EndDate) > winStart && new Date(p.StartDate) < winEnd)
-                .sort((a, b) => a.StartDate.localeCompare(b.StartDate));
-            const row = el('div', 'cg-row');
-            const chan = el('div', 'cg-chan');
-            chan.appendChild(el('div', 'cg-chan-num', esc(ch.Number)));
-            chan.appendChild(logoChip(ch));
-            row.appendChild(chan);
-            const lane = el('div', 'cg-lane');
-            const cells = [];
-            const list = progs.length ? progs : [{ Name: '', StartDate: winStart.toISOString(), EndDate: winEnd.toISOString(), _empty: true }];
-            for (const p of list) {
-                const s = new Date(p.StartDate);
-                const e = new Date(p.EndDate);
-                const unknown = p._empty || PLACEHOLDER.test(p.Name);
-                const cell = el('div', 'cg-prog' + (s <= now && e > now ? ' now' : '') + (unknown ? ' unknown' : ''));
-                const left = xFor(s);
-                cell.style.left = left + 4 + 'px';
-                cell.style.width = Math.max(24, xFor(e) - left - 8) + 'px';
-                const g = genreOf(p);
-                if (g) cell.style.setProperty('--genre', `var(--${g})`);
-                const title = unknown ? `${ch.Name} · listings unavailable` : p.Name;
-                const sub = unknown ? '' : [p.EpisodeTitle, `${fmtShort(s)} – ${fmtShort(e)}`].filter(Boolean).join('  ·  ');
-                cell.innerHTML = `<div class="cg-prog-title">${esc(title)}</div><div class="cg-prog-sub">${esc(sub)}</div>`;
-                if (s <= now && e > now && !unknown) {
-                    const bar = el('div', 'cg-prog-progress');
-                    bar.style.width = Math.round(((now - s) / (e - s)) * 100) + '%';
-                    cell.appendChild(bar);
-                }
-                cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData)));
-                cell.addEventListener('click', () => open(ch));
-                const cellData = { el: cell, p, s, e, unknown };
-                cells.push(cellData);
-                lane.appendChild(cell);
-            }
-            row.appendChild(lane);
-            inner.appendChild(row);
-            const rowData = { el: row, ch, cells };
-            return rowData;
+    // The stylesheet is fetched on first open (not on every Jellyfin page load);
+    // resolves once it has loaded, or after a timeout so a slow CDN can't block.
+    let cssReady = null;
+    const ensureCss = () => {
+        if (cssReady && document.getElementById('cg-css')) return cssReady;
+        const css = document.createElement('link');
+        css.id = 'cg-css';
+        css.rel = 'stylesheet';
+        css.href = BASE + 'guide.css' + QUERY;
+        cssReady = new Promise((resolve) => {
+            css.onload = css.onerror = resolve;
+            setTimeout(resolve, 2000);
         });
-
-        // start on the first channel that has real listings, on what's airing now
-        const first = Math.max(0, rows.findIndex((r) => r.cells.some((c) => !c.unknown)));
-        const nowCol = Math.max(0, rows[first].cells.findIndex((c) => c.s <= now && c.e > now));
-        select(first, nowCol);
+        document.head.appendChild(css);
+        return cssReady;
     };
 
-    const select = (r, c) => {
-        if (r < 0 || r >= rows.length) return;
-        const row = rows[r];
-        c = Math.max(0, Math.min(row.cells.length - 1, c));
-        const prev = rows[sel.row];
-        if (prev) {
-            prev.el.classList.remove('sel');
-            prev.cells[sel.col]?.el.classList.remove('sel');
+    // ---------- Playback ----------
+
+    // Start the channel in this browser tab. Jellyfin Web's own "Play" remote
+    // command handler is registered on window.ApiClient, so handing it a Play
+    // message locally is exactly what happens when the server tells this client
+    // to play something, minus the round trip (and minus the ambiguity when
+    // several tabs share one Jellyfin device id).
+    const playChannel = async (ch) => {
+        const ac = window.ApiClient;
+        const server = getServer();
+        if (ac && typeof ac.handleMessageReceived === 'function' && (!ac.serverId || ac.serverId() === server.Id)) {
+            ac.handleMessageReceived({ MessageType: 'Play', Data: { PlayCommand: 'PlayNow', ItemIds: [ch.Id] } });
+            return;
         }
-        sel = { row: r, col: c };
-        row.el.classList.add('sel');
-        row.cells[c].el.classList.add('sel');
-        // keep the selected row in view, TV-style (the grid pages rather than free-scrolls)
-        const top = Math.max(0, Math.min(r - 1, rows.length - VISIBLE_ROWS));
-        $('.cg-rows-inner').style.transform = `translateY(${-top * ROW_H}px)`;
-        $('.cg-rows-inner').style.transition = 'transform 180ms ease';
-        showInfo(row.ch, row.cells[c]);
+        // Fallback: remote-control this browser's own session through the server.
+        const deviceId = (ac && ac.deviceId && ac.deviceId()) || localStorage.getItem('_deviceId2');
+        const sessions = await api(`/Sessions?deviceId=${encodeURIComponent(deviceId)}`);
+        const mine = (sessions || []).find((s) => s.DeviceId === deviceId && s.SupportsRemoteControl);
+        if (!mine) throw new Error('Could not find this browser\'s Jellyfin session');
+        await request('POST', `/Sessions/${mine.Id}/Playing?playCommand=PlayNow&itemIds=${ch.Id}`);
     };
 
-    const showInfo = (ch, cell) => {
-        const { p, s, e, unknown } = cell;
-        const live = s <= now && e > now;
-        $('.cg-info-channel').innerHTML = '';
-        $('.cg-info-channel').appendChild(logoChip(ch));
-        $('.cg-info-channel').appendChild(el('div', 'cg-info-chname', `<b>${esc(ch.Number)}</b>${esc(ch.Name)}`));
-        $('.cg-info-title').textContent = unknown ? ch.Name : p.Name;
-        const meta = $('.cg-info-meta');
-        meta.innerHTML = '';
-        if (live) meta.appendChild(el('span', 'cg-chip live', 'Live'));
-        if (!unknown) meta.appendChild(el('span', 'cg-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
-        const g = genreOf(p);
-        if (g) {
-            const chip = el('span', 'cg-chip genre', genreLabel[g]);
-            chip.style.background = `var(--${g})`;
-            meta.appendChild(chip);
+    // ---------- Guide ----------
+
+    let guide = null; // the open guide instance, or null
+
+    const open = () => {
+        if (guide) return;
+        const server = getServer();
+        if (!server) {
+            console.warn('[Channel Guide] Not signed in to Jellyfin');
+            return;
         }
-        if (p.ParentIndexNumber && p.IndexNumber) meta.appendChild(el('span', 'cg-chip', `S${p.ParentIndexNumber} E${p.IndexNumber}`));
-        if (p.OfficialRating) meta.appendChild(el('span', 'cg-chip', esc(p.OfficialRating)));
-        $('.cg-info-desc').textContent = unknown ? 'No listing information from this channel\'s guide.' : (p.EpisodeTitle ? p.EpisodeTitle + ' — ' : '') + (p.Overview || '');
-
-        // preview window
-        const art = $('.cg-preview-art');
-        art.style.backgroundImage = p.ImageTags && p.ImageTags.Primary ? `url(/Items/${p.Id}/Images/Primary?maxWidth=700&tag=${p.ImageTags.Primary})` : 'none';
-        const logo = $('.cg-preview-logo');
-        logo.innerHTML = '';
-        if (!(p.ImageTags && p.ImageTags.Primary)) logo.appendChild(logoChip(ch));
-        $('.cg-preview-badge').innerHTML = live ? '<span class="cg-chip live">Live</span>' : '<span class="cg-chip">Upcoming</span>';
-        $('.cg-preview-left').textContent = `CH ${ch.Number}`;
-        $('.cg-preview-right').textContent = live && !unknown ? `${Math.round((e - now) / 60000)} min left` : unknown ? '' : `Starts ${fmtTime(s)}`;
-        $('.cg-progress > i').style.width = live && !unknown ? Math.round(((now - s) / (e - s)) * 100) + '%' : '0';
+        guide = createGuide(server);
+        const g = guide;
+        ensureCss().then(() => g.show());
     };
-
-    const open = (ch) => {
-        close();
-        location.hash = `#/details?id=${ch.Id}&serverId=${server.Id}`;
-    };
-
-    const onKey = (ev) => {
-        const k = ev.key;
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'].includes(k)) {
-            ev.preventDefault();
-            ev.stopPropagation();
-        }
-        if (k === 'ArrowDown') select(sel.row + 1, nearestCol(sel.row + 1));
-        else if (k === 'ArrowUp') select(sel.row - 1, nearestCol(sel.row - 1));
-        else if (k === 'ArrowRight') select(sel.row, sel.col + 1);
-        else if (k === 'ArrowLeft') select(sel.row, sel.col - 1);
-        else if (k === 'Enter') open(rows[sel.row].ch);
-        else if (k === 'Escape' || k === 'Backspace') close();
-    };
-    // moving up/down keeps the same point in time, like a real guide
-    const nearestCol = (r) => {
-        if (!rows[r]) return 0;
-        const cur = rows[sel.row].cells[sel.col];
-        const t = cur ? Math.max(cur.s, now) : now;
-        const i = rows[r].cells.findIndex((c) => c.s <= t && c.e > t);
-        return i < 0 ? 0 : i;
-    };
-    const onWheel = (ev) => {
-        ev.preventDefault();
-        const r = sel.row + (ev.deltaY > 0 ? 1 : -1);
-        select(r, nearestCol(r));
-    };
-    document.addEventListener('keydown', onKey, true);
-    root.addEventListener('wheel', onWheel, { passive: false });
 
     const close = () => {
-        document.removeEventListener('keydown', onKey, true);
-        window.removeEventListener('resize', fit);
-        clearInterval(clockTimer);
-        clearInterval(needleTimer);
-        root.remove();
+        if (!guide) return;
+        const g = guide;
+        guide = null;
+        g.teardown();
     };
 
-    (async () => {
-        const [ch, progs] = await Promise.all([
-            api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1`),
-            api(`/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${winStart.toISOString()}&MaxStartDate=${winEnd.toISOString()}&limit=5000&fields=Overview&EnableImages=true&ImageTypeLimit=1`)
-        ]);
-        const byChannel = {};
-        for (const p of progs.Items) (byChannel[p.ChannelId] = byChannel[p.ChannelId] || []).push(p);
-        const channels = ch.Items.sort((a, b) => (parseFloat(a.Number) || 0) - (parseFloat(b.Number) || 0) || a.Name.localeCompare(b.Name));
-        render(channels, byChannel);
-    })().catch((err) => {
-        console.error('[Channel Guide]', err);
-        $('.cg-info-title').textContent = 'Couldn\'t load the guide';
-    });
+    const createGuide = (server) => {
+        const root = el('div');
+        root.id = 'cg-root';
+        root.style.visibility = 'hidden'; // until guide.css has loaded
+        const stage = el('div');
+        stage.id = 'cg-stage';
+        root.appendChild(stage);
+        document.body.appendChild(root);
+
+        stage.innerHTML = `
+            <div class="cg-topbar">
+                <div class="cg-brand"><span class="cg-brand-mark"></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
+                <div class="cg-clock"><div class="cg-clock-time"></div><div class="cg-clock-date"></div></div>
+            </div>
+            <div class="cg-toast" role="status" aria-live="polite"></div>
+            <div class="cg-info">
+                <div class="cg-info-text">
+                    <div class="cg-info-channel"></div>
+                    <div class="cg-info-title">Loading guide…</div>
+                    <div class="cg-info-meta"></div>
+                    <div class="cg-info-desc"></div>
+                </div>
+                <div class="cg-preview">
+                    <div class="cg-preview-art"></div>
+                    <div class="cg-preview-logo"></div>
+                    <div class="cg-preview-badge"></div>
+                    <div class="cg-preview-bar"><span class="cg-preview-left"></span><span class="cg-preview-right"></span></div>
+                    <div class="cg-progress"><i></i></div>
+                </div>
+            </div>
+            <div class="cg-grid">
+                <div class="cg-timebar"><div class="cg-timebar-day"><b>TODAY</b></div></div>
+                <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div></div>
+            </div>
+            <div class="cg-legend">
+                <span><span class="cg-key">▲▼</span>Channels</span>
+                <span><span class="cg-key">◀▶</span>Time</span>
+                <span data-action="watch"><span class="cg-key">OK</span>Watch</span>
+                <span data-action="record"><span class="cg-key rec">●</span>Record</span>
+                <span class="spacer"></span>
+                <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
+            </div>`;
+
+        const $ = (s) => stage.querySelector(s);
+
+        const fit = () => {
+            const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+        };
+        fit();
+
+        const tick = () => {
+            const d = new Date();
+            $('.cg-clock-time').textContent = fmtTime(d);
+            $('.cg-clock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+        };
+        tick();
+        const clockTimer = setInterval(tick, 1000);
+
+        // ---------- Time window ----------
+        const now = new Date();
+        const winStart = new Date(now);
+        winStart.setMinutes(now.getMinutes() < 30 ? 0 : 30, 0, 0);
+        const winEnd = new Date(winStart.getTime() + WINDOW_MIN * 60000);
+        const xFor = (d) => Math.max(0, Math.min(GRID_W, ((d - winStart) / 60000) * PX_PER_MIN));
+
+        const timebar = $('.cg-timebar');
+        for (let m = 0; m < WINDOW_MIN; m += 30) {
+            const slot = el('div', 'cg-slot', fmtShort(new Date(winStart.getTime() + m * 60000)));
+            slot.style.left = m * PX_PER_MIN + 'px';
+            timebar.appendChild(slot);
+        }
+
+        const needle = $('.cg-needle');
+        const placeNeedle = () => { needle.style.left = 300 + xFor(new Date()) + 'px'; };
+        placeNeedle();
+        const needleTimer = setInterval(placeNeedle, 30000);
+
+        // ---------- Toast ----------
+        const toastEl = $('.cg-toast');
+        let toastTimer = 0;
+        const toast = (msg, kind = '') => {
+            toastEl.innerHTML = `<span class="cg-toast-text">${esc(msg)}</span>`;
+            toastEl.className = 'cg-toast show' + (kind ? ' ' + kind : '');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toastEl.className = 'cg-toast'; }, 3200);
+        };
+
+        // ---------- Data + render ----------
+        let rows = [];
+        let sel = { row: 0, col: 0 };
+        const timersByProgram = new Map(); // programId -> timerId
+
+        const current = () => {
+            const row = rows[sel.row];
+            return row ? { row, cell: row.cells[sel.col] } : null;
+        };
+
+        const markRecorded = () => {
+            for (const row of rows) {
+                for (const c of row.cells) {
+                    c.el.classList.toggle('rec', !c.unknown && !!c.p.Id && timersByProgram.has(c.p.Id));
+                }
+            }
+        };
+
+        const loadTimers = async () => {
+            const res = await api('/LiveTv/Timers');
+            timersByProgram.clear();
+            for (const t of (res && res.Items) || []) {
+                if (t.ProgramId && t.Status !== 'Cancelled') timersByProgram.set(t.ProgramId, t.Id);
+            }
+        };
+
+        const render = (channels, byChannel) => {
+            const inner = $('.cg-rows-inner');
+            rows = channels.map((ch) => {
+                const progs = (byChannel[ch.Id] || [])
+                    .filter((p) => new Date(p.EndDate) > winStart && new Date(p.StartDate) < winEnd)
+                    .sort((a, b) => a.StartDate.localeCompare(b.StartDate));
+                const row = el('div', 'cg-row');
+                const chan = el('div', 'cg-chan');
+                chan.appendChild(el('div', 'cg-chan-num', esc(ch.Number)));
+                chan.appendChild(logoChip(ch));
+                row.appendChild(chan);
+                const lane = el('div', 'cg-lane');
+                const cells = [];
+                const rowData = { el: row, ch, cells };
+                const list = progs.length ? progs : [{ Name: '', StartDate: winStart.toISOString(), EndDate: winEnd.toISOString(), _empty: true }];
+                for (const p of list) {
+                    const s = new Date(p.StartDate);
+                    const e = new Date(p.EndDate);
+                    const unknown = !!p._empty || PLACEHOLDER.test(p.Name);
+                    const cell = el('div', 'cg-prog' + (s <= now && e > now ? ' now' : '') + (unknown ? ' unknown' : ''));
+                    const left = xFor(s);
+                    cell.style.left = left + 4 + 'px';
+                    cell.style.width = Math.max(24, xFor(e) - left - 8) + 'px';
+                    const g = genreOf(p);
+                    if (g) cell.style.setProperty('--genre', `var(--${g})`);
+                    const title = unknown ? `${ch.Name} · listings unavailable` : p.Name;
+                    const sub = unknown ? '' : [p.EpisodeTitle, `${fmtShort(s)} – ${fmtShort(e)}`].filter(Boolean).join('  ·  ');
+                    cell.innerHTML = `<div class="cg-prog-title">${esc(title)}</div><div class="cg-prog-sub">${esc(sub)}</div>`;
+                    if (s <= now && e > now && !unknown) {
+                        const bar = el('div', 'cg-prog-progress');
+                        bar.style.width = Math.round(((now - s) / (e - s)) * 100) + '%';
+                        cell.appendChild(bar);
+                    }
+                    const cellData = { el: cell, p, s, e, unknown };
+                    cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData)));
+                    cell.addEventListener('click', () => {
+                        select(rows.indexOf(rowData), cells.indexOf(cellData));
+                        watch();
+                    });
+                    cells.push(cellData);
+                    lane.appendChild(cell);
+                }
+                row.appendChild(lane);
+                inner.appendChild(row);
+                return rowData;
+            });
+
+            if (!rows.length) {
+                $('.cg-info-title').textContent = 'No channels';
+                $('.cg-info-desc').textContent = 'Jellyfin didn\'t return any Live TV channels for this user.';
+                return;
+            }
+            markRecorded();
+            // start on the first channel that has real listings, on what's airing now
+            const first = Math.max(0, rows.findIndex((r) => r.cells.some((c) => !c.unknown)));
+            const nowCol = Math.max(0, rows[first].cells.findIndex((c) => c.s <= now && c.e > now));
+            select(first, nowCol);
+        };
+
+        const select = (r, c) => {
+            if (r < 0 || r >= rows.length) return;
+            const row = rows[r];
+            c = Math.max(0, Math.min(row.cells.length - 1, c));
+            const prev = rows[sel.row];
+            if (prev) {
+                prev.el.classList.remove('sel');
+                prev.cells[sel.col]?.el.classList.remove('sel');
+            }
+            sel = { row: r, col: c };
+            row.el.classList.add('sel');
+            row.cells[c].el.classList.add('sel');
+            // keep the selected row in view, TV-style (the grid pages rather than free-scrolls)
+            const top = Math.max(0, Math.min(r - 1, rows.length - VISIBLE_ROWS));
+            $('.cg-rows-inner').style.transform = `translateY(${-top * ROW_H}px)`;
+            $('.cg-rows-inner').style.transition = 'transform 180ms ease';
+            showInfo(row.ch, row.cells[c]);
+        };
+
+        const showInfo = (ch, cell) => {
+            const { p, s, e, unknown } = cell;
+            const live = s <= now && e > now;
+            $('.cg-info-channel').innerHTML = '';
+            $('.cg-info-channel').appendChild(logoChip(ch));
+            $('.cg-info-channel').appendChild(el('div', 'cg-info-chname', `<b>${esc(ch.Number)}</b>${esc(ch.Name)}`));
+            $('.cg-info-title').textContent = unknown ? ch.Name : p.Name;
+            const meta = $('.cg-info-meta');
+            meta.innerHTML = '';
+            if (live) meta.appendChild(el('span', 'cg-chip live', 'Live'));
+            if (!unknown && timersByProgram.has(p.Id)) meta.appendChild(el('span', 'cg-chip rec', 'Recording'));
+            if (!unknown) meta.appendChild(el('span', 'cg-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
+            const g = genreOf(p);
+            if (g) {
+                const chip = el('span', 'cg-chip genre', genreLabel[g]);
+                chip.style.background = `var(--${g})`;
+                meta.appendChild(chip);
+            }
+            if (p.ParentIndexNumber && p.IndexNumber) meta.appendChild(el('span', 'cg-chip', `S${p.ParentIndexNumber} E${p.IndexNumber}`));
+            if (p.OfficialRating) meta.appendChild(el('span', 'cg-chip', esc(p.OfficialRating)));
+            $('.cg-info-desc').textContent = unknown ? 'No listing information from this channel\'s guide.' : (p.EpisodeTitle ? p.EpisodeTitle + ' — ' : '') + (p.Overview || '');
+
+            // preview window
+            const art = $('.cg-preview-art');
+            art.style.backgroundImage = p.ImageTags && p.ImageTags.Primary ? `url(/Items/${p.Id}/Images/Primary?maxWidth=700&tag=${p.ImageTags.Primary})` : 'none';
+            const logo = $('.cg-preview-logo');
+            logo.innerHTML = '';
+            if (!(p.ImageTags && p.ImageTags.Primary)) logo.appendChild(logoChip(ch));
+            $('.cg-preview-badge').innerHTML = live ? '<span class="cg-chip live">Live</span>' : '<span class="cg-chip">Upcoming</span>';
+            $('.cg-preview-left').textContent = `CH ${ch.Number}`;
+            $('.cg-preview-right').textContent = live && !unknown ? `${Math.round((e - now) / 60000)} min left` : unknown ? '' : `Starts ${fmtTime(s)}`;
+            $('.cg-progress > i').style.width = live && !unknown ? Math.round(((now - s) / (e - s)) * 100) + '%' : '0';
+        };
+
+        // ---------- Actions ----------
+        const watch = () => {
+            const cur = current();
+            if (!cur) return;
+            close();
+            playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
+        };
+
+        let recording = false;
+        const record = async () => {
+            const cur = current();
+            if (!cur || recording) return;
+            const { cell } = cur;
+            if (cell.unknown || !cell.p.Id) {
+                toast('No listing to record', 'err');
+                return;
+            }
+            if (timersByProgram.has(cell.p.Id)) {
+                toast(`Already set to record ${cell.p.Name}`, 'rec');
+                return;
+            }
+            if (cell.e <= new Date()) {
+                toast('That program has already ended', 'err');
+                return;
+            }
+            recording = true;
+            try {
+                const defaults = await api(`/LiveTv/Timers/Defaults?programId=${encodeURIComponent(cell.p.Id)}`);
+                await request('POST', '/LiveTv/Timers', defaults);
+                try {
+                    await loadTimers();
+                } catch {
+                    // the timer was created; mark it even if the refresh failed
+                    timersByProgram.set(cell.p.Id, null);
+                }
+                if (!timersByProgram.has(cell.p.Id)) timersByProgram.set(cell.p.Id, null);
+                if (guide !== self) return;
+                markRecorded();
+                showInfo(cur.row.ch, cell);
+                toast(`Recording ${cell.p.Name}`, 'rec');
+            } catch (err) {
+                console.error('[Channel Guide] Recording failed:', err);
+                if (guide === self) toast('Couldn\'t schedule that recording', 'err');
+            } finally {
+                recording = false;
+            }
+        };
+
+        // ---------- Input ----------
+        // moving up/down keeps the same point in time, like a real guide
+        const nearestCol = (r) => {
+            if (!rows[r]) return 0;
+            const cur = rows[sel.row].cells[sel.col];
+            const t = cur ? Math.max(cur.s, now) : now;
+            const i = rows[r].cells.findIndex((c) => c.s <= t && c.e > t);
+            return i < 0 ? 0 : i;
+        };
+
+        const onKey = (ev) => {
+            if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+            const k = ev.key;
+            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G'];
+            if (!handled.includes(k)) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R')) return;
+            if (!rows.length && !['Escape', 'Backspace', 'GoBack', 'BrowserBack', 'g', 'G'].includes(k)) return;
+            if (k === 'ArrowDown') select(sel.row + 1, nearestCol(sel.row + 1));
+            else if (k === 'ArrowUp') select(sel.row - 1, nearestCol(sel.row - 1));
+            else if (k === 'ArrowRight') select(sel.row, sel.col + 1);
+            else if (k === 'ArrowLeft') select(sel.row, sel.col - 1);
+            else if (k === 'Enter') watch();
+            else if (k === 'r' || k === 'R') record();
+            else close();
+        };
+        const onWheel = (ev) => {
+            ev.preventDefault();
+            if (!rows.length) return;
+            const r = sel.row + (ev.deltaY > 0 ? 1 : -1);
+            select(r, nearestCol(r));
+        };
+        const onLegendClick = (ev) => {
+            const item = ev.target.closest('[data-action]');
+            if (!item) return;
+            const action = item.dataset.action;
+            if (action === 'watch') watch();
+            else if (action === 'record') record();
+            else if (action === 'close') close();
+        };
+
+        document.addEventListener('keydown', onKey, true);
+        window.addEventListener('resize', fit);
+        root.addEventListener('wheel', onWheel, { passive: false });
+        $('.cg-legend').addEventListener('click', onLegendClick);
+
+        const self = {
+            show() {
+                root.style.visibility = '';
+            },
+            teardown() {
+                document.removeEventListener('keydown', onKey, true);
+                window.removeEventListener('resize', fit);
+                clearInterval(clockTimer);
+                clearInterval(needleTimer);
+                clearTimeout(toastTimer);
+                root.remove();
+            }
+        };
+
+        (async () => {
+            const [ch, progs] = await Promise.all([
+                api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1`),
+                api(`/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${winStart.toISOString()}&MaxStartDate=${winEnd.toISOString()}&limit=5000&fields=Overview&EnableImages=true&ImageTypeLimit=1`),
+                loadTimers().catch((err) => console.warn('[Channel Guide] Could not read timers:', err))
+            ]);
+            if (guide !== self) return;
+            const byChannel = {};
+            for (const p of progs.Items) (byChannel[p.ChannelId] = byChannel[p.ChannelId] || []).push(p);
+            const channels = ch.Items.sort((a, b) => (parseFloat(a.Number) || 0) - (parseFloat(b.Number) || 0) || a.Name.localeCompare(b.Name));
+            render(channels, byChannel);
+        })().catch((err) => {
+            console.error('[Channel Guide]', err);
+            if (guide === self) $('.cg-info-title').textContent = 'Couldn\'t load the guide';
+        });
+
+        return self;
+    };
+
+    // ---------- Launcher: header button + "g" key ----------
+
+    const makeButton = () => {
+        let btn;
+        try {
+            btn = document.createElement('button', { is: 'paper-icon-button-light' });
+        } catch {
+            btn = document.createElement('button');
+        }
+        btn.type = 'button';
+        btn.setAttribute('is', 'paper-icon-button-light');
+        btn.className = `headerButton headerButtonRight ${BTN_CLASS} paper-icon-button-light`;
+        btn.title = 'Guide';
+        btn.setAttribute('aria-label', 'Guide');
+        btn.innerHTML = '<span class="material-icons live_tv" aria-hidden="true"></span>';
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            open();
+        });
+        return btn;
+    };
+
+    const syncButton = () => {
+        const signedIn = !!getServer();
+        const existing = document.querySelectorAll('.' + BTN_CLASS);
+        const right = document.querySelector('.skinHeader .headerRight');
+        existing.forEach((b) => {
+            if (!signedIn || !right || b.parentNode !== right) b.remove();
+        });
+        if (!signedIn || !right || right.querySelector('.' + BTN_CLASS)) return;
+        const btn = makeButton();
+        const before = right.querySelector('.headerSearchButton') || right.querySelector('.headerUserButton');
+        right.insertBefore(btn, before || null);
+    };
+
+    let syncQueued = false;
+    const queueSync = () => {
+        if (syncQueued) return;
+        syncQueued = true;
+        // setTimeout, not requestAnimationFrame: rAF never fires in a background tab
+        setTimeout(() => {
+            syncQueued = false;
+            syncButton();
+        }, 50);
+    };
+
+    const isTyping = (t) => {
+        if (!t || !(t instanceof Element)) return false;
+        if (t.isContentEditable) return true;
+        const tag = t.tagName;
+        if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+        if (tag !== 'INPUT') return false;
+        return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'image', 'color', 'file'].includes((t.type || '').toLowerCase());
+    };
+
+    const onGlobalKey = (ev) => {
+        if (guide || ev.defaultPrevented || ev.repeat) return;
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        if (ev.key !== 'g' && ev.key !== 'G') return;
+        if (isTyping(ev.target) || isTyping(document.activeElement)) return;
+        if (!getServer()) return;
+        ev.preventDefault();
+        open();
+    };
+
+    // Jellyfin Web is a single-page app: leaving the current view (back button,
+    // a link) should take the guide down with it.
+    const onRouteChange = () => {
+        close();
+        queueSync();
+    };
+
+    let observer = null;
+    const start = () => {
+        observer = new MutationObserver(queueSync);
+        observer.observe(document.body, { childList: true, subtree: true });
+        queueSync();
+    };
+
+    document.addEventListener('keydown', onGlobalKey);
+    window.addEventListener('hashchange', onRouteChange);
+    window.addEventListener('popstate', onRouteChange);
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+
+    window.ChannelGuide = {
+        version: VERSION,
+        open,
+        close,
+        destroy() {
+            close();
+            observer && observer.disconnect();
+            document.removeEventListener('keydown', onGlobalKey);
+            document.removeEventListener('DOMContentLoaded', start);
+            window.removeEventListener('hashchange', onRouteChange);
+            window.removeEventListener('popstate', onRouteChange);
+            document.querySelectorAll('.' + BTN_CLASS).forEach((b) => b.remove());
+            document.getElementById('cg-css')?.remove();
+            cssReady = null;
+        }
+    };
 })();
