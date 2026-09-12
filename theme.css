@@ -3,170 +3,229 @@
  * Target: Jellyfin Web 10.11.x
  * https://github.com/endlessshrimp/jellyfin-channel-guide
  *
- * Everything is scoped to the guide page (.tvguide) so the rest of Jellyfin
- * is untouched. Colors and sizes live in the variables below; override them
- * after the @import in Jellyfin's Custom CSS box to customize.
+ * Scoped to the guide page (.tvguide); the rest of Jellyfin is untouched.
+ * Colors and sizes live in the variables below; override them after the
+ * @import in Jellyfin's Custom CSS box to customize.
  */
 
 :root {
-    --cg-bg: #0a0e13;
-    --cg-header: rgba(10, 14, 19, 0.97);
-    --cg-cell: rgba(22, 27, 34, 0.94);
-    --cg-cell-now: rgba(34, 42, 53, 0.97);
-    --cg-rule: rgba(255, 255, 255, 0.06);
-    --cg-rule-strong: rgba(255, 255, 255, 0.13);
-    --cg-text: #eef1f4;
-    --cg-text-muted: #98a2ad;
-    --cg-accent: 58, 141, 222;          /* RGB triplet: the "now" / selection blue */
-    --cg-focus: #ffffff;
-    --cg-logo-filter: grayscale(1) brightness(1.35) contrast(1.1);
-    --cg-row-height: 3.4em;
+    --cg-bg-top: #03060b;
+    --cg-bg-bottom: #0b1a2d;
+    --cg-header: #050a12;
+    --cg-timebar: #0a1422;
+    --cg-channel: #0e1a2a;
+    --cg-cell: #0f1b2b;
+    --cg-cell-now: #1b3452;
+    --cg-gap: #03060b;                   /* the dark seam between tiles */
+    --cg-text: #ffffff;
+    --cg-text-dim: #8fa3ba;
+    --cg-accent: 34, 128, 240;           /* RGB triplet: selection + highlights */
+    --cg-now-bar: 95, 180, 255;          /* RGB triplet: the on-now marker */
+    --cg-logo-filter: none;              /* logos keep their original colors */
+    --cg-row-height: 3em;
+    --cg-channel-width: 13.5em;
+    --cg-label: "GUIDE";
 }
 
 /* ---------- Page ---------- */
 
 .tvguide,
-.tvguide .programContainer {
-    background: var(--cg-bg);
+.tvguide .programContainer,
+.liveTvPage:has(.tvguide.is-active) {
+    background: linear-gradient(180deg, var(--cg-bg-top) 0%, var(--cg-bg-bottom) 100%) fixed;
     color: var(--cg-text);
 }
 
-/* While the guide tab is open, the page and app header join the guide's palette */
-.liveTvPage:has(.tvguide.is-active),
 html:has(.tvguide.is-active) .skinHeader {
     background: var(--cg-header);
-}
-
-html:has(.tvguide.is-active) .skinHeader {
-    border-bottom: 1px solid var(--cg-rule);
+    border-bottom: 1px solid rgba(var(--cg-accent), 0.35);
 }
 
 html:has(.tvguide.is-active) .skinHeader .emby-tab-button {
-    color: var(--cg-text-muted);
-    font-weight: 600;
+    color: var(--cg-text-dim);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.85em;
 }
 
 html:has(.tvguide.is-active) .skinHeader .emby-tab-button-active {
     color: var(--cg-text);
+    box-shadow: inset 0 -3px 0 rgb(var(--cg-accent));
 }
 
 /* ---------- Header: date tabs + time bar ---------- */
 
 .tvguide .tvGuideHeader {
     background: var(--cg-header);
-    border-bottom: 1px solid var(--cg-rule-strong);
+}
+
+.tvguide .guideHeaderDateSelection {
+    padding: 0.35em 0;
 }
 
 .tvguide .guide-date-tab-button {
-    color: var(--cg-text-muted);
-    font-size: 0.78em;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    color: var(--cg-text-dim);
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    border-radius: 0;
+    border-radius: 2em;
+    padding: 0.35em 1em;
+    margin: 0 0.15em;
 }
 
 .tvguide .guide-date-tab-button.emby-tab-button-active {
     color: var(--cg-text);
-    box-shadow: inset 0 -2px 0 rgb(var(--cg-accent));
+    background: rgb(var(--cg-accent));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+}
+
+.tvguide .guide-headerTimeslots {
+    background: var(--cg-timebar);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 2px solid rgb(var(--cg-accent));
+}
+
+/* The corner cell above the channel column carries the GUIDE label */
+.tvguide .guide-channelTimeslotHeader {
+    position: relative;
+    width: var(--cg-channel-width);
+    min-width: var(--cg-channel-width);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.tvguide .guide-channelTimeslotHeader::before {
+    content: var(--cg-label);
+    position: absolute;
+    left: 1em;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.05em;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: var(--cg-text);
+    padding-left: 0.7em;
+    border-left: 4px solid rgb(var(--cg-accent));
+}
+
+.tvguide .btnGuideViewSettings {
+    color: var(--cg-text-dim);
 }
 
 .tvguide .timeslotHeader {
-    color: var(--cg-text-muted);
-    font-size: 0.95em;
-    font-weight: 500;
+    color: var(--cg-text);
+    font-size: 1em;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
     text-align: left;
-    padding-left: 0.6em;
-    border-left: 1px solid var(--cg-rule-strong);
+    padding-left: 0.75em;
+    border-left: 2px solid rgba(255, 255, 255, 0.18);
 }
 
 /* ---------- Channel column ---------- */
 
+.tvguide .channelsContainer {
+    width: var(--cg-channel-width);
+    min-width: var(--cg-channel-width);
+    background: var(--cg-gap);
+}
+
 .tvguide .guide-channelHeaderCell {
-    background: var(--cg-cell);
-    border: 0;
-    border-bottom: 1px solid var(--cg-rule);
-    border-right: 1px solid var(--cg-rule-strong);
     height: var(--cg-row-height);
+    background: var(--cg-channel);
+    border: 0;
+    border-bottom: 2px solid var(--cg-gap);
+    border-right: 2px solid var(--cg-gap);
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.9em;
 }
 
 .tvguide .guideChannelNumber {
     color: var(--cg-text);
-    font-weight: 600;
+    font-size: 1.15em;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
+    margin: 0;
 }
 
 .tvguide .guideChannelImage {
     filter: var(--cg-logo-filter);
-    opacity: 0.9;
+    opacity: 0.95;
+    background-position: right center;
+    height: 70%;
+    width: 55%;
 }
 
 /* ---------- Program grid ---------- */
 
 .tvguide .channelPrograms {
     height: var(--cg-row-height);
-    border-bottom: 1px solid var(--cg-rule);
+    border-bottom: 2px solid var(--cg-gap);
 }
 
 .tvguide .programCell {
     background: var(--cg-cell);
-    color: var(--cg-text-muted);
+    color: var(--cg-text-dim);
     border: 0;
-    border-left: 1px solid var(--cg-rule-strong);
+    border-left: 2px solid var(--cg-gap);
     border-radius: 0;
-    transition: background-color 120ms ease, color 120ms ease;
-}
-
-/* What's on now reads brighter than what's coming up */
-.tvguide .programCell-active {
-    background: var(--cg-cell-now);
-    color: var(--cg-text);
+    font-size: 1em;
+    transition: background-color 100ms ease, color 100ms ease;
 }
 
 .tvguide .guideProgramNameText {
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.tvguide .guide-programNameCaret {
-    color: var(--cg-text-muted);
-    opacity: 0.7;
+/* On now: lifted slate-blue tile, white type, bright marker on the left edge */
+.tvguide .programCell-active {
+    background: var(--cg-cell-now);
+    color: var(--cg-text);
+    box-shadow: inset 4px 0 0 rgb(var(--cg-now-bar));
 }
 
-/* Selection: the set-top-box white outline (hover on desktop, focus on TV/remote) */
+.tvguide .guide-programNameCaret {
+    color: rgb(var(--cg-now-bar));
+}
+
+/* Selection: solid blue bar with a white frame (hover on desktop, focus on TV/remote) */
 .tvguide .programCell:focus,
 .layout-desktop .tvguide .programCell:hover {
-    background: rgba(var(--cg-accent), 0.22);
+    background: rgb(var(--cg-accent));
     color: #fff;
-    outline: 2px solid var(--cg-focus);
-    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px #fff;
     z-index: 1;
 }
 
 .tvguide .guide-channelHeaderCell:focus,
 .layout-desktop .tvguide .guide-channelHeaderCell:hover {
-    background: var(--cg-cell-now);
-    outline: 2px solid var(--cg-focus);
-    outline-offset: -2px;
+    background: rgb(var(--cg-accent));
+    box-shadow: inset 0 0 0 2px #fff;
 }
 
 /* ---------- Scrollbars ---------- */
 
 .tvguide .guideScroller {
     scrollbar-width: thin;
-    scrollbar-color: var(--cg-rule-strong) transparent;
+    scrollbar-color: rgba(var(--cg-accent), 0.6) transparent;
 }
 
-/* ---------- TV layout: a little larger for across-the-room viewing ---------- */
+/* ---------- TV layout: larger for across-the-room viewing ---------- */
 
 .layout-tv .tvguide {
-    --cg-row-height: 3.8em;
+    --cg-row-height: 3.6em;
+    --cg-channel-width: 15em;
 }
 
 .layout-tv .tvguide .guideProgramNameText {
-    font-size: 1.05em;
+    font-size: 1.1em;
 }
