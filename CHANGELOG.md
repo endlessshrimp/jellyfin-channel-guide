@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- Weather: a new layout. Now keeps the top left, with the next 14 hours
+  under it, two hours to a slot (conditions, temperature, chance of rain), in
+  place of the long Hour by hour band. The next 3 days move down to the bottom,
+  a panel each, and with the room they now show wind, sunrise and sunset along
+  with the high, low, conditions, and chance and amount of rain. No more ◀ ▶
+  paging.
+- Weather: a Radar panel in the top right, the National Weather Service's
+  animated loop for the radar nearest the place (looked up once through
+  api.weather.gov and remembered on that device). The white NWS map is turned
+  HOMER navy and the radar colors are left exactly as the NWS draws them; the
+  time of each frame shows in the corner. The loop is fetched again every 5
+  minutes while the screen is up. Outside the US, or when the NWS doesn't
+  answer, the panel says so.
+- Weather: Now and each day sit on an illustrated sky that matches the
+  weather: clear, a few clouds, partly cloudy, overcast, fog, rain, sleet, snow
+  or storms. Now's sky also follows the time of day (day, dawn, dusk, night).
+  Drawn in the style of the icons, under a navy scrim so every number stays
+  readable, and nothing moves; a change of weather fades the new sky in.
+- Weather: a snowy day says "Snow" and its chance, without the melted amount.
+
 ## v0.3.10
 
 - Channel logos: every logo sits on the dark chip now; there are no light

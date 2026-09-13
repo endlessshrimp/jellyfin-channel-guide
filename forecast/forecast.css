@@ -4,12 +4,12 @@
  * come from shared/tokens.css with the guide's values as fallbacks.
  *
  *   title band          124–184
- *   Now | Next 3 days   208–580
- *   Hour by hour        604–980
+ *   Now | Radar         208–640   (the next hours sit in Now's lower part)
+ *   Next 3 days         664–980   (a panel a day)
  *
- * One data color: the blue of the chance-of-rain columns (checked against the
- * navy with the dataviz palette validator; it's the raindrop blue of the icons
- * one step darker). Numbers stay in text colors.
+ * Now and the days sit on illustrated skies (forecast.js draws them) under a
+ * navy scrim. One data color: the raindrop blue by each chance of rain (the
+ * icons' raindrop blue). Numbers stay in text colors.
  */
 
 #hf-root {
@@ -28,9 +28,10 @@
     --shadow: var(--homer-shadow, 0 20px 60px rgba(0, 0, 0, 0.45));
     --font: var(--homer-font, "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
     --cond: var(--homer-font-cond, "Barlow Semi Condensed", "Barlow", sans-serif);
-    --rain: #3990ef;
-    /* Now takes 40% of the row, up to 700 (what it gets on a 1920 stage) */
-    --now-w: min(700px, (100% - 168px) * 0.4);
+    --rain-light: #4faeff;
+    /* the radar takes 36% of the top row, up to 640 (about what it gets on a
+       1920 stage); Now gets the rest */
+    --radar-w: min(640px, (100% - 168px) * 0.36);
 
     position: fixed;
     inset: 0;
@@ -243,21 +244,71 @@
     white-space: nowrap;
 }
 
+/* ---------- Skies (behind Now and the days) ---------- */
+
+.hf-sky {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* one layer per sky; a new one fades in over the old */
+.hf-sky i {
+    position: absolute;
+    inset: 0;
+    background: right top / cover no-repeat; /* the sun and clouds are up in the right corner */
+    opacity: 0;
+    transition: opacity 1400ms ease;
+}
+
+.hf-sky i.on { opacity: 1; }
+
+/* the scrim: navy over the sky, heaviest where the text is */
+.hf-sky::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+.hf-now > :not(.hf-sky),
+.hf-day-body {
+    position: relative;
+    text-shadow: 0 1px 2px rgba(2, 8, 20, 0.5), 0 0 18px rgba(2, 8, 20, 0.5);
+}
+
 /* ---------- Now ---------- */
 
 .hf-now {
     left: 72px;
+    right: calc(96px + var(--radar-w));
     top: 208px;
-    width: var(--now-w);
-    height: 372px;
+    height: 432px;
+    padding-bottom: 20px;
+    overflow: hidden;
+}
+
+.hf-now .hf-sky::after {
+    background:
+        linear-gradient(180deg, rgba(4, 11, 24, 0) 45%, rgba(4, 11, 24, 0.5) 100%),
+        linear-gradient(90deg, rgba(4, 11, 24, 0.62) 0%, rgba(4, 11, 24, 0.42) 50%, rgba(4, 11, 24, 0.2) 100%);
+}
+
+.hf-now-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 40px;
+    margin-top: 6px;
+    min-width: 0;
 }
 
 .hf-now-main {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 14px;
     height: 150px;
-    margin-top: 6px;
 }
 
 .hf-now-icon {
@@ -299,9 +350,14 @@
 .hf-docked .hf-now-icon { display: none; }
 .hf-docked .hf-preview { display: grid; }
 
+.hf-now-side {
+    flex: 1;
+    min-width: 0;
+    padding-top: 12px;
+}
+
 .hf-now-cond {
-    margin-top: 4px;
-    font-size: 40px;
+    font-size: 38px;
     font-weight: 700;
     line-height: 1.1;
     white-space: nowrap;
@@ -312,8 +368,8 @@
 .hf-now-stats {
     display: grid;
     grid-template-columns: repeat(2, max-content);
-    gap: 8px 56px;
-    margin-top: auto;
+    gap: 8px 40px;
+    margin-top: 18px;
 }
 
 .hf-stat {
@@ -327,7 +383,7 @@
     font-family: var(--cond);
     font-size: 20px;
     font-weight: 600;
-    color: var(--dim);
+    color: var(--soft);
 }
 
 .hf-stat-v {
@@ -335,55 +391,296 @@
     font-weight: 700;
 }
 
-/* ---------- Next 3 days ---------- */
+/* ---------- The next hours, under Now ---------- */
 
-.hf-days {
-    left: calc(72px + var(--now-w) + 24px);
-    right: 72px;
-    top: 208px;
-    height: 372px;
+.hf-strip {
+    margin-top: auto;
 }
 
-.hf-days-cols {
-    flex: 1;
+.hf-strip-head {
+    display: flex;
+    align-items: center;
+    height: 22px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--soft);
+    white-space: nowrap;
+}
+
+/* what the drop by each percentage means */
+.hf-key-rain {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    font-weight: 600;
+}
+
+/* a raindrop: a rounded square turned on its corner */
+.hf-key-rain i,
+.hf-slot-pop i {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 0 50% 50% 50%;
+    transform: rotate(45deg);
+    background: var(--rain-light);
+}
+
+.hf-strip-cols {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    margin: 10px -28px 0;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0 8px;
+    margin-top: 10px;
 }
 
-.hf-day {
+.hf-slot {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-width: 0;
-    padding: 0 20px;
 }
 
-/* hairline between the days */
-.hf-day + .hf-day { border-left: 1px solid var(--line); }
+.hf-slot-time {
+    width: 100%;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.1);
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--soft);
+    white-space: nowrap;
+    text-shadow: none;
+}
+
+.hf-slot.new-day .hf-slot-time { color: var(--text); }
+
+.hf-slot.now .hf-slot-time {
+    background: var(--needle);
+    color: #1b1300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.hf-slot-icon {
+    width: 76px;
+    height: 76px;
+    margin: -2px 0 -10px;
+    pointer-events: none;
+}
+
+.hf-slot-temp {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.hf-slot-pop {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 6px;
+    height: 20px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* under 10%: no drop, and quieter */
+.hf-slot-pop.dry { color: var(--dim); }
+.hf-slot-pop.dry i { display: none; }
+
+/* ---------- Radar ---------- */
+
+.hf-radar {
+    right: 72px;
+    top: 208px;
+    width: var(--radar-w);
+    height: 432px;
+    padding: 0;
+    overflow: hidden;
+    background: #0b1627; /* the map's own navy, while it loads */
+}
+
+.hf-radar-map {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+/* The loop covers the panel by its map alone: at least as wide as the panel,
+   and as wide as a 502px map needs to be to fill 432px of height. The title
+   bar and color key above and below the map fall outside. */
+.hf-radar-map img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, calc(432px * 600 / 502));
+    height: auto;
+    transform: translate(-50%, -50%);
+    filter: url(#hf-radar-navy);
+    pointer-events: none;
+}
+
+.hf-radar .hf-head {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: auto;
+    padding: 22px 28px 34px;
+    background: linear-gradient(180deg, rgba(5, 12, 26, 0.9) 30%, rgba(5, 12, 26, 0));
+}
+
+.hf-radar-name {
+    font-family: var(--font);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--soft);
+    padding-left: 18px;
+    border-left: 2px solid var(--line-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hf-radar-name:empty { display: none; }
+
+/* the time of the frame on screen, cut from the GIF's own key bar */
+.hf-radar-time {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 262px;
+    height: 24px;
+    overflow: hidden;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.hf-radar-time img {
+    position: absolute;
+    left: -338px;
+    top: -526px;
+    width: 600px;
+    height: 550px;
+    pointer-events: none;
+}
+
+.hf-radar:not([data-state="ready"]) .hf-radar-map,
+.hf-radar:not([data-state="ready"]) .hf-radar-time { display: none; }
+
+/* no radar here, or it didn't load: faint range rings and a sentence */
+.hf-radar-off {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 60px 40px 0;
+    text-align: center;
+    background: repeating-radial-gradient(circle at 50% 56%, transparent 0 62px, rgba(160, 190, 230, 0.09) 62px 64px);
+}
+
+.hf-radar[data-state="off"] .hf-radar-off { display: flex; }
+
+.hf-radar-off b {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.hf-radar-off span {
+    max-width: 480px;
+    font-family: var(--cond);
+    font-size: 20px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+/* ---------- Next 3 days ---------- */
+
+.hf-days {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 664px;
+    height: 316px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.hf-days .hf-panel {
+    position: relative;
+    min-width: 0;
+    padding: 20px 26px 22px;
+    overflow: hidden;
+}
+
+.hf-day .hf-sky::after {
+    background:
+        linear-gradient(180deg, rgba(4, 11, 24, 0) 45%, rgba(4, 11, 24, 0.55) 100%),
+        linear-gradient(90deg, rgba(4, 11, 24, 0.6) 0%, rgba(4, 11, 24, 0.36) 55%, rgba(4, 11, 24, 0.06) 100%);
+}
+
+.hf-day-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+}
+
+.hf-day-top {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    white-space: nowrap;
+}
 
 .hf-day-name {
     font-size: 26px;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    white-space: nowrap;
 }
 
 .hf-day-date {
-    margin-top: 2px;
     font-family: var(--cond);
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
-    color: var(--dim);
+    color: var(--soft);
+}
+
+.hf-day-mid {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    min-width: 0;
 }
 
 .hf-day-icon {
-    width: 116px;
-    height: 116px;
-    margin: -6px 0 -12px;
+    flex: none;
+    width: 120px;
+    height: 120px;
+    margin: -8px -4px -8px -14px;
     pointer-events: none;
 }
+
+.hf-day-main { min-width: 0; }
 
 .hf-day-temps {
     display: flex;
@@ -400,13 +697,12 @@
 .hf-day-lo {
     font-size: 38px;
     font-weight: 600;
-    color: var(--dim);
+    color: var(--soft);
 }
 
 .hf-day-cond {
-    margin-top: 10px;
-    max-width: 100%;
-    font-size: 22px;
+    margin-top: 8px;
+    font-size: 23px;
     font-weight: 600;
     color: var(--soft);
     white-space: nowrap;
@@ -414,168 +710,15 @@
     text-overflow: ellipsis;
 }
 
-.hf-day-rain {
-    margin-top: 6px;
-    font-family: var(--cond);
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--dim);
-    white-space: nowrap;
-}
-
-.hf-day-rain b {
-    font-family: var(--font);
-    font-size: 21px;
-    font-weight: 700;
-    color: var(--text);
-}
-
-/* ---------- Hour by hour ---------- */
-
-.hf-hours {
-    left: 72px;
-    right: 72px;
-    top: 604px;
-    height: 376px;
-}
-
-.hf-hours-range {
-    font-family: var(--font);
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: none;
-    color: var(--soft);
-    padding-left: 18px;
-    border-left: 2px solid var(--line-strong);
-}
-
-/* what the columns at the bottom are */
-.hf-key-rain {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--cond);
-    font-size: 18px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: none;
-    color: var(--dim);
-}
-
-.hf-key-rain i {
-    width: 12px;
-    height: 20px;
-    border-radius: 3px 3px 0 0;
-    background: var(--rain);
-}
-
-.hf-hours-cols {
-    flex: 1;
+.hf-day-facts {
     display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    gap: 0 6px;
-    margin-top: 16px;
-}
-
-.hf-hour {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 0;
-}
-
-/* a new day starts at this column */
-.hf-hour.new-day::before {
-    content: "";
-    position: absolute;
-    left: -4px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    border-radius: 1px;
-    background: var(--line-strong);
-}
-
-.hf-hour-time {
-    width: 100%;
-    height: 40px;
-    display: grid;
-    place-items: center;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    font-family: var(--cond);
-    font-size: 21px;
-    font-weight: 700;
-    color: var(--soft);
-    white-space: nowrap;
-}
-
-.hf-hour.new-day .hf-hour-time {
-    color: var(--text);
-    letter-spacing: 0.02em;
-}
-
-.hf-hour.now .hf-hour-time {
-    background: var(--needle);
-    color: #1b1300;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
-.hf-hour-icon {
-    width: 112px;
-    height: 112px;
-    margin: 0 0 -12px;
-    pointer-events: none;
-}
-
-.hf-hour-temp {
-    font-size: 52px;
-    font-weight: 800;
-    line-height: 1;
-}
-
-.hf-hour-rain {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
+    grid-template-columns: repeat(2, max-content);
+    gap: 6px 36px;
     margin-top: auto;
 }
 
-/* chance of rain: a 24px column, 4px rounded top, square on the baseline */
-.hf-bar-slot {
-    position: relative;
-    width: 100%;
-    height: 64px;
-    border-bottom: 1px solid var(--line-strong);
-}
-
-.hf-bar-slot i {
-    position: absolute;
-    left: 50%;
-    bottom: 0;
-    width: 24px;
-    margin-left: -12px;
-    border-radius: 4px 4px 0 0;
-    background: var(--rain);
-}
-
-.hf-hour-pop {
-    margin-top: 8px;
-    font-family: var(--cond);
-    font-size: 21px;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text);
-}
-
-.hf-hour-pop.zero {
-    color: var(--faint);
-}
+.hf-day-facts .hf-stat-k { font-size: 18px; }
+.hf-day-facts .hf-stat-v { font-size: 22px; }
 
 /* ---------- Loading / error ---------- */
 
@@ -669,8 +812,10 @@
 
 .hf-legend [data-action]:hover { color: var(--text); }
 
-/* nothing further that way */
-.hf-legend .off {
-    opacity: 0.4;
-    pointer-events: none;
+/* the radar filter's definition takes no room */
+.hf-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }

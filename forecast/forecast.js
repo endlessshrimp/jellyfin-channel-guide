@@ -10,19 +10,23 @@
  *
  *   Title band    the place, and what's coming in a sentence
  *   Now           temperature and conditions; feels like, humidity, wind, and
- *                 the next sunrise or sunset
- *   Next 3 days   conditions, high and low, chance of rain and how much
- *   Hour by hour  twelve hours: conditions, temperature, chance of rain
+ *                 the next sunrise or sunset; below them the next 14 hours,
+ *                 two at a time: conditions, temperature, chance of rain
+ *   Radar         the National Weather Service's loop for the nearest radar
+ *   Next 3 days   one panel a day: conditions, high and low, chance of rain
+ *                 and how much, wind, sunrise and sunset
  *
- * Only the Now icon moves; the rest are stills of the same icons.
+ * Now and each day sit on an illustrated sky that matches the weather (and,
+ * for Now, the time of day). Only the Now icon and the radar move; the rest
+ * are stills.
  *
- * Remote/keyboard: ◀▶ earlier/later hours (twelve at a time), OK back to now,
- * Esc/Backspace goes back, H goes Home.
+ * Remote/keyboard: Esc/Backspace goes back, H goes Home, OK tries again after
+ * an error.
  *
  * window.HomerForecast = { open, close, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     // Loading twice (hot reload, or the loader plus a manual copy) replaces the
     // previous instance.
@@ -41,7 +45,9 @@
 
     const Z = 99990; // just under the guide, so the guide can open on top
     const REFRESH_MS = 10 * 60 * 1000; // same as the clock's weather
-    const PAGE = 12; // hours in the Hour by hour panel
+    const SLOTS = 8; // Now, then the next 14 hours two at a time
+    const STEP = 2;
+    const RADAR_MS = 5 * 60 * 1000; // the NWS redraws its loops every few minutes
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
 
     // ---------- Jellyfin session (only to know someone is signed in) ----------
@@ -172,6 +178,296 @@
         });
     };
 
+    // ---------- Radar ----------
+    // The National Weather Service's own loop for the radar that covers the
+    // place (public domain): api.weather.gov says which radar that is, and
+    // radar.weather.gov keeps an animated GIF of its last hour or so, redrawn
+    // every few minutes. The NWS only covers the US; anywhere else the panel
+    // says there's no radar.
+    //
+    // The GIF is 600×550: a 24px title bar, the 600×502 map, and a 24px color
+    // key with the frame's time on the right. The panel shows the map (the bars
+    // are cropped off) and that time, and the filter below turns the white map
+    // navy.
+
+    const RADAR_KEY = 'homer-weather-radar'; // localStorage: "lat,lon" -> { id, name, at }
+    const radarLoop = (id) => `https://radar.weather.gov/ridge/standard/${encodeURIComponent(id)}_loop.gif`;
+
+    const readStations = () => {
+        try { return JSON.parse(localStorage.getItem(RADAR_KEY) || '{}') || {}; } catch { return {}; }
+    };
+    const saveStation = (key, v) => {
+        try {
+            const all = readStations();
+            all[key] = { id: v ? v.id : null, name: v ? v.name : '', at: Date.now() };
+            // a handful of places is plenty
+            const keep = Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(0, 8);
+            localStorage.setItem(RADAR_KEY, JSON.stringify(Object.fromEntries(keep.map((k) => [k, all[k]]))));
+        } catch { /* storage blocked */ }
+    };
+
+    // resolves to { id, name } for the radar covering a place, or null where
+    // the NWS has none; rejects if api.weather.gov can't be reached
+    const stations = new Map(); // "lat,lon" (to 2 places, about a kilometer) -> Promise
+    const radarStation = (lat, lon) => {
+        const key = lat.toFixed(2) + ',' + lon.toFixed(2);
+        if (stations.has(key)) return stations.get(key);
+        // a radar doesn't move: look again after a month (a day, for "none")
+        const saved = readStations()[key];
+        if (saved && Date.now() - saved.at < (saved.id ? 30 : 1) * 86400000) {
+            const v = saved.id ? { id: saved.id, name: saved.name || '' } : null;
+            stations.set(key, Promise.resolve(v));
+            return stations.get(key);
+        }
+        const p = fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`)
+            .then((r) => {
+                if (r.status === 404) return null; // somewhere the NWS doesn't cover
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json().then((j) => (j.properties && j.properties.radarStation) || null);
+            })
+            .then((id) => (!id ? null
+                // its name ("Dallas/Ft Worth") is a nicety; the ID will do without it
+                : fetch(`https://api.weather.gov/radar/stations/${encodeURIComponent(id)}`)
+                    .then((r) => (r.ok ? r.json() : null))
+                    .then((j) => ({ id, name: (j && j.properties && j.properties.name) || '' }))
+                    .catch(() => ({ id, name: '' }))))
+            .then((v) => { saveStation(key, v); return v; })
+            .catch((err) => {
+                stations.delete(key); // try again next time
+                throw err;
+            });
+        stations.set(key, p);
+        return p;
+    };
+
+    // The NWS map is white land, pale blue water, grey county lines and black
+    // borders and names. This SVG filter swaps just those for HOMER navy (water
+    // darker, lines a shade lighter) and light grey, and leaves every radar
+    // color exactly as the NWS drew it. It works from each pixel's lowest and
+    // highest channel (m, M) and the lower of its green and blue (the pinks at
+    // the top of the scale have one of those low; the map's pale colors don't):
+    //   land   pale in green and blue alike (water and county lines too)
+    //   haze   the light greys of the weakest returns: light, and nearly grey
+    //   ink    anything near black
+    const RADAR_FILTER = `
+        <svg class="hf-defs" width="0" height="0" aria-hidden="true" focusable="false">
+            <filter id="hf-radar-navy" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+                <feColorMatrix in="SourceGraphic" type="matrix" values="0 1 0 0 0  0 0 1 0 0  1 0 0 0 0  0 0 0 1 0" result="r1"/>
+                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 1 0 0  1 0 0 0 0  0 1 0 0 0  0 0 0 1 0" result="r2"/>
+                <feBlend in="SourceGraphic" in2="r1" mode="darken" result="d1"/>
+                <feBlend in="d1" in2="r2" mode="darken" result="lo"/>
+                <feBlend in="SourceGraphic" in2="r1" mode="lighten" result="l1"/>
+                <feBlend in="l1" in2="r2" mode="lighten" result="hi"/>
+                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 1 0 0 0  0 0 0 1 0" result="g"/>
+                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
+                <feBlend in="g" in2="b" mode="darken" result="gb"/>
+                <feColorMatrix in="lo" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="m"/>
+                <feColorMatrix in="hi" type="matrix" values="0 0 0 0 0  1 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="M"/>
+                <feBlend in="m" in2="M" mode="lighten" result="mM"/>
+                <feBlend in="mM" in2="gb" mode="lighten" result="x"/>
+                <feColorMatrix in="x" type="matrix" values="0.5 -0.9 0 0 0.475  0.4 -0.8 0 0 0.515  0.1 -0.5 0 0 0.58  0 0 20 0 -16" result="land"/>
+                <feColorMatrix in="x" type="matrix" values="0.5 -0.9 0 0 0.475  0.4 -0.8 0 0 0.515  0.1 -0.5 0 0 0.58  35 -25 0 0 -3.5" result="haze"/>
+                <feColorMatrix in="x" type="matrix" values="0 0 0 0 0.78  0 0 0 0 0.83  0 0 0 0 0.9  0 -8.33 0 0 2.33" result="ink"/>
+                <feMerge>
+                    <feMergeNode in="SourceGraphic"/>
+                    <feMergeNode in="land"/>
+                    <feMergeNode in="haze"/>
+                    <feMergeNode in="ink"/>
+                </feMerge>
+            </filter>
+        </svg>`;
+
+    // ---------- Skies (behind Now and each day) ----------
+    // An illustrated sky for each kind of weather, in the flat, soft-gradient
+    // style of the icons, lit for day, dawn, dusk or night. Drawn here as SVG,
+    // so there are no image files, and kept low-key: a navy scrim over it keeps
+    // every number readable. Nothing moves.
+
+    // WMO code -> the sky it gets
+    const skyKind = (code) => {
+        if (code >= 95) return 'storm';
+        if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+        if ([56, 57, 66, 67].includes(code)) return 'sleet';
+        if (code >= 51) return 'rain';
+        if (code === 45 || code === 48) return 'fog';
+        if (code === 3) return 'overcast';
+        if (code === 2) return 'partly';
+        if (code === 1) return 'mostly';
+        return 'clear';
+    };
+    // dawn and dusk: 45 minutes either side of sunrise and sunset
+    const skyTime = (at, isDay, day) => {
+        const near = (t) => isFinite(t) && Math.abs(at - t) < 45 * 60000;
+        if (day && near(day.sunrise)) return 'dawn';
+        if (day && near(day.sunset)) return 'dusk';
+        return isDay ? 'day' : 'night';
+    };
+
+    // the sky from top to horizon: clear, grey (overcast, rain), pale (snow,
+    // fog) and dark (storms)
+    const SKY = {
+        day: { clear: ['#154f9f', '#347bc8', '#78b1e3'], grey: ['#384556', '#526176', '#768597'], pale: ['#566a80', '#7a8ca0', '#a2b0bf'], dark: ['#131a25', '#232c3a', '#3a4556'] },
+        dawn: { clear: ['#1a295b', '#65548c', '#dc946f'], grey: ['#2d3346', '#575164', '#937b79'], pale: ['#474d62', '#767182', '#b19c95'], dark: ['#141924', '#2b2b39', '#52454a'] },
+        dusk: { clear: ['#131d4b', '#663c70', '#d97646'], grey: ['#252b3e', '#4f4255', '#8a665f'], pale: ['#40455a', '#6e6477', '#a88a82'], dark: ['#11151e', '#282331', '#4a3a3c'] },
+        night: { clear: ['#030815', '#0a1937', '#16325f'], grey: ['#0a0f1a', '#151e2d', '#232f42'], pale: ['#131a27', '#212b3b', '#324054'], dark: ['#05070c', '#0d121b', '#1a212e'] },
+    };
+    // clouds, lit top and shaded base: fair-weather, grey, rain and storm
+    const CLOUD = {
+        day: { fair: ['#eef3f9', '#b3c4d8'], grey: ['#b1bcc9', '#7b8796'], rain: ['#77828f', '#485261'], storm: ['#4d5664', '#252c37'] },
+        dawn: { fair: ['#fbe0d4', '#b488a2'], grey: ['#a498a4', '#696275'], rain: ['#6c6676', '#423d4c'], storm: ['#48424e', '#24212b'] },
+        dusk: { fair: ['#f8cfba', '#a36c8a'], grey: ['#9d8c96', '#625466'], rain: ['#675a66', '#3d3342'], storm: ['#443a44', '#211c25'] },
+        night: { fair: ['#34435e', '#1c273c'], grey: ['#2a3447', '#161e2c'], rain: ['#212a39', '#101621'], storm: ['#1b212c', '#0a0e15'] },
+    };
+    // what each kind of sky is made of
+    const SKY_PARTS = {
+        clear: { sky: 'clear', light: 1, stars: 70 },
+        mostly: { sky: 'clear', light: 1, stars: 55, clouds: 'fair', few: 1 },
+        partly: { sky: 'clear', light: 1, stars: 35, clouds: 'fair', few: 3 },
+        overcast: { sky: 'grey', clouds: 'grey', deck: 1 },
+        fog: { sky: 'pale', clouds: 'grey', deck: 0.5, fog: 1 },
+        rain: { sky: 'grey', clouds: 'rain', deck: 1, fall: 'rain' },
+        sleet: { sky: 'grey', clouds: 'rain', deck: 1, fall: 'sleet' },
+        snow: { sky: 'pale', clouds: 'grey', deck: 1, fall: 'snow' },
+        storm: { sky: 'dark', clouds: 'storm', deck: 1, fall: 'rain', glow: 1 },
+    };
+
+    // the same "random" stars and cloud offsets every time
+    const seeded = (seed) => () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+    };
+
+    // 1600×640, pinned to the right edge of the panel; the panel crops the rest.
+    // The text covers nearly all of Now on a narrow screen, so the sun, moon,
+    // clouds and bolt stay in the top right corner (x > 1400, y < 370).
+    const skySvg = (kind, time) => {
+        const parts = SKY_PARTS[kind] || SKY_PARTS.clear;
+        const sky = SKY[time][parts.sky];
+        const tone = parts.clouds && CLOUD[time][parts.clouds];
+        const rnd = seeded(7);
+        const defs = [];
+        const art = [];
+        let gid = 0;
+        const n = (v) => Math.round(v * 10) / 10;
+
+        defs.push(`<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset=".55" stop-color="${sky[1]}"/><stop offset="1" stop-color="${sky[2]}"/></linearGradient>`);
+        art.push('<rect width="1600" height="640" fill="url(#sky)"/>');
+
+        // stars, on clear-ish nights
+        if (time === 'night' && parts.stars) {
+            let dots = '';
+            for (let i = 0; i < parts.stars; i++) {
+                dots += `<circle cx="${n(rnd() * 1600)}" cy="${n(rnd() * 420)}" r="${n(0.8 + rnd() * 1.3)}" opacity="${n(0.25 + rnd() * 0.55)}"/>`;
+            }
+            art.push(`<g fill="#fff">${dots}</g>`);
+        }
+
+        // the sun, the moon, or the glow of a sun on the horizon
+        if (parts.light) {
+            if (time === 'day') {
+                defs.push('<radialGradient id="sun"><stop offset="0" stop-color="#fffbe6"/><stop offset=".16" stop-color="#ffeaa0" stop-opacity=".7"/><stop offset=".45" stop-color="#ffe08a" stop-opacity=".22"/><stop offset="1" stop-color="#ffe08a" stop-opacity="0"/></radialGradient>');
+                art.push('<circle cx="1530" cy="150" r="300" fill="url(#sun)"/><circle cx="1530" cy="150" r="42" fill="#ffefb0"/>');
+            } else if (time === 'night') {
+                defs.push('<radialGradient id="moonGlow"><stop offset="0" stop-color="#cdd9ff" stop-opacity=".22"/><stop offset="1" stop-color="#cdd9ff" stop-opacity="0"/></radialGradient>');
+                defs.push('<mask id="crescent"><circle cx="1530" cy="150" r="38" fill="#fff"/><circle cx="1549" cy="137" r="34" fill="#000"/></mask>');
+                art.push('<circle cx="1530" cy="150" r="220" fill="url(#moonGlow)"/><circle cx="1530" cy="150" r="38" fill="#eef0e4" mask="url(#crescent)"/>');
+            } else {
+                defs.push('<radialGradient id="sun"><stop offset="0" stop-color="#ffd9a1" stop-opacity=".95"/><stop offset=".25" stop-color="#ffb070" stop-opacity=".45"/><stop offset="1" stop-color="#ff9a5c" stop-opacity="0"/></radialGradient>');
+                art.push('<circle cx="1450" cy="700" r="620" fill="url(#sun)"/>');
+            }
+        }
+
+        // a cloud: puffs on a flat base, w wide, its base line at (x, y)
+        const cloud = (x, y, w, top, base) => {
+            const u = w / 100;
+            const id = 'c' + gid++;
+            defs.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${n(y - 46 * u)}" x2="0" y2="${n(y)}"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${base}"/></linearGradient>`);
+            const c = (dx, dy, r) => `<circle cx="${n(x + dx * u)}" cy="${n(y + dy * u)}" r="${n(r * u)}"/>`;
+            return `<g fill="url(#${id})">${c(-28, -12, 16)}${c(-6, -22, 24)}${c(18, -16, 20)}${c(36, -8, 12)}`
+                + `<rect x="${n(x - 44 * u)}" y="${n(y - 16 * u)}" width="${n(88 * u)}" height="${n(16 * u)}" rx="${n(8 * u)}"/></g>`;
+        };
+        defs.push('<filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2"/></filter>');
+
+        // the glow of lightning inside the storm clouds
+        if (parts.glow) {
+            defs.push('<radialGradient id="flash"><stop offset="0" stop-color="#e4dcff" stop-opacity=".55"/><stop offset=".5" stop-color="#b9b0ff" stop-opacity=".18"/><stop offset="1" stop-color="#b9b0ff" stop-opacity="0"/></radialGradient>');
+        }
+
+        if (parts.few) {
+            // fair-weather clouds drifting past the sun
+            const spots = [[1510, 290, 170], [1580, 215, 120], [1400, 110, 110]].slice(0, parts.few);
+            art.push(`<g filter="url(#soft)">${spots.map(([x, y, w]) => cloud(x, y, w, tone[0], tone[1])).join('')}</g>`);
+        } else if (parts.deck) {
+            // a deck of cloud across the top: staggered rows, darker below
+            let deck = `<rect width="1600" height="${n(130 * parts.deck)}" fill="${tone[1]}"/>`;
+            const rows = parts.deck < 1 ? [[150, 300]] : [[140, 340], [240, 300], [330, 250]];
+            rows.forEach(([y, w], r) => {
+                for (let x = -120 + r * 130; x < 1760; x += w * 0.66) {
+                    deck += cloud(x + rnd() * 60, y * parts.deck + rnd() * 36 - 18, w + rnd() * 140, tone[0], tone[1]);
+                }
+            });
+            if (parts.glow) deck += '<ellipse cx="1470" cy="210" rx="300" ry="150" fill="url(#flash)"/>';
+            art.push(`<g filter="url(#soft)">${deck}</g>`);
+        }
+
+        // a short bolt out of the glow, kept high: Now's next hours sit below it
+        if (parts.glow) {
+            art.push('<path d="M1532 226 L1508 290 L1530 290 L1500 362 L1552 276 L1528 276 L1546 226 Z" fill="#fff1c2" opacity=".75"/>');
+        }
+
+        // what's falling, fading out toward the ground
+        if (parts.fall) {
+            defs.push('<linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".15" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity=".35"/></linearGradient>');
+            defs.push('<mask id="below"><rect y="300" width="1600" height="340" fill="url(#fade)"/></mask>');
+            const streaks = (w, h, op) => `<path d="M${w * 0.25} 0v${h}M${w * 0.75} ${h * 1.5}v${h}" stroke="#d2e2ff" stroke-opacity="${op}" stroke-width="2.5" stroke-linecap="round"/>`;
+            const flakes = '<g fill="#fff" fill-opacity=".7"><circle cx="12" cy="18" r="3.5"/><circle cx="58" cy="8" r="2.5"/><circle cx="40" cy="52" r="4"/><circle cx="78" cy="66" r="3"/><circle cx="20" cy="76" r="2.5"/></g>';
+            const tile = parts.fall === 'snow' ? [90, 90, flakes]
+                : parts.fall === 'sleet' ? [60, 90, streaks(60, 18, 0.36) + '<g fill="#fff" fill-opacity=".65"><circle cx="45" cy="12" r="2.6"/><circle cx="15" cy="70" r="2.6"/></g>']
+                    : [40, 80, streaks(40, 26, 0.36)];
+            defs.push(`<pattern id="fall" width="${tile[0]}" height="${tile[1]}" patternUnits="userSpaceOnUse" patternTransform="rotate(${parts.fall === 'snow' ? 0 : 12})">${tile[2]}</pattern>`);
+            art.push('<rect y="300" width="1600" height="340" fill="url(#fall)" mask="url(#below)"/>');
+        }
+
+        // fog: soft pale bands low in the sky
+        if (parts.fog) {
+            defs.push('<filter id="mist" x="-10%" y="-100%" width="120%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>');
+            art.push('<g fill="#e3e9f0" filter="url(#mist)">'
+                + '<rect x="-60" y="270" width="1100" height="44" rx="22" opacity=".22"/>'
+                + '<rect x="500" y="350" width="1200" height="56" rx="28" opacity=".26"/>'
+                + '<rect x="-60" y="440" width="1300" height="60" rx="30" opacity=".3"/>'
+                + '<rect x="300" y="530" width="1400" height="70" rx="35" opacity=".34"/></g>');
+        }
+
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 640" width="1600" height="640" preserveAspectRatio="xMidYMid slice"><defs>${defs.join('')}</defs>${art.join('')}</svg>`;
+    };
+    const skies = new Map(); // "kind time" -> data: URL
+    const skyUrl = (kind, time) => {
+        const key = kind + ' ' + time;
+        if (!skies.has(key)) skies.set(key, 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(skySvg(kind, time)));
+        return skies.get(key);
+    };
+
+    // Put a sky behind a panel; a change of weather fades the new sky in over
+    // the old one.
+    const setSky = (box, code, time) => {
+        const kind = skyKind(code);
+        const key = kind + ' ' + time;
+        if (box.dataset.sky === key) return;
+        const first = !box.dataset.sky;
+        box.dataset.sky = key;
+        const old = [...box.querySelectorAll('i')];
+        const layer = document.createElement('i');
+        layer.style.backgroundImage = `url("${skyUrl(kind, time)}")`;
+        box.appendChild(layer);
+        if (first) {
+            layer.className = 'on';
+            return;
+        }
+        void layer.offsetWidth; // start from transparent
+        layer.className = 'on';
+        setTimeout(() => old.forEach((o) => o.remove()), 1600);
+    };
+
     // Stylesheets load on first open. tokens.css normally comes from homer.js;
     // load it here too when this script is used on its own.
     let cssReady = null;
@@ -217,26 +513,37 @@
                     <div class="hf-title-line"></div>
                 </div>
                 <section class="hf-panel hf-now">
+                    <div class="hf-sky"></div>
                     <h2 class="hf-head">Now</h2>
-                    <div class="hf-now-main">
-                        <img class="hf-now-icon" alt="" draggable="false">
-                        <div class="hf-preview" data-homer-preview><span class="material-icons" aria-hidden="true">live_tv</span></div>
-                        <div class="hf-now-temp"></div>
+                    <div class="hf-now-top">
+                        <div class="hf-now-main">
+                            <img class="hf-now-icon" alt="" draggable="false">
+                            <div class="hf-preview" data-homer-preview><span class="material-icons" aria-hidden="true">live_tv</span></div>
+                            <div class="hf-now-temp"></div>
+                        </div>
+                        <div class="hf-now-side">
+                            <div class="hf-now-cond"></div>
+                            <div class="hf-now-stats"></div>
+                        </div>
                     </div>
-                    <div class="hf-now-cond"></div>
-                    <div class="hf-now-stats"></div>
+                    <div class="hf-strip">
+                        <div class="hf-strip-head"><span class="hf-strip-range"></span><span class="hf-key-rain"><i></i>Chance of rain</span></div>
+                        <div class="hf-strip-cols"></div>
+                    </div>
                 </section>
-                <section class="hf-panel hf-days">
-                    <h2 class="hf-head">Next 3 days</h2>
-                    <div class="hf-days-cols"></div>
+                <section class="hf-panel hf-radar">
+                    <div class="hf-radar-map"><img alt="" draggable="false"></div>
+                    <h2 class="hf-head">Radar<span class="hf-radar-name"></span></h2>
+                    <div class="hf-radar-time"><img alt="" draggable="false"></div>
+                    <div class="hf-radar-off"><b></b><span></span></div>
                 </section>
-                <section class="hf-panel hf-hours">
-                    <h2 class="hf-head">Hour by hour<span class="hf-hours-range"></span><span class="hf-key-rain"><i></i>Chance of rain</span></h2>
-                    <div class="hf-hours-cols"></div>
-                </section>
+                <div class="hf-days">
+                    ${'<section class="hf-panel hf-day"><div class="hf-sky"></div><div class="hf-day-body"></div></section>'.repeat(3)}
+                </div>
             </div>
             <div class="hf-state"></div>
-            <div class="hf-legend"></div>`;
+            <div class="hf-legend"></div>
+            ${RADAR_FILTER}`;
         document.body.appendChild(root);
         const $ = (s) => stage.querySelector(s);
 
@@ -268,13 +575,9 @@
         let alive = true;
         let status = 'loading'; // loading | ready | error
         let fc = null; // HomerWeather.forecast()'s result
-        let page = 0; // which twelve hours: 0 starts at the current hour
         let fmt = null; // formatters in the place's own time zone
 
         const hourNow = () => clamp(Math.floor((Date.now() - fc.hours[0].at) / 3600000), 0, fc.hours.length - 1);
-        const lastPage = () => Math.max(0, Math.ceil((fc.hours.length - hourNow()) / PAGE) - 1);
-        // the first hour on a page; the last page ends with the forecast's last hour
-        const pageStart = (p) => Math.max(0, Math.min(hourNow() + p * PAGE, fc.hours.length - PAGE));
         // the index of the hour that starts day d
         const dayStart = (d) => {
             const at = fc.days[d] && fc.days[d].at;
@@ -338,6 +641,9 @@
         };
 
         // ----- Now -----
+        // a label and its value (Now's readings, and each day's)
+        const stat = (k, v) => (v ? `<div class="hf-stat"><span class="hf-stat-k">${esc(k)}</span><span class="hf-stat-v">${esc(v)}</span></div>` : '');
+        const drawNowSky = () => setSky($('.hf-now .hf-sky'), fc.current.code, skyTime(Date.now(), fc.current.isDay, fc.days[0]));
         const drawNow = () => {
             const cur = fc.current;
             const { label, icon } = describe(cur.code, cur.isDay);
@@ -347,6 +653,7 @@
             if (img.getAttribute('src') !== src) img.setAttribute('src', src);
             img.alt = label;
             $('.hf-now-cond').textContent = label;
+            drawNowSky();
 
             const now = Date.now();
             const today = fc.days[0] || {};
@@ -354,13 +661,48 @@
             const sun = now < today.sunrise ? ['Sunrise', today.sunrise]
                 : now < today.sunset ? ['Sunset', today.sunset]
                     : ['Sunrise', tomorrow.sunrise];
-            const stat = (k, v) => (v ? `<div class="hf-stat"><span class="hf-stat-k">${esc(k)}</span><span class="hf-stat-v">${esc(v)}</span></div>` : '');
             $('.hf-now-stats').innerHTML = [
                 stat('Feels like', cur.feels == null ? '' : deg(cur.feels)),
                 stat('Humidity', cur.humidity == null ? '' : `${cur.humidity}%`),
                 stat('Wind', cur.wind == null ? '' : cur.wind < 1 ? 'Calm' : `${compass(cur.windFrom)} ${cur.wind} mph`),
                 stat(sun[0], isFinite(sun[1]) ? fmt.time(sun[1]) : '')
             ].join('');
+        };
+
+        // ----- the next 14 hours, under Now -----
+        // Now, then two hours at a time: a slot shows its first hour's
+        // temperature, the wetter hour's conditions when rain is likely, and
+        // the higher chance of rain of the two.
+        const drawStrip = () => {
+            const i0 = hourNow();
+            const slots = [];
+            for (let k = 0; k < SLOTS; k++) {
+                const i = k === 0 ? i0 : i0 + 1 + (k - 1) * STEP;
+                if (i >= fc.hours.length) break;
+                slots.push({ i, hrs: fc.hours.slice(i, k === 0 ? i + 1 : i + STEP) });
+            }
+            const box = $('.hf-strip-cols');
+            box.innerHTML = slots.map(({ i, hrs }, k) => {
+                const h = hrs[0];
+                const isNow = k === 0;
+                const likely = hrs.filter((x) => wet(x.code) && x.pop >= 30);
+                // the Now slot shows the current reading, same as the panel above it
+                const code = isNow ? fc.current.code : likely.length ? Math.max(...likely.map((x) => x.code)) : h.code;
+                const { label, icon } = describe(code, isNow ? fc.current.isDay : h.isDay);
+                const pops = hrs.map((x) => x.pop).filter((v) => v != null);
+                const pop = pops.length ? Math.round(Math.max(...pops)) : null;
+                const newDay = k > 0 && dayOf(i) !== dayOf(slots[k - 1].i);
+                const time = isNow ? 'Now' : newDay ? `${fmt.wdShort(h.at)} ${fmt.hour(h.at)}` : fmt.hour(h.at);
+                return `
+                    <div class="hf-slot${isNow ? ' now' : ''}${newDay ? ' new-day' : ''}" title="${esc(label)}">
+                        <div class="hf-slot-time">${esc(time)}</div>
+                        ${stillImg(icon, 'hf-slot-icon')}
+                        <div class="hf-slot-temp">${deg(isNow ? fc.current.temp : h.temp)}</div>
+                        <div class="hf-slot-pop${pop >= 10 ? '' : ' dry'}"><i></i>${pop == null ? '–' : pop + '%'}</div>
+                    </div>`;
+            }).join('');
+            fillStills(box);
+            $('.hf-strip-range').textContent = `Next ${Math.max(1, (slots.length - 1) * STEP)} hours`;
         };
 
         // ----- the next three days -----
@@ -378,93 +720,117 @@
             hrs.forEach((h) => { count[h.code] = (count[h.code] || 0) + 1; });
             return Number(Object.keys(count).sort((x, y) => count[y] - count[x] || y - x)[0]);
         };
+        // a panel a day, each on its daytime sky
         const drawDays = () => {
-            const box = $('.hf-days-cols');
-            box.innerHTML = fc.days.slice(1, 4).map((d, k) => {
-                const { label, icon } = describe(dayCode(k + 1), true);
+            stage.querySelectorAll('.hf-day').forEach((pane, k) => {
+                const d = fc.days[k + 1];
+                const body = pane.querySelector('.hf-day-body');
+                pane.style.visibility = d ? '' : 'hidden';
+                if (!d) return;
+                const code = dayCode(k + 1);
+                const { label, icon } = describe(code, true);
+                setSky(pane.querySelector('.hf-sky'), code, 'day');
                 const noon = d.at + 12 * 3600000;
-                const rain = d.pop == null ? ''
-                    : d.pop < 10 ? 'No rain'
-                        : `<b>${Math.round(d.pop)}%</b> chance${inches(d.precip) ? ` · ${inches(d.precip)}` : ''}`;
-                return `
-                    <div class="hf-day">
-                        <div class="hf-day-name">${esc(fmt.weekday(noon))}</div>
-                        <div class="hf-day-date">${esc(fmt.date(noon))}</div>
+                // the chance, and how much only when it's at all likely (a 2% day
+                // can still add up to 0.1 in). Open-Meteo's amount is melted, so
+                // a snowy day gets the chance alone.
+                const snow = wetWord(code) === 'Snow';
+                const rain = d.pop == null ? '' : `${Math.round(d.pop)}%${!snow && d.pop >= 10 && inches(d.precip) ? ` · ${inches(d.precip)}` : ''}`;
+                const wind = d.wind == null ? '' : d.wind < 1 ? 'Calm' : `${compass(d.windFrom)} ${d.wind} mph`;
+                body.innerHTML = `
+                    <div class="hf-day-top"><span class="hf-day-name">${esc(fmt.weekday(noon))}</span><span class="hf-day-date">${esc(fmt.date(noon))}</span></div>
+                    <div class="hf-day-mid">
                         ${stillImg(icon, 'hf-day-icon')}
-                        <div class="hf-day-temps"><span class="hf-day-hi">${deg(d.hi)}</span><span class="hf-day-lo">${deg(d.lo)}</span></div>
-                        <div class="hf-day-cond">${esc(label)}</div>
-                        <div class="hf-day-rain">${rain}</div>
-                    </div>`;
-            }).join('');
-            fillStills(box);
-        };
-
-        // ----- hour by hour -----
-        const drawHours = () => {
-            page = clamp(page, 0, lastPage());
-            const i0 = hourNow();
-            const a = pageStart(page);
-            const hrs = fc.hours.slice(a, a + PAGE);
-            const box = $('.hf-hours-cols');
-            box.innerHTML = hrs.map((h, k) => {
-                const i = a + k;
-                const isNow = i === i0;
-                // the Now column shows the current reading, same as the Now panel
-                const code = isNow ? fc.current.code : h.code;
-                const isDay = isNow ? fc.current.isDay : h.isDay;
-                const temp = isNow ? fc.current.temp : h.temp;
-                const { label, icon } = describe(code, isDay);
-                const newDay = k > 0 && dayOf(i) !== dayOf(i - 1);
-                const time = isNow ? 'Now' : newDay ? `${fmt.wdShort(h.at)} ${fmt.hour(h.at)}` : fmt.hour(h.at);
-                const pop = h.pop == null ? null : Math.round(h.pop);
-                return `
-                    <div class="hf-hour${isNow ? ' now' : ''}${newDay ? ' new-day' : ''}" title="${esc(label)}">
-                        <div class="hf-hour-time">${esc(time)}</div>
-                        ${stillImg(icon, 'hf-hour-icon')}
-                        <div class="hf-hour-temp">${deg(temp)}</div>
-                        <div class="hf-hour-rain">
-                            <div class="hf-bar-slot"><i style="height:${pop ? Math.max(4, pop) : 0}%"></i></div>
-                            <div class="hf-hour-pop${pop ? '' : ' zero'}">${pop == null ? '–' : pop + '%'}</div>
+                        <div class="hf-day-main">
+                            <div class="hf-day-temps"><span class="hf-day-hi">${deg(d.hi)}</span><span class="hf-day-lo">${deg(d.lo)}</span></div>
+                            <div class="hf-day-cond">${esc(label)}</div>
                         </div>
+                    </div>
+                    <div class="hf-day-facts">
+                        ${stat(snow ? 'Snow' : 'Rain', rain)}${stat('Wind', wind)}
+                        ${stat('Sunrise', isFinite(d.sunrise) ? fmt.time(d.sunrise) : '')}${stat('Sunset', isFinite(d.sunset) ? fmt.time(d.sunset) : '')}
                     </div>`;
-            }).join('');
-            fillStills(box);
-            // which hours these are
-            const first = hrs[0];
-            const last = hrs[hrs.length - 1];
-            const dayName = (i) => (dayOf(i) === 0 ? 'Today' : dayOf(i) === 1 ? 'Tomorrow' : fmt.weekday(fc.hours[i].at));
-            const range = !first ? ''
-                : dayOf(a) === dayOf(a + hrs.length - 1)
-                    ? `${dayName(a)} · ${fmt.hour(first.at)} – ${fmt.hour(last.at)}`
-                    : `${dayName(a)} ${fmt.hour(first.at)} – ${dayName(a + hrs.length - 1)} ${fmt.hour(last.at)}`;
-            $('.hf-hours-range').textContent = range;
-            updateLegend();
+                fillStills(body);
+            });
         };
 
-        const setPage = (p) => {
-            if (!fc) return;
-            const next = clamp(p, 0, lastPage());
-            if (next === page) return;
-            page = next;
-            drawHours();
+        // ----- radar -----
+        const radarBox = $('.hf-radar');
+        let radarFor = ''; // the place ("lat,lon") the panel is for
+        let radarId = null; // and its radar, once known
+        let radarLoader = null;
+        const radarState = (s, title = '', text = '') => {
+            radarBox.dataset.state = s; // loading | ready | off
+            $('.hf-radar-off b').textContent = title;
+            $('.hf-radar-off span').textContent = text;
         };
+        const radarFailed = (what) => radarState('off', 'The radar didn\'t load',
+            `The National Weather Service didn't ${what}. HOMER tries again every few minutes.`);
+        // fetch the loop again (a new address, so no cache hands back the old
+        // one), and swap it in once it's all here
+        const loadLoop = () => {
+            const url = radarLoop(radarId) + '?t=' + Math.floor(Date.now() / 60000);
+            const img = new Image();
+            radarLoader = img;
+            img.onload = () => {
+                if (!alive || radarLoader !== img) return;
+                radarLoader = null;
+                // the map and the time are the same GIF, so they play in step
+                radarBox.querySelectorAll('img').forEach((el) => { el.src = url; });
+                radarState('ready');
+            };
+            img.onerror = () => {
+                if (!alive || radarLoader !== img) return;
+                radarLoader = null;
+                // keep the last good loop; the next round may work
+                if (radarBox.dataset.state !== 'ready') radarFailed('send it');
+            };
+            img.src = url;
+        };
+        const drawRadar = () => {
+            const p = fc.place;
+            if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') { radarState('off', 'Radar unavailable here'); return; }
+            const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
+            if (key === radarFor) return;
+            radarFor = key;
+            radarId = null;
+            radarLoader = null;
+            $('.hf-radar-name').textContent = '';
+            radarState('loading');
+            radarStation(p.lat, p.lon).then((st) => {
+                if (!alive || radarFor !== key) return;
+                if (!st) {
+                    radarState('off', 'Radar unavailable here', 'The National Weather Service\'s radar covers the US and its territories.');
+                    return;
+                }
+                radarId = st.id;
+                $('.hf-radar-name').textContent = st.name ? `${st.name} · ${st.id}` : st.id;
+                loadLoop();
+            }, (err) => {
+                if (!alive || radarFor !== key) return;
+                console.warn('[HOMER Weather] radar', err);
+                radarFor = ''; // look again next round
+                radarFailed('answer');
+            });
+        };
+        // a fresh loop every 5 minutes while the screen is up
+        const radarTimer = setInterval(() => {
+            if (!fc) return;
+            if (radarId) loadLoop();
+            else if (!radarFor) drawRadar();
+        }, RADAR_MS);
 
         // ----- legend -----
         const updateLegend = () => {
             const items = [];
             if (status === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
-            else if (status === 'ready') {
-                items.push({ key: '◀', label: 'Earlier', action: 'earlier', off: page === 0 });
-                items.push({ key: '▶', label: 'Later', action: 'later', off: page >= lastPage() });
-                if (page > 0) items.push({ key: 'OK', label: 'Back to now', action: 'ok' });
-            }
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer',
                 { key: 'H', label: 'Home', action: 'home' },
                 { key: 'ESC', label: 'Back', action: 'back' });
             $('.hf-legend').innerHTML = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
-                : `<span${i.action ? ` data-action="${i.action}"` : ''}${i.off ? ' class="off"' : ''}><span class="hf-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
+                : `<span data-action="${i.action}"><span class="hf-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
         };
 
         // ----- status -----
@@ -483,8 +849,9 @@
             fmt = makeFormatters(fc.timeZone);
             drawTitle();
             drawNow();
+            drawStrip();
             drawDays();
-            drawHours();
+            drawRadar();
         };
 
         let loadToken = 0;
@@ -511,10 +878,12 @@
         // a fresh reading every 10 minutes while the screen is up (forced: the
         // shared one could be a few seconds short of stale and skip a round)
         const refreshTimer = setInterval(() => load(true), REFRESH_MS);
-        // a new hour moves the Now column along (and the sentence and sun time with it)
+        // a new hour moves the strip along (and the sentence and sun time with
+        // it); dawn and dusk come and go on their own time
         let lastHour = -1;
         const hourTimer = setInterval(() => {
             if (!fc || status !== 'ready') return;
+            drawNowSky();
             const h = hourNow();
             if (h === lastHour) return;
             if (lastHour >= 0) drawAll();
@@ -534,7 +903,6 @@
         };
         const ok = () => {
             if (status === 'error') load(true);
-            else if (status === 'ready') setPage(0);
         };
         const onKey = (ev) => {
             // the guide opens on top of us; it gets the keys while it's up
@@ -552,35 +920,19 @@
                 if (!ev.repeat) goBack();
                 return;
             }
+            // nothing on this screen moves, but the arrows mustn't reach the page underneath
             const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Enter', ' '];
             if (!handled.includes(k)) return; // F (full screen), G (the guide) and the rest pass through
             eat(ev);
-            if (k === 'Enter' || k === ' ') { if (!ev.repeat) ok(); return; }
-            if (status !== 'ready') return;
-            if (k === 'ArrowRight' || k === 'PageDown') setPage(page + 1);
-            else if (k === 'ArrowLeft' || k === 'PageUp') setPage(page - 1);
-            else if (k === 'Home') setPage(0);
-            else if (k === 'End') setPage(lastPage());
+            if ((k === 'Enter' || k === ' ') && !ev.repeat) ok();
         };
 
         // Jellyfin's player turns the wheel into volume, and the page underneath
-        // would scroll: every wheel event is ours while this screen is up. A
-        // good swipe over the hours pages them.
-        let wheelAcc = 0;
-        let wheelAt = 0;
+        // would scroll: every wheel event is ours while this screen is up.
         const onWheel = (ev) => {
             if (document.getElementById('cg-root')) return;
             ev.preventDefault();
             ev.stopImmediatePropagation();
-            if (status !== 'ready' || !$('.hf-hours').contains(ev.target)) return;
-            const now = Date.now();
-            if (now - wheelAt < 500) return; // one page per swipe
-            const d = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
-            wheelAcc += ev.deltaMode === 1 ? d * 40 : d;
-            if (Math.abs(wheelAcc) < 80) return;
-            setPage(page + (wheelAcc > 0 ? 1 : -1));
-            wheelAcc = 0;
-            wheelAt = now;
         };
 
         const onClick = (ev) => {
@@ -592,8 +944,6 @@
             else if (a === 'back') goBack();
             else if (a === 'fullscreen') fullscreen();
             else if (a === 'ok') ok();
-            else if (a === 'earlier') setPage(page - 1);
-            else if (a === 'later') setPage(page + 1);
         };
 
         window.addEventListener('keydown', onKey, true);
@@ -616,6 +966,8 @@
                 clearInterval(clockTimer);
                 clearInterval(refreshTimer);
                 clearInterval(hourTimer);
+                clearInterval(radarTimer);
+                radarLoader = null;
                 wxDetach();
                 root.remove();
             }
@@ -715,6 +1067,10 @@
             suppressed = true;
             closeScreen();
         },
+        // for previews: an illustrated sky as a data: URL (kind: clear, mostly,
+        // partly, overcast, fog, rain, sleet, snow, storm; time: day, dawn,
+        // dusk, night)
+        _skyUrl: skyUrl,
         destroy() {
             destroyed = true;
             closeScreen();

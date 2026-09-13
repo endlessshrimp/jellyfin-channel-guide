@@ -55,12 +55,18 @@ Settings → Weather location):
 
 - A title band with the place and what's coming, in a sentence.
 - **Now**: the temperature and conditions, feels like, humidity, wind, and the
-  next sunrise or sunset.
-- **Next 3 days**: conditions, high and low, and the chance of rain.
-- **Hour by hour**: twelve hours of conditions, temperature and chance of
-  rain. **◀ ▶** show earlier or later hours, **OK** comes back to now.
+  next sunrise or sunset. Below them, the next 14 hours two at a time:
+  conditions, temperature and chance of rain.
+- **Radar**: the National Weather Service's animated loop for the nearest
+  radar, on a navy map, with the time of each frame. US only; elsewhere the
+  panel says there's no radar.
+- **Next 3 days**: a panel a day with conditions, high and low, chance of rain
+  and how much, wind, sunrise and sunset.
 
-It refreshes every 10 minutes while it's up. Data from Open-Meteo.
+Now and each day sit on an illustrated sky that matches the weather (and, for
+Now, the time of day: day, dawn, dusk or night). The forecast refreshes every
+10 minutes while the screen is up, the radar every 5. Data from Open-Meteo and
+the National Weather Service.
 
 ## Channel Guide
 
@@ -185,4 +191,5 @@ brand.
 
 Weather icons in `shared/wx/` are [Meteocons](https://github.com/basmilius/meteocons)
 by Bas Milius, MIT licensed (see `shared/wx/LICENSE`). Weather data comes from
-[Open-Meteo](https://open-meteo.com/).
+[Open-Meteo](https://open-meteo.com/); the radar loops are the National Weather
+Service's ([radar.weather.gov](https://radar.weather.gov/), public domain).

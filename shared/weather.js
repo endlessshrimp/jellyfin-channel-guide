@@ -35,7 +35,7 @@
         + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
         + '&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,wind_direction_10m'
         + '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day'
-        + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset'
+        + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,wind_speed_10m_max,wind_direction_10m_dominant'
         + '&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=4';
 
     // ---------- Location ----------
@@ -240,6 +240,8 @@
             precip: num((d.precipitation_sum || [])[i]),
             sunrise: instant((d.sunrise || [])[i], off),
             sunset: instant((d.sunset || [])[i], off),
+            wind: round((d.wind_speed_10m_max || [])[i]), // the day's strongest, mph
+            windFrom: num((d.wind_direction_10m_dominant || [])[i]),
         }));
         return {
             place: p,
