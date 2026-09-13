@@ -46,6 +46,7 @@
     js('library/library.js');
     js('settings/settings.js');
     js('search/search.js');
+    js('search/search-phone.js'); // Search's phone layout
     js('recordings/recordings.js');
     js('forecast/forecast.js');
 })();

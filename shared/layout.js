@@ -217,7 +217,14 @@
         document.body.appendChild(top);
         document.body.appendChild(tabs);
         top.querySelector('.hp-brand').addEventListener('click', goHome);
-        top.querySelector('.hp-search').addEventListener('click', () => go('#/search'));
+        top.querySelector('.hp-search').addEventListener('click', () => {
+            // the phone search takes the tap when it can: back to its box if
+            // it's up, else the keyboard starts coming up (inside the tap, as
+            // an iPhone wants) while it opens
+            const s = window.HomerSearch;
+            if (s && typeof s.phoneTap === 'function' && s.phoneTap()) return;
+            go('#/search');
+        });
         tabs.addEventListener('click', (ev) => {
             const b = ev.target.closest('.hp-tab');
             const t = b && TABS.find((x) => x.key === b.dataset.tab);
