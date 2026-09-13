@@ -56,6 +56,13 @@
     background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
 }
 
+/* during playback Jellyfin makes the page see-through (and JMP draws video
+   behind the web view), so the texture must not sit over the picture */
+:root .backgroundContainer-transparent::after,
+:root.transparentDocument .backgroundContainer::after {
+    display: none;
+}
+
 /* over an item backdrop image: navy wash instead of grey */
 :root .backgroundContainer.withBackdrop {
     background:
@@ -171,9 +178,15 @@
     backdrop-filter: blur(14px) saturate(1.3);
 }
 
-/* over backdrops Jellyfin forces a flat 40% black with !important on the filter */
+/* over backdrops (item pages) Jellyfin uses a see-through header and kills
+   the blur with !important; keep it see-through, just navy instead of black */
 :root .skinHeader.semiTransparent {
-    background: linear-gradient(180deg, rgba(2, 5, 10, 0.72), rgba(2, 5, 10, 0));
+    background: rgba(4, 11, 22, 0.62);
+    box-shadow: inset 0 -1px 0 var(--homer-line);
+}
+
+:root.layout-tv .skinHeader.semiTransparent {
+    background: none;
     box-shadow: none;
 }
 
@@ -232,24 +245,42 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--homer-dim);
+    transition: color 120ms ease;
+}
+
+/* the pill sits on the label, not the (tall) button, so tab sizes don't change */
+:root .emby-tab-button > .emby-button-foreground {
+    padding: 0.35em 0.9em;
+    margin: -0.35em -0.9em;
     border-radius: 999px;
-    transition: color 120ms ease, background-color 120ms ease;
+    transition: background 120ms ease, box-shadow 120ms ease;
 }
 
 :root .emby-tab-button:hover {
     color: #fff;
 }
 
-:root .emby-tab-button-active,
-:root .emby-tab-button-active:hover {
-    color: #fff;
-    background: var(--homer-focus-fill);
-    box-shadow: 0 6px 18px rgba(var(--homer-accent-rgb), 0.4);
+:root .emby-tab-button:hover > .emby-button-foreground {
+    background: var(--sk-hover);
 }
 
-/* TV focus: Jellyfin blanks the background with !important, so the ring goes on box-shadow */
+:root .emby-tab-button-active {
+    color: #fff;
+}
+
+:root .emby-tab-button-active > .emby-button-foreground,
+:root .emby-tab-button-active:hover > .emby-button-foreground {
+    background: var(--homer-focus-fill);
+    box-shadow: 0 6px 18px rgba(var(--homer-accent-rgb), 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* TV focus: Jellyfin blanks the button background with !important; the ring goes on the label */
 :root .emby-tab-button.show-focus:focus {
     color: #fff;
+}
+
+:root .emby-tab-button.show-focus:focus > .emby-button-foreground {
+    background: var(--homer-focus-fill);
     box-shadow: var(--homer-focus-ring);
 }
 
@@ -268,7 +299,7 @@
 :root .mainDrawer .mainDrawer-scrollContainer::before {
     content: "HOMER";
     display: block;
-    margin: 1.5em 1.5em 0.4em;
+    margin: 1.5em 1em 0.4em 2.62em; /* lines the mark up with the menu icons */
     padding-left: 2.35em;
     font-weight: 800;
     font-size: 1.2em;
@@ -286,7 +317,7 @@
     text-transform: uppercase;
     color: var(--homer-faint);
     margin-top: 1.6em;
-    padding-inline: 2.1em 0;
+    padding-inline: 3.85em 0; /* lines up with the menu labels */
 }
 
 :root .mainDrawer .sidebarDivider,
@@ -333,7 +364,7 @@
 
 :root .navMenuOption:focus-visible,
 :root.layout-tv .navMenuOption:focus {
-    background: var(--homer-focus-fill) !important;
+    background: var(--homer-focus-fill);
     color: #fff;
     box-shadow: var(--homer-focus-ring);
 }
@@ -401,13 +432,12 @@
     box-shadow: 0 8px 24px rgba(255, 59, 59, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-:root .button-flat:hover,
 :root .button-accent-flat {
     color: var(--homer-accent-2) !important; /* .button-accent-flat is !important in Jellyfin */
 }
 
 :root .button-flat:hover {
-    color: #fff !important;
+    color: #fff;
     background: var(--sk-hover);
 }
 
@@ -1175,9 +1205,16 @@
     font-family: var(--sk-font-stack);
 }
 
+/* over video: no glass blur on the picture, just a fade */
 :root .skinHeader.osdHeader {
     background: linear-gradient(180deg, rgba(2, 5, 10, 0.85), rgba(7, 20, 42, 0));
     box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+:root .osdTitle {
+    font-size: 1.45em;
 }
 
 :root .osdTitle,
@@ -1257,7 +1294,8 @@
    with one-class specificity, so :root + a class wins cleanly.
    ===================================================================== */
 
-:root [class*="Mui"]:not(.MuiSvgIcon-root) {
+/* :where() keeps this at two classes so the per-component fonts below still win */
+:root [class*="Mui"]:where(:not(.MuiSvgIcon-root)) {
     font-family: var(--sk-font-stack);
 }
 
@@ -1587,7 +1625,33 @@
     background-color: transparent;
 }
 
-:root .MuiTableRow-root:hover > .MuiTableCell-body {
+/* material-react-table (Activity, Devices, API keys) paints every row, cell and
+   toolbar solid grey; let the glass panel underneath show instead */
+:root .MuiTableCell-root,
+:root .MuiPaper-root:has(> .MuiTableContainer-root) > .MuiBox-root {
+    background-color: transparent;
+}
+
+:root .MuiTableRow-root {
+    background-color: transparent !important; /* MRT sets the row grey with !important */
+}
+
+:root .MuiToggleButton-root {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--homer-dim);
+    border-color: var(--homer-line-strong);
+}
+
+:root .MuiToggleButton-root.Mui-selected,
+:root .MuiToggleButton-root.Mui-selected:hover {
+    background: var(--homer-focus-fill);
+    color: #fff;
+}
+
+:root .MuiTableRow-root:hover > .MuiTableCell-body,
+:root .MuiTableRow-root:hover > .MuiTableCell-body::after {
     background-color: rgba(var(--homer-accent-rgb), 0.08);
 }
 
@@ -1622,9 +1686,11 @@
     color: var(--homer-text);
 }
 
-:root .MuiAvatar-root {
+/* only the signed-in user's avatar; list avatars carry severity colors (red = error) */
+:root .MuiAppBar-root .MuiAvatar-root {
     background: linear-gradient(145deg, var(--homer-accent-2), var(--homer-accent) 60%, #1450c8);
     color: #fff;
+    box-shadow: 0 0 0 2px var(--homer-line-strong);
 }
 
 :root .MuiLinearProgress-root {
@@ -1657,6 +1723,12 @@
 /* =====================================================================
    Layout variants
    ===================================================================== */
+
+/* phones: the header is crowded with icons, so the title tightens up */
+:root.layout-mobile .pageTitle {
+    font-size: 1.05em;
+    letter-spacing: 0.08em;
+}
 
 /* phones: keep the panels, lose a little padding */
 :root.layout-mobile .navMenuOption {
