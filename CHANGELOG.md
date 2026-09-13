@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.12
 
 - Guide on touch screens (tablets, and any screen that can't hover): the
   first tap on a program highlights it and shows its **●** button, a size up
