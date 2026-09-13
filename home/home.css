@@ -160,11 +160,11 @@
     height: 400px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px; /* seven items: 7 × 52 + 6 × 6 = 400, level with On Now */
 }
 
 .hm-menu-item {
-    height: 58px;
+    height: 52px;
     display: flex;
     align-items: center;
     gap: 18px;

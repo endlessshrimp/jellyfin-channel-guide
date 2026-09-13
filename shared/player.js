@@ -79,8 +79,11 @@
     const screenFor = (h) => (/^#\/search(\.html)?(\?|$)/.test(h) ? 'HomerSearch'
         : /^#\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h) ? 'HomerRecordings'
         : /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h) ? 'HomerSettings' : null);
+    // #/weather is HOMER's own page (Jellyfin has none), so it always counts
+    const isWeatherHash = (h) => /^#\/weather(\?|$)/.test(h);
     const isHomerHash = (h) => isHomeHash(h)
         || /^#\/(movies|tv|details)(\.html)?\?/.test(h)
+        || isWeatherHash(h)
         || (!!screenFor(h) && !!window[screenFor(h)]);
     const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
     // Jellyfin pages HOMER leaves alone: the admin dashboard, sign-in and setup,

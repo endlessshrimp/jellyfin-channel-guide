@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Weather: a HOMER Weather screen, from a new Weather item in Home's menu
+  (#/weather). A forecast board in the style of a TV weather segment: a title
+  band with the place and a one-line outlook, Now (temperature, conditions,
+  feels like, humidity, wind, next sunrise or sunset), the next 3 days (high,
+  low, conditions, chance of rain) and twelve hours at a time of conditions,
+  temperature and chance of rain (◀ ▶ for earlier and later hours, OK back to
+  now). Same place and same reading as the clock's weather; refreshes every
+  10 minutes. Only the Now icon animates.
+- Home's menu items are a little shorter so all seven fit beside On Now.
+
 ## v0.3.7
 
 - Weather location: the weather follows each device instead of always showing

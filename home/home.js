@@ -330,6 +330,7 @@
             { icon: 'movie', label: 'Movies', act: () => { const r = viewRoute('movies'); if (r) route(r); } },
             { icon: 'tv', label: 'TV Shows', act: () => { const r = viewRoute('tvshows'); if (r) route(r); } },
             { icon: 'fiber_smart_record', label: 'Recordings', act: () => route('#/livetv?tab=3') },
+            { icon: 'wb_sunny', label: 'Weather', act: () => route('#/weather') },
             { icon: 'search', label: 'Search', hint: '/', act: () => focusSearch() },
             { icon: 'settings', label: 'Settings', act: () => route('#/mypreferencesmenu') }
         ];

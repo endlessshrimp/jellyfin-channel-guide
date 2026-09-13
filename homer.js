@@ -36,4 +36,5 @@
     js('settings/settings.js');
     js('search/search.js');
     js('recordings/recordings.js');
+    js('forecast/forecast.js');
 })();

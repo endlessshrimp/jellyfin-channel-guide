@@ -7,8 +7,8 @@ Jellyfin page matches.
 ## Home
 
 Home replaces Jellyfin's home page: a main menu (Live TV Guide, Movies, TV
-Shows, Recordings, Search, Settings), an On Now panel, and rows of Continue
-Watching, Up Next, On Now and Recently Added.
+Shows, Recordings, Weather, Search, Settings), an On Now panel, and rows of
+Continue Watching, Up Next, On Now and Recently Added.
 
 - **Watch** plays the channel in the On Now preview window, and Home stays up
   so you can keep browsing. The panel shows what you're watching, with
@@ -46,6 +46,21 @@ or by Recently Added, and press **/** to filter. A show opens to season tabs
 over an episode list. Arrow keys move, OK plays, Esc goes back.
 
 ![TV Shows](screenshots/library-series.jpg)
+
+## Weather
+
+Home's **Weather** item opens a forecast board laid out like a TV weather
+segment, for the same place as the clock's weather (set per device in
+Settings → Weather location):
+
+- A title band with the place and what's coming, in a sentence.
+- **Now**: the temperature and conditions, feels like, humidity, wind, and the
+  next sunrise or sunset.
+- **Next 3 days**: conditions, high and low, and the chance of rain.
+- **Hour by hour**: twelve hours of conditions, temperature and chance of
+  rain. **◀ ▶** show earlier or later hours, **OK** comes back to now.
+
+It refreshes every 10 minutes while it's up. Data from Open-Meteo.
 
 ## Channel Guide
 

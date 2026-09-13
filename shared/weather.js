@@ -5,6 +5,9 @@
  *
  * Screens call HomerWeather.attach(clockEl) and run the returned function on
  * teardown. Every attached bug shares one fetch, refreshed every 10 minutes.
+ * The Weather screen (forecast/) asks forecast() for the full hourly and daily
+ * forecast of the same place, and feeds its reading back to the bugs, so the
+ * clock and the screen always agree.
  *
  * Where: saved per device (localStorage), set from HOMER Settings.
  *   device  the browser's own location. Browsers only share it over HTTPS
@@ -26,6 +29,13 @@
         + '&current=temperature_2m,weather_code,is_day'
         + '&daily=temperature_2m_max,temperature_2m_min'
         + '&temperature_unit=fahrenheit&timezone=auto&forecast_days=1';
+    // the Weather screen's: now, every hour of today and the next 3 days, and each day
+    const fullUrl = (lat, lon) => 'https://api.open-meteo.com/v1/forecast'
+        + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
+        + '&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,wind_direction_10m'
+        + '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day'
+        + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset'
+        + '&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=4';
 
     // ---------- Location ----------
 
@@ -187,8 +197,95 @@
     // start over for a new location (after any fetch already on its way)
     const reload = async () => {
         if (inflight) await inflight;
+        if (fullInflight) await fullInflight.catch(() => {});
         data = null;
+        full = null;
         return load();
+    };
+
+    // ---------- The full forecast (the Weather screen) ----------
+
+    // Open-Meteo gives times as the place's wall clock ("2026-09-13T14:00") plus
+    // its UTC offset; turn them into real instants
+    const instant = (local, offsetSec) => {
+        const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(local || '');
+        if (!m) return NaN;
+        return Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) - offsetSec * 1000;
+    };
+    const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const round = (v) => (num(v) == null ? null : Math.round(v));
+
+    const shape = (j, p) => {
+        const off = j.utc_offset_seconds || 0;
+        const cur = j.current || {};
+        const h = j.hourly || {};
+        const d = j.daily || {};
+        if (num(cur.temperature_2m) == null || !(h.time || []).length) throw new Error('no forecast');
+        const hours = h.time.map((t, i) => ({
+            at: instant(t, off),
+            temp: num(h.temperature_2m[i]),
+            pop: num((h.precipitation_probability || [])[i]),
+            precip: num((h.precipitation || [])[i]),
+            code: (h.weather_code || [])[i],
+            isDay: (h.is_day || [])[i] === 1,
+        }));
+        const days = (d.time || []).map((t, i) => ({
+            at: instant(t + 'T00:00', off),
+            date: t,
+            code: (d.weather_code || [])[i],
+            hi: round((d.temperature_2m_max || [])[i]),
+            lo: round((d.temperature_2m_min || [])[i]),
+            pop: num((d.precipitation_probability_max || [])[i]),
+            precip: num((d.precipitation_sum || [])[i]),
+            sunrise: instant((d.sunrise || [])[i], off),
+            sunset: instant((d.sunset || [])[i], off),
+        }));
+        return {
+            place: p,
+            timeZone: j.timezone || undefined,
+            fetchedAt: Date.now(),
+            current: {
+                temp: Math.round(cur.temperature_2m),
+                feels: round(cur.apparent_temperature),
+                code: cur.weather_code,
+                isDay: cur.is_day === 1,
+                humidity: round(cur.relative_humidity_2m),
+                wind: round(cur.wind_speed_10m),
+                windFrom: num(cur.wind_direction_10m),
+            },
+            hours,
+            days,
+        };
+    };
+
+    let full = null;
+    let fullInflight = null;
+    // resolves to the forecast for the place the bugs use; a reading younger
+    // than the refresh interval is reused unless force is set
+    const forecast = ({ force = false } = {}) => {
+        if (!force && full && Date.now() - full.fetchedAt < REFRESH_MS) return Promise.resolve(full);
+        if (fullInflight) return fullInflight;
+        fullInflight = resolvePlace()
+            .then((p) => fetch(fullUrl(p.lat, p.lon), { cache: 'no-store' })
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+                .then((j) => {
+                    place = p;
+                    full = shape(j, p);
+                    // the bugs show the same reading as the screen
+                    const today = full.days[0] || {};
+                    data = {
+                        temp: full.current.temp,
+                        code: full.current.code,
+                        isDay: full.current.isDay,
+                        hi: today.hi,
+                        lo: today.lo,
+                    };
+                    fetchedAt = Date.now();
+                    bugs.forEach(paint);
+                    return full;
+                }))
+            .finally(() => { fullInflight = null; });
+        return fullInflight;
     };
 
     const build = (clockEl) => {
@@ -227,6 +324,11 @@
             };
         },
         refresh: load,
+        // the Weather screen's full forecast (see shape() for what's in it)
+        forecast,
+        // WMO weather code -> { label, icon }, and an icon's URL (shared/wx/<name>.svg)
+        describe,
+        iconUrl,
 
         // ----- for HOMER Settings -----
         canUseDevice,

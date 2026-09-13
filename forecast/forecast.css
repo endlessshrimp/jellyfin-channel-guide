@@ -1,0 +1,676 @@
+/*
+ * HOMER Weather (#/weather): a TV-style forecast board. Same 1080-tall stage,
+ * palette, type, panels and key legend as the other HOMER screens; colors
+ * come from shared/tokens.css with the guide's values as fallbacks.
+ *
+ *   title band          124–184
+ *   Now | Next 3 days   208–580
+ *   Hour by hour        604–980
+ *
+ * One data color: the blue of the chance-of-rain columns (checked against the
+ * navy with the dataviz palette validator; it's the raindrop blue of the icons
+ * one step darker). Numbers stay in text colors.
+ */
+
+#hf-root {
+    --bg0: var(--homer-bg0, #02050a);
+    --bg1: var(--homer-bg1, #07142a);
+    --panel: var(--homer-panel, rgba(9, 20, 38, 0.72));
+    --line: var(--homer-line, rgba(160, 190, 230, 0.12));
+    --line-strong: var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    --text: var(--homer-text, #f4f7fb);
+    --soft: #c9d6e6;
+    --dim: var(--homer-dim, #8ea3bd);
+    --faint: var(--homer-faint, #5a6f89);
+    --accent: var(--homer-accent, #2f8cff);
+    --accent-2: var(--homer-accent-2, #6fd3ff);
+    --needle: var(--homer-needle, #ffb020);
+    --shadow: var(--homer-shadow, 0 20px 60px rgba(0, 0, 0, 0.45));
+    --font: var(--homer-font, "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+    --cond: var(--homer-font-cond, "Barlow Semi Condensed", "Barlow", sans-serif);
+    --rain: #3990ef;
+    /* Now takes 40% of the row, up to 700 (what it gets on a 1920 stage) */
+    --now-w: min(700px, (100% - 168px) * 0.4);
+
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    background: #000;
+    font-family: var(--font);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+#hf-stage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: center center;
+    background:
+        radial-gradient(1200px 700px at 12% -10%, rgba(47, 140, 255, 0.22), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(111, 211, 255, 0.10), transparent 55%),
+        linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 70%);
+    overflow: hidden;
+}
+
+/* same faint scanline texture as the guide */
+#hf-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+    z-index: 20;
+}
+
+/* ---------- Top bar ---------- */
+
+.hf-topbar {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 44px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 2;
+}
+
+.hf-brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    font-size: 26px;
+}
+
+.hf-brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, var(--accent-2), var(--accent) 60%, #1450c8);
+    box-shadow: 0 6px 22px rgba(47, 140, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    display: grid;
+    place-items: center;
+}
+
+.hf-brand-mark::before {
+    content: "";
+    width: 18px;
+    height: 13px;
+    border: 3px solid #fff;
+    border-radius: 4px;
+}
+
+.hf-brand-mark .material-icons {
+    display: none;
+    font-size: 28px;
+    color: #fff;
+}
+
+.hf-brand-sub {
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    font-size: 18px;
+    padding-left: 18px;
+    border-left: 2px solid var(--line-strong);
+    text-transform: uppercase;
+}
+
+/* the HOMER logo is the way Home (so is H) */
+.hf-brand.homer-home {
+    cursor: pointer;
+    margin: -8px -16px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    transition: background 120ms ease;
+}
+
+.hf-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
+.hf-brand.homer-home:hover .hf-brand-mark::before { display: none; }
+.hf-brand.homer-home:hover .hf-brand-mark .material-icons { display: block; }
+
+.hf-clock {
+    text-align: right;
+    line-height: 1;
+}
+
+.hf-clock-time {
+    font-size: 40px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.hf-clock-date {
+    margin-top: 6px;
+    font-size: 17px;
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+/* ---------- Body (hidden until the forecast is in) ---------- */
+
+.hf-body {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+.hf-ready .hf-body { opacity: 1; }
+
+/* ---------- Title band ---------- */
+
+.hf-title {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 124px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 0 28px 0 22px;
+    border-radius: 14px;
+    background: linear-gradient(90deg, rgba(47, 140, 255, 0.34), rgba(47, 140, 255, 0.1) 55%, rgba(47, 140, 255, 0.04));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px var(--line);
+    white-space: nowrap;
+}
+
+.hf-title-place {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hf-title-place .material-icons {
+    font-size: 30px;
+    color: var(--accent-2);
+}
+
+.hf-title-line {
+    flex: 1;
+    min-width: 0;
+    padding-left: 28px;
+    border-left: 2px solid var(--line-strong);
+    font-size: 25px;
+    font-weight: 500;
+    color: var(--soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- Panels ---------- */
+
+.hf-panel {
+    position: absolute;
+    border-radius: 18px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), var(--shadow);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 28px 24px;
+    box-sizing: border-box;
+}
+
+.hf-head {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    height: 24px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    white-space: nowrap;
+}
+
+/* ---------- Now ---------- */
+
+.hf-now {
+    left: 72px;
+    top: 208px;
+    width: var(--now-w);
+    height: 372px;
+}
+
+.hf-now-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 150px;
+    margin-top: 6px;
+}
+
+.hf-now-icon {
+    width: 176px;
+    height: 176px;
+    margin: -13px -8px -13px -18px; /* the art has built-in padding */
+    pointer-events: none;
+}
+
+.hf-now-temp {
+    font-size: 150px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+/* a video docked while this screen is up plays here (shared/player.js pins it) */
+.hf-preview {
+    display: none;
+    flex: none;
+    width: 240px;
+    height: 135px;
+    margin-right: 14px;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.22), transparent 55%),
+        linear-gradient(135deg, #0f2f58, #061326);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-strong);
+    place-items: center;
+}
+
+.hf-preview .material-icons {
+    font-size: 44px;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.hf-docked .hf-now-icon { display: none; }
+.hf-docked .hf-preview { display: grid; }
+
+.hf-now-cond {
+    margin-top: 4px;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hf-now-stats {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    gap: 8px 56px;
+    margin-top: auto;
+}
+
+.hf-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.hf-stat-k {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hf-stat-v {
+    font-size: 25px;
+    font-weight: 700;
+}
+
+/* ---------- Next 3 days ---------- */
+
+.hf-days {
+    left: calc(72px + var(--now-w) + 24px);
+    right: 72px;
+    top: 208px;
+    height: 372px;
+}
+
+.hf-days-cols {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 10px -28px 0;
+}
+
+.hf-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    padding: 0 20px;
+}
+
+/* hairline between the days */
+.hf-day + .hf-day { border-left: 1px solid var(--line); }
+
+.hf-day-name {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hf-day-date {
+    margin-top: 2px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hf-day-icon {
+    width: 116px;
+    height: 116px;
+    margin: -6px 0 -12px;
+    pointer-events: none;
+}
+
+.hf-day-temps {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    line-height: 1;
+}
+
+.hf-day-hi {
+    font-size: 60px;
+    font-weight: 800;
+}
+
+.hf-day-lo {
+    font-size: 38px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hf-day-cond {
+    margin-top: 10px;
+    max-width: 100%;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hf-day-rain {
+    margin-top: 6px;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.hf-day-rain b {
+    font-family: var(--font);
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ---------- Hour by hour ---------- */
+
+.hf-hours {
+    left: 72px;
+    right: 72px;
+    top: 604px;
+    height: 376px;
+}
+
+.hf-hours-range {
+    font-family: var(--font);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--soft);
+    padding-left: 18px;
+    border-left: 2px solid var(--line-strong);
+}
+
+/* what the columns at the bottom are */
+.hf-key-rain {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    color: var(--dim);
+}
+
+.hf-key-rain i {
+    width: 12px;
+    height: 20px;
+    border-radius: 3px 3px 0 0;
+    background: var(--rain);
+}
+
+.hf-hours-cols {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 0 6px;
+    margin-top: 16px;
+}
+
+.hf-hour {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+}
+
+/* a new day starts at this column */
+.hf-hour.new-day::before {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--line-strong);
+}
+
+.hf-hour-time {
+    width: 100%;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--soft);
+    white-space: nowrap;
+}
+
+.hf-hour.new-day .hf-hour-time {
+    color: var(--text);
+    letter-spacing: 0.02em;
+}
+
+.hf-hour.now .hf-hour-time {
+    background: var(--needle);
+    color: #1b1300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.hf-hour-icon {
+    width: 112px;
+    height: 112px;
+    margin: 0 0 -12px;
+    pointer-events: none;
+}
+
+.hf-hour-temp {
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.hf-hour-rain {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-top: auto;
+}
+
+/* chance of rain: a 24px column, 4px rounded top, square on the baseline */
+.hf-bar-slot {
+    position: relative;
+    width: 100%;
+    height: 64px;
+    border-bottom: 1px solid var(--line-strong);
+}
+
+.hf-bar-slot i {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 24px;
+    margin-left: -12px;
+    border-radius: 4px 4px 0 0;
+    background: var(--rain);
+}
+
+.hf-hour-pop {
+    margin-top: 8px;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+}
+
+.hf-hour-pop.zero {
+    color: var(--faint);
+}
+
+/* ---------- Loading / error ---------- */
+
+.hf-state {
+    position: absolute;
+    inset: 128px 72px 100px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.hf-state.show { display: flex; }
+
+.hf-state b {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.hf-state span {
+    max-width: 660px;
+    font-family: var(--cond);
+    font-size: 21px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hf-state em {
+    display: inline-grid;
+    place-items: center;
+    min-width: 30px;
+    height: 28px;
+    padding: 0 7px;
+    margin: 0 2px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-style: normal;
+    font-weight: 700;
+    font-size: 16px;
+    vertical-align: 2px;
+    box-sizing: border-box;
+}
+
+/* ---------- Remote legend ---------- */
+
+.hf-legend {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    bottom: 30px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 36px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.hf-key {
+    display: inline-grid;
+    place-items: center;
+    min-width: 34px;
+    height: 30px;
+    padding: 0 8px;
+    margin-right: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.hf-legend .spacer { flex: 1; }
+
+.hf-legend [data-action] {
+    cursor: pointer;
+    transition: color 120ms ease;
+}
+
+.hf-legend [data-action]:hover { color: var(--text); }
+
+/* nothing further that way */
+.hf-legend .off {
+    opacity: 0.4;
+    pointer-events: none;
+}
