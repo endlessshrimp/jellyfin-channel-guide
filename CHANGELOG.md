@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.8
 
 - Weather: a HOMER Weather screen, from a new Weather item in Home's menu
   (#/weather). A forecast board in the style of a TV weather segment: a title
@@ -11,6 +11,8 @@
   now). Same place and same reading as the clock's weather; refreshes every
   10 minutes. Only the Now icon animates.
 - Home's menu items are a little shorter so all seven fit beside On Now.
+- Clicking the weather next to the clock, on any screen, opens the Weather
+  screen.
 
 ## v0.3.7
 

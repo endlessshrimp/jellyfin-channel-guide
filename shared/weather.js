@@ -4,7 +4,8 @@
  * with the raindrop blue brightened (#0A5AD4 -> #4FAEFF) to read on HOMER navy.
  *
  * Screens call HomerWeather.attach(clockEl) and run the returned function on
- * teardown. Every attached bug shares one fetch, refreshed every 10 minutes.
+ * teardown. Every attached bug shares one fetch, refreshed every 10 minutes,
+ * and clicking one opens the Weather screen.
  * The Weather screen (forecast/) asks forecast() for the full hourly and daily
  * forecast of the same place, and feeds its reading back to the bugs, so the
  * clock and the screen always agree.
@@ -303,6 +304,15 @@
         clockEl.parentNode.insertBefore(group, clockEl);
         group.appendChild(clockEl);
         const q = (s) => group.querySelector(s);
+        // the bug opens the Weather screen
+        q('.homer-wx').addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const hp = window.HomerPlayer;
+            if (window.HomerForecast && typeof window.HomerForecast.open === 'function') window.HomerForecast.open();
+            else if (hp && typeof hp.go === 'function') hp.go('#/weather');
+            else location.hash = '#/weather';
+        });
         return {
             group, clockEl,
             wx: q('.homer-wx'), img: q('.homer-wx-icon'), temp: q('.homer-wx-temp'),
