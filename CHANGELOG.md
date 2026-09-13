@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.11
 
 - Weather: a new layout. Now keeps the top left, with the next 14 hours
   under it, two hours to a slot (conditions, temperature, chance of rain), in
