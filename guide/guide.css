@@ -380,6 +380,14 @@
     padding: 4px 10px;
     border-radius: 6px;
     letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* a day other than today: the chip turns white, so it's clear you've moved on */
+.cg-timebar-day b.later {
+    background: #fff;
+    color: #0a1a30;
 }
 
 .cg-slot {
@@ -397,6 +405,23 @@
     border-left: 1px solid var(--line-strong);
 }
 
+/* the slot where a new day starts: a brighter rule and the weekday */
+.cg-slot-newday {
+    border-left: 3px solid #fff;
+}
+
+.cg-slot-day {
+    margin-right: 10px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: #fff;
+    color: #0a1a30;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
 .cg-rows {
     position: absolute;
     top: 54px;
@@ -408,6 +433,7 @@
 
 .cg-row {
     position: relative;
+    box-sizing: border-box; /* 76px with its rule, the ROW_H the scrolling counts in */
     height: 76px;
     border-bottom: 1px solid var(--line);
     transition: transform 180ms ease;
@@ -528,6 +554,15 @@
     font-style: italic;
 }
 
+/* listings for this stretch haven't come in yet */
+.cg-prog.loading,
+.cg-prog.loading.now {
+    background: repeating-linear-gradient(135deg, rgba(160, 190, 230, 0.07) 0 14px, transparent 14px 28px);
+    border-style: solid;
+}
+
+.cg-prog.loading .cg-prog-title { font-style: normal; }
+
 .cg-prog .cg-prog-progress {
     position: absolute;
     left: 0;
@@ -562,6 +597,8 @@
     z-index: 4;
     pointer-events: none;
 }
+
+.cg-needle[hidden] { display: none; }
 
 .cg-needle::before {
     content: "";
@@ -608,12 +645,25 @@
 
 .cg-legend .spacer { flex: 1; }
 
+.cg-legend > span { flex: none; white-space: nowrap; }
+
+#cg-root.cg-compact .cg-legend { gap: 22px; font-size: 17px; }
+
 .cg-legend [data-action] {
     cursor: pointer;
     transition: color 120ms ease;
 }
 
 .cg-legend [data-action]:hover { color: var(--text); }
+
+.cg-legend [hidden] { display: none; }
+
+/* Back to now: only while now is off the screen, in the needle's amber */
+.cg-legend-now { color: var(--text); }
+.cg-legend-now .cg-key { background: var(--needle); border-color: transparent; color: #1a1100; }
+
+/* OK has nothing to do here (an upcoming stretch with no listing) */
+.cg-legend-ok.off { opacity: 0.4; }
 
 /* ---------- Recordings ---------- */
 

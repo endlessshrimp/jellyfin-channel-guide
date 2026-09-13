@@ -71,7 +71,13 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 ![Channel Guide](screenshots/guide.jpg)
 
 - Opens from a **Guide** button in Jellyfin's header, or the **G** key.
-- **OK / Enter** (or a click) starts the channel in the same browser tab.
+- **OK / Enter** (or a click) starts the channel in the same browser tab. On a
+  program that hasn't started yet there's nothing to watch, so OK records it
+  instead, like **R**. The legend says which one OK will do.
+- **◀ ▶** past the edge of the screen pages the guide later (or earlier, back
+  to now), as far ahead as your listings go. The chip at the top left of the
+  grid says which day you're looking at, and a new day's first slot is marked
+  with its weekday. **N** jumps back to now.
 - **R**, or the **●** button on a program you hover over, schedules a one-time
   recording of that program. Programs that are set to record get a red dot.
 - On a program that's set to record, **R** (or its **■** button) cancels the
@@ -117,8 +123,9 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | --- | --- |
 | **G** | Open the guide (from anywhere in Jellyfin, unless you're typing in a text field) |
 | **▲ ▼** | Change channel (keeps the same time slot, like a real guide) |
-| **◀ ▶** | Move through time on the current channel |
-| **OK / Enter** | Watch the selected channel |
+| **◀ ▶** | Move through time on the current channel. Past the edge of the screen, the guide pages later or earlier (never earlier than now) |
+| **N** | Back to now, on what's airing on the current channel (the legend shows it once you've moved away from now) |
+| **OK / Enter** | Watch the selected channel. On a program that hasn't started yet, record it (the same as **R**) |
 | **R** | Record the selected program. On a program that's set to record, press **R** twice to cancel it (or stop it if it's recording) |
 | **/** | Filter by channel name/number or show title (Esc clears) |
 | **[ ] / 1–8** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment |
@@ -127,12 +134,13 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
 | **Esc / Backspace / G** | Close the guide |
 
-With a mouse or trackpad: scroll the grid freely, hover to select, click a
-program to watch it. A hovered program shows a **●** button at its right edge
+With a mouse or trackpad: scroll the grid freely (sideways moves through
+time), hover to select, click a program to watch it (or, if it hasn't started
+yet, to record it). A hovered program shows a **●** button at its right edge
 that records it (**■** on a program that's set to record: click it twice to
-cancel). Type in the filter box at the top to narrow the grid. The **OK**,
-**/**, **[ ]**, **C**, **H** and **ESC** hints along the bottom are clickable
-too.
+cancel). Type in the filter box at the top to narrow the grid. The **N**,
+**OK**, **/**, **[ ]**, **C**, **H** and **ESC** hints along the bottom are
+clickable too.
 
 Scripts can also call `window.ChannelGuide.open()` and
 `window.ChannelGuide.close()`.

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+- Guide: move through time like a cable box. **◀ ▶** past the edge of the
+  screen pages the guide later or earlier (at least half a screen, far enough
+  that the next program lands mid-screen), never earlier than now and as far
+  ahead as the real listings go (the placeholder "(Mo. 18:00 - 00:00)" blocks
+  at the tail don't count). Sideways on the trackpad moves it a half hour at a
+  time. Up and down still keep the same point in time.
+- Guide: the day chip at the top left of the grid says TODAY, TOMORROW or the
+  date (WED SEP 16), and a slot that starts a new day carries its weekday. The
+  "now" needle only shows while now is on screen.
+- Guide: **N** jumps back to now. The legend shows it (in the needle's amber)
+  only while you're away from now; it's clickable too.
+- Guide: listings load 3 hours at a time as you move, plus the next 3 hours
+  ahead, one request at a time, instead of all at once. The channels go up as
+  soon as they're in; a stretch whose listings haven't arrived shows as
+  striped "Loading…" cells, and you can keep moving meanwhile. A chunk that
+  fails is tried again.
+- Guide: a program that hasn't started shows its day and time ("Tomorrow ·
+  6:00 PM – 7:00 PM") in the info panel. OK (or a click) on it records it, the
+  same as R, instead of tuning the channel; the legend's OK hint says what OK
+  will do (Watch, Record, Cancel recording).
+- Guide recording: Jellyfin can take 20 seconds or more to set up a recording,
+  so the guide now says "Scheduling …" right away, and "Still scheduling …" to
+  a second press instead of ignoring it. Just before sending, it re-reads
+  Jellyfin's timers and doesn't send a second request for a program that's
+  already set to record (from another tab, or a guide closed and reopened
+  while the first request was still out).
+- Guide: rows are exactly 76px with their divider, so keyboard scrolling no
+  longer drifts a pixel per row (far down the list, the highlighted row could
+  end up below the visible grid).
+- Guide: on windows narrower than 16:9 the legend tightens up so every hint
+  fits.
+
 ## v0.3.8
 
 - Weather: a HOMER Weather screen, from a new Weather item in Home's menu

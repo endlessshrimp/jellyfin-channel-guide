@@ -6,8 +6,10 @@
  * header and binds the "g" key. It runs inside the signed-in Jellyfin Web page
  * and uses that session's API access.
  *
- * Remote/keyboard: arrows move, OK/Enter watches the channel, R records the
- * selected program (R twice cancels a recording), Esc/Back closes.
+ * Remote/keyboard: arrows move (◀▶ past the edge pages through time), OK/Enter
+ * watches the channel (or records a program that hasn't started), R records the
+ * selected program (R twice cancels a recording), N comes back to now,
+ * Esc/Back closes.
  *
  * window.ChannelGuide = { open, close, version }
  */
@@ -28,7 +30,15 @@
         : `https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v${VERSION}/guide/`;
     const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
 
-    const WINDOW_MIN = 180;
+    const WINDOW_MIN = 180; // one screen of the grid
+    const PAGE_MIN = WINDOW_MIN / 2; // ◀▶ past the edge moves at least half a screen
+    const SLOT_MIN = 30;
+    // Listings load a screen's worth (3 hours) at a time, as they're needed, plus
+    // the next 3 hours ahead of time. One request at a time: the NAS is slow
+    // under load, and the whole EPG is several days of ~400 channels.
+    const CHUNK_MIN = 180;
+    const RETRY_MS = 15000; // a chunk that failed is tried again after this
+    const MIN_MS = 60000;
     // The stage is always 1080 tall and as wide as the window's shape allows
     // (never narrower than MIN_STAGE_W), so it fills a desktop window edge to edge
     // instead of letterboxing a fixed 16:9 frame.
@@ -91,6 +101,27 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const fmtShort = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?(AM|PM)$/i, '');
+    // the half hour a time falls in (local time, so slots stay on :00 and :30)
+    const floorSlot = (t) => {
+        const d = new Date(t);
+        d.setMinutes(d.getMinutes() < 30 ? 0 : 30, 0, 0);
+        return d.getTime();
+    };
+    // "Today", "Tomorrow", or "Mon, Sep 14", relative to the real today
+    const dayWord = (d) => {
+        const a = new Date(d);
+        a.setHours(0, 0, 0, 0);
+        const b = new Date();
+        b.setHours(0, 0, 0, 0);
+        const days = Math.round((a - b) / 86400000);
+        return days === 0 ? 'Today' : days === 1 ? 'Tomorrow'
+            : a.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    };
+    // a program's time, with its day when that isn't today
+    const fmtWhen = (s, e) => {
+        const day = dayWord(s);
+        return (day === 'Today' ? '' : day + ' · ') + `${fmtTime(s)} – ${fmtTime(e)}`;
+    };
     const genreOf = (p) => (p.IsSports ? 'sports' : p.IsNews ? 'news' : p.IsMovie ? 'movie' : p.IsKids ? 'kids' : null);
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
 
@@ -208,6 +239,10 @@
     // ---------- Guide ----------
 
     let guide = null; // the open guide instance, or null
+    // Programs with a recording request on its way to Jellyfin, from any guide
+    // opened in this tab. Jellyfin can take half a minute to answer one, and a
+    // guide closed and reopened in the meantime mustn't send a second.
+    const scheduling = new Set();
     let nowWatching = null; // channel last started from the guide
     let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
     let tabSuppressed = false; // closed from that tab; don't reopen until it's left
@@ -285,7 +320,8 @@
             <div class="cg-legend">
                 <span><span class="cg-key">▲▼</span>Channels</span>
                 <span><span class="cg-key">◀▶</span>Time</span>
-                <span data-action="watch"><span class="cg-key">OK</span>Watch</span>
+                <span data-action="now" class="cg-legend-now" hidden><span class="cg-key">N</span>Back to now</span>
+                <span data-action="ok" class="cg-legend-ok"><span class="cg-key">OK</span><span class="cg-legend-ok-label">Watch</span></span>
                 <span><span class="cg-key rec">R</span>Record</span>
                 <span data-action="search"><span class="cg-key">/</span>Filter</span>
                 <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
@@ -300,12 +336,16 @@
         let stageW = 1920;
         let gridW = stageW - SIDE * 2 - CHAN_COL;
         let pxPerMin = gridW / WINDOW_MIN;
+        let stageScale = 1;
         let relayout = () => {};
         const fit = () => {
             let s = window.innerHeight / 1080;
             let w = window.innerWidth / s;
             if (w < MIN_STAGE_W) { s = window.innerWidth / MIN_STAGE_W; w = MIN_STAGE_W; }
+            stageScale = s;
             stage.style.width = w + 'px';
+            // narrower than 16:9: tighten the legend so every hint still fits
+            root.classList.toggle('cg-compact', w < 1800);
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
             if (Math.abs(w - stageW) > 0.5) {
                 stageW = w;
@@ -325,10 +365,25 @@
         const wxDetach = window.HomerWeather ? HomerWeather.attach($('.cg-clock')) : () => {};
 
         // ---------- Time window ----------
-        const now = new Date();
-        const winStart = new Date(now);
-        winStart.setMinutes(now.getMinutes() < 30 ? 0 : 30, 0, 0);
-        const winEnd = new Date(winStart.getTime() + WINDOW_MIN * 60000);
+        // The grid shows WINDOW_MIN at a time. It starts on the current half hour
+        // and moves through the listings in half-hour steps, but never earlier
+        // than now.
+        const base = floorSlot(Date.now()); // listing chunks count from here
+        let winStart = new Date(base);
+        let winEnd = new Date(base + WINDOW_MIN * MIN_MS);
+        const earliest = () => floorSlot(Date.now());
+        // how far ahead there are real listings: found once the first chunk is
+        // in (see probeEnd), and pushed later by any chunk that goes further.
+        // Until then, a week.
+        let listingsEnd = 0;
+        const latest = () => {
+            const end = listingsEnd || base + 7 * 1440 * MIN_MS;
+            return Math.max(earliest(), floorSlot(end - 1) + SLOT_MIN * MIN_MS - WINDOW_MIN * MIN_MS);
+        };
+        const nowInView = () => {
+            const t = Date.now();
+            return t >= winStart && t < winEnd;
+        };
         const xFor = (d) => Math.max(0, Math.min(gridW, ((d - winStart) / 60000) * pxPerMin));
         const posCell = (c) => {
             const left = xFor(c.s);
@@ -338,23 +393,44 @@
             c.el.classList.toggle('cg-narrow', w < 90); // too small for the record button
         };
 
+        // The time header: the day chip names the window's first day (TODAY,
+        // TOMORROW, WED SEP 16), and a slot that starts a new day carries its
+        // weekday so a window that crosses midnight says so.
         const timebar = $('.cg-timebar');
-        for (let m = 0; m < WINDOW_MIN; m += 30) {
-            const slot = el('div', 'cg-slot', fmtShort(new Date(winStart.getTime() + m * 60000)));
-            slot.dataset.m = m;
-            slot.style.left = m * pxPerMin + 'px';
-            timebar.appendChild(slot);
-        }
+        const dayChip = $('.cg-timebar-day b');
+        const drawTimebar = () => {
+            timebar.querySelectorAll('.cg-slot').forEach((sl) => sl.remove());
+            for (let m = 0; m < WINDOW_MIN; m += SLOT_MIN) {
+                const d = new Date(winStart.getTime() + m * MIN_MS);
+                const newDay = m > 0 && d.getHours() === 0 && d.getMinutes() === 0;
+                const slot = el('div', 'cg-slot' + (newDay ? ' cg-slot-newday' : ''),
+                    (newDay ? `<span class="cg-slot-day">${esc(d.toLocaleDateString([], { weekday: 'short' }))}</span>` : '') + esc(fmtShort(d)));
+                slot.dataset.m = m;
+                slot.style.left = m * pxPerMin + 'px';
+                timebar.appendChild(slot);
+            }
+            const day = dayWord(winStart);
+            dayChip.textContent = day.replace(',', '');
+            dayChip.classList.toggle('later', day !== 'Today');
+        };
+        drawTimebar();
 
+        // the "now" needle only while now is on screen
         const needle = $('.cg-needle');
-        const placeNeedle = () => { needle.style.left = CHAN_COL + xFor(new Date()) + 'px'; };
+        const placeNeedle = () => {
+            needle.hidden = !nowInView();
+            needle.style.left = CHAN_COL + xFor(new Date()) + 'px';
+        };
         relayout = () => {
             timebar.querySelectorAll('.cg-slot').forEach((sl) => { sl.style.left = +sl.dataset.m * pxPerMin + 'px'; });
             for (const r of rows) for (const c of r.cells) posCell(c);
             placeNeedle();
         };
         placeNeedle();
-        const needleTimer = setInterval(placeNeedle, 30000);
+        const needleTimer = setInterval(() => {
+            placeNeedle();
+            updateLegend();
+        }, 30000);
 
         // ---------- Toast ----------
         const toastEl = $('.cg-toast');
@@ -423,65 +499,252 @@
             }
         };
 
-        const render = (channels, byChannel) => {
+        // ---------- Listings, loaded in chunks ----------
+        // Chunk i is [base + i·CHUNK_MIN, base + (i+1)·CHUNK_MIN). A program that
+        // spans a chunk edge comes back with both chunks; it's kept once, by Id.
+        const CHUNK_MS = CHUNK_MIN * MIN_MS;
+        const chunkOf = (t) => Math.floor((t - base) / CHUNK_MS);
+        const chunkStart = (i) => base + i * CHUNK_MS;
+        const chunks = new Map(); // i -> 'loading' | 'done' | { failedAt }
+        const listings = new Map(); // channelId -> { byId: Map, sorted: [] | null }
+        let loadingChunk = false;
+        let probed = false; // listingsEnd has been looked up
+        let retryTimer = 0;
+        let touched = false; // the user has moved; don't jump them back to "now"
+
+        const chunkDone = (i) => chunks.get(i) === 'done';
+        // in, or past the end of the real listings (so there's nothing to load)
+        const chunkReady = (i) => chunkDone(i) || (!!listingsEnd && chunkStart(i) >= listingsEnd);
+        const chunkFailed = (i) => {
+            const c = chunks.get(i);
+            return !!c && typeof c === 'object';
+        };
+        const wantsChunk = (i) => {
+            const c = chunks.get(i);
+            if (c === 'done' || c === 'loading') return false;
+            if (c && Date.now() - c.failedAt < RETRY_MS) return false;
+            return i >= 0 && chunkStart(i) < (listingsEnd || Infinity);
+        };
+
+        const addListings = (items) => {
+            let realEnd = 0;
+            for (const p of items) {
+                if (!p.Id || !p.ChannelId) continue;
+                let l = listings.get(p.ChannelId);
+                if (!l) listings.set(p.ChannelId, (l = { byId: new Map(), sorted: null }));
+                if (l.byId.has(p.Id)) continue;
+                p._s = Date.parse(p.StartDate);
+                p._e = Date.parse(p.EndDate);
+                l.byId.set(p.Id, p);
+                l.sorted = null;
+                if (!PLACEHOLDER.test(p.Name)) realEnd = Math.max(realEnd, p._e);
+            }
+            if (listingsEnd && realEnd > listingsEnd) listingsEnd = realEnd;
+        };
+        const sortedFor = (chId) => {
+            const l = listings.get(chId);
+            if (!l) return [];
+            if (!l.sorted) l.sorted = [...l.byId.values()].sort((a, b) => a._s - b._s);
+            return l.sorted;
+        };
+
+        // Where the real listings end: the latest-starting programs, skipping the
+        // "(Mo. 18:00 - 00:00)" placeholders the provider fills the tail with.
+        const probeEnd = async () => {
+            const res = await api(`/LiveTv/Programs?userId=${server.UserId}&MinStartDate=${new Date(base).toISOString()}&SortBy=StartDate&SortOrder=Descending&limit=400&EnableImages=false&EnableUserData=false`);
+            const items = (res && res.Items) || [];
+            const real = items.filter((p) => !PLACEHOLDER.test(p.Name));
+            if (real.length) listingsEnd = Math.max(...real.map((p) => Date.parse(p.EndDate)));
+            // only placeholders that far out: the real listings end before them
+            else if (items.length) listingsEnd = Math.min(...items.map((p) => Date.parse(p.StartDate)));
+            else listingsEnd = base + WINDOW_MIN * MIN_MS; // no listings at all
+            for (const l of listings.values()) {
+                for (const p of l.byId.values()) {
+                    if (!PLACEHOLDER.test(p.Name) && p._e > listingsEnd) listingsEnd = p._e;
+                }
+            }
+        };
+
+        const fetchChunk = async (i) => {
+            const q = `/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${new Date(chunkStart(i)).toISOString()}`
+                + `&MaxStartDate=${new Date(chunkStart(i + 1)).toISOString()}&fields=Overview&EnableImages=true&ImageTypeLimit=1&limit=5000`;
+            const items = [];
+            // a chunk bigger than one page comes back in pages
+            for (;;) {
+                const res = await api(q + `&StartIndex=${items.length}`);
+                const page = (res && res.Items) || [];
+                items.push(...page);
+                if (!page.length || !(res.TotalRecordCount > items.length)) return items;
+            }
+        };
+
+        // Load what's on screen first, then look up where the real listings end,
+        // then the next chunk ahead. One request at a time.
+        const pump = () => {
+            if (loadingChunk || guide !== self) return;
+            const first = chunkOf(+winStart);
+            const last = chunkOf(+winEnd - 1);
+            for (let i = first; i <= last; i++) {
+                if (wantsChunk(i)) {
+                    loadChunk(i);
+                    return;
+                }
+            }
+            if (!probed && chunkDone(0)) {
+                probed = true;
+                loadingChunk = true;
+                probeEnd()
+                    .catch((err) => console.warn('[Channel Guide] Could not find where the listings end:', err))
+                    .finally(() => {
+                        loadingChunk = false;
+                        if (guide !== self) return;
+                        // paged past the end before it was known: nothing more is coming
+                        if (rows.length && listingsEnd && winEnd > listingsEnd) refill();
+                        pump();
+                    });
+                return;
+            }
+            if (wantsChunk(last + 1)) loadChunk(last + 1);
+        };
+
+        const loadChunk = async (i) => {
+            loadingChunk = true;
+            chunks.set(i, 'loading');
+            try {
+                const items = await fetchChunk(i);
+                if (guide !== self) return;
+                addListings(items);
+                chunks.set(i, 'done');
+            } catch (err) {
+                console.warn('[Channel Guide] Listings didn\'t load:', err);
+                chunks.set(i, { failedAt: Date.now() });
+                clearTimeout(retryTimer);
+                retryTimer = setTimeout(pump, RETRY_MS + 100);
+            } finally {
+                loadingChunk = false;
+            }
+            if (guide !== self) return;
+            // on screen: put the listings (or the failure) in the grid
+            if (rows.length && chunkStart(i) < winEnd && chunkStart(i + 1) > winStart) refill();
+            pump();
+        };
+
+        // ---------- Lanes ----------
+        // A row's cells for the current window: its programs, plus a "loading"
+        // cell over any stretch of time whose chunk isn't in yet. A row with no
+        // programs at all in the window gets "listings unavailable" instead.
+        const laneItems = (row) => {
+            const ws = +winStart;
+            const we = +winEnd;
+            const items = [];
+            for (const p of sortedFor(row.ch.Id)) {
+                if (p._s >= we) break;
+                if (p._e <= ws) continue;
+                items.push({ p, s: new Date(p._s), e: new Date(p._e), unknown: PLACEHOLDER.test(p.Name) });
+            }
+            const empty = !items.length;
+            const out = [];
+            const gap = (a, b) => {
+                for (let i = chunkOf(a); i <= chunkOf(b - 1); i++) {
+                    const kind = chunkReady(i) ? (empty ? 'none' : null) : chunkFailed(i) ? 'failed' : 'loading';
+                    if (!kind) continue;
+                    const s = Math.max(a, chunkStart(i));
+                    const e = Math.min(b, chunkStart(i + 1));
+                    const prev = out[out.length - 1];
+                    if (prev && prev.gap === kind && +prev.e === s) prev.e = new Date(e);
+                    else out.push({ gap: kind, p: { Name: '' }, s: new Date(s), e: new Date(e), unknown: true });
+                }
+            };
+            let t = ws;
+            for (const it of items) {
+                if (+it.s > t) gap(t, +it.s);
+                out.push(it);
+                t = Math.max(t, +it.e);
+            }
+            if (t < we) gap(t, we);
+            return out;
+        };
+
+        const buildCell = (rowData, it) => {
+            const { p, s, e, unknown, gap } = it;
+            const ch = rowData.ch;
+            const t = new Date();
+            const onNow = s <= t && e > t;
+            const cell = el('div', 'cg-prog' + (onNow ? ' now' : '') + (unknown ? ' unknown' : '') + (gap === 'loading' ? ' loading' : ''));
+            const cellData = { el: cell, p, s, e, unknown, gap: gap || null, btn: null };
+            posCell(cellData);
+            const g = genreOf(p);
+            if (g) cell.style.setProperty('--genre', `var(--${g})`);
+            const title = gap === 'loading' ? 'Loading…'
+                : gap === 'failed' ? 'Listings didn\'t load'
+                    : unknown ? `${ch.Name} · listings unavailable` : p.Name;
+            const sub = unknown ? '' : [p.EpisodeTitle, `${fmtShort(s)} – ${fmtShort(e)}`].filter(Boolean).join('  ·  ');
+            cell.innerHTML = `<div class="cg-prog-title">${esc(title)}</div><div class="cg-prog-sub">${esc(sub)}</div>`;
+            if (onNow && !unknown) {
+                const bar = el('div', 'cg-prog-progress');
+                bar.style.width = Math.round(((t - s) / (e - s)) * 100) + '%';
+                cell.appendChild(bar);
+            }
+            // The mouse only highlights; it never scrolls the grid out from under
+            // the pointer. A pointer that's just resting there doesn't take the
+            // highlight from the keys when the grid redraws under it.
+            cell.addEventListener('mouseenter', () => {
+                if (!pointerActive()) return;
+                touched = true;
+                select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
+            });
+            cell.addEventListener('click', () => {
+                touched = true;
+                select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
+                ok();
+            });
+            // The hovered program's own record button: it records the program
+            // it sits on, not whatever the mouse crossed on the way to it.
+            if (!unknown && p.Id && e > t) {
+                cell.classList.add('can-rec');
+                const btn = el('button', 'cg-rec-btn', '<i class="cg-rec-icon"></i><span class="cg-rec-label">Record</span>');
+                btn.type = 'button';
+                btn.tabIndex = -1;
+                btn.addEventListener('mousedown', (ev) => ev.preventDefault()); // keep focus off it
+                btn.addEventListener('click', (ev) => {
+                    ev.stopPropagation(); // the rest of the cell does what OK does; this only records
+                    select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
+                    toggleRecord(rowData, cellData, 'click');
+                });
+                cell.appendChild(btn);
+                cellData.btn = btn;
+            }
+            // a cancel that's waiting for its second press follows its program
+            // into the redraw
+            if (armed && p.Id && armed.cell.p.Id === p.Id) armed.cell = cellData;
+            paintCell(cellData);
+            return cellData;
+        };
+
+        const fillLane = (row) => {
+            const frag = document.createDocumentFragment();
+            row.cells = laneItems(row).map((it) => {
+                const c = buildCell(row, it);
+                frag.appendChild(c.el);
+                return c;
+            });
+            row.lane.textContent = '';
+            row.lane.appendChild(frag);
+        };
+
+        const render = (channels) => {
             const inner = $('.cg-rows-inner');
-            rows = channels.map((ch) => {
-                const progs = (byChannel[ch.Id] || [])
-                    .filter((p) => new Date(p.EndDate) > winStart && new Date(p.StartDate) < winEnd)
-                    .sort((a, b) => a.StartDate.localeCompare(b.StartDate));
+            rows = channels.map((ch, i) => {
                 const row = el('div', 'cg-row');
                 const chan = el('div', 'cg-chan');
                 chan.appendChild(el('div', 'cg-chan-num', esc(ch.Number)));
                 chan.appendChild(logoChip(ch));
                 row.appendChild(chan);
                 const lane = el('div', 'cg-lane');
-                const cells = [];
-                const rowData = { el: row, ch, cells, cats: categorize(ch), country: countryOf(ch) };
-                const list = progs.length ? progs : [{ Name: '', StartDate: winStart.toISOString(), EndDate: winEnd.toISOString(), _empty: true }];
-                for (const p of list) {
-                    const s = new Date(p.StartDate);
-                    const e = new Date(p.EndDate);
-                    const unknown = !!p._empty || PLACEHOLDER.test(p.Name);
-                    const cell = el('div', 'cg-prog' + (s <= now && e > now ? ' now' : '') + (unknown ? ' unknown' : ''));
-                    posCell({ el: cell, s, e });
-                    const g = genreOf(p);
-                    if (g) cell.style.setProperty('--genre', `var(--${g})`);
-                    const title = unknown ? `${ch.Name} · listings unavailable` : p.Name;
-                    const sub = unknown ? '' : [p.EpisodeTitle, `${fmtShort(s)} – ${fmtShort(e)}`].filter(Boolean).join('  ·  ');
-                    cell.innerHTML = `<div class="cg-prog-title">${esc(title)}</div><div class="cg-prog-sub">${esc(sub)}</div>`;
-                    if (s <= now && e > now && !unknown) {
-                        const bar = el('div', 'cg-prog-progress');
-                        bar.style.width = Math.round(((now - s) / (e - s)) * 100) + '%';
-                        cell.appendChild(bar);
-                    }
-                    const cellData = { el: cell, p, s, e, unknown, btn: null };
-                    // the mouse only highlights; it never scrolls the grid out from under the pointer
-                    cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false }));
-                    cell.addEventListener('click', () => {
-                        select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false });
-                        watch();
-                    });
-                    // The hovered program's own record button: it records the program
-                    // it sits on, not whatever the mouse crossed on the way to it.
-                    if (!unknown && p.Id && e > now) {
-                        cell.classList.add('can-rec');
-                        const btn = el('button', 'cg-rec-btn', '<i class="cg-rec-icon"></i><span class="cg-rec-label">Record</span>');
-                        btn.type = 'button';
-                        btn.tabIndex = -1;
-                        btn.addEventListener('mousedown', (ev) => ev.preventDefault()); // keep focus off it
-                        btn.addEventListener('click', (ev) => {
-                            ev.stopPropagation(); // the rest of the cell watches; this only records
-                            select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false });
-                            toggleRecord(rowData, cellData, 'click');
-                        });
-                        cell.appendChild(btn);
-                        cellData.btn = btn;
-                    }
-                    cells.push(cellData);
-                    lane.appendChild(cell);
-                }
                 row.appendChild(lane);
                 inner.appendChild(row);
+                const rowData = { i, el: row, ch, lane, cells: [], cats: categorize(ch), country: countryOf(ch) };
+                fillLane(rowData);
                 return rowData;
             });
 
@@ -492,11 +755,36 @@
             }
             order = rows.map((_, i) => i);
             buildCats();
-            markRecorded();
-            // start on the first channel that has real listings, on what's airing now
-            const first = Math.max(0, rows.findIndex((r) => r.cells.some((c) => !c.unknown)));
-            const nowCol = Math.max(0, rows[first].cells.findIndex((c) => c.s <= now && c.e > now));
-            select(first, nowCol);
+            landOnNow();
+        };
+
+        // start on the first channel that has real listings, on what's airing now
+        const landOnNow = () => {
+            if (!order.length) return;
+            const v = Math.max(0, order.findIndex((r) => rows[r].cells.some((c) => !c.unknown)));
+            select(order[v], colAt(order[v], Date.now()));
+        };
+
+        // Redraw every lane for the current window (it moved, or listings came
+        // in), keeping the highlight on the same program, or at the same time.
+        const refill = () => {
+            const cur = current();
+            const keep = cur && cur.cell ? { id: cur.cell.p.Id, t: Math.max(+cur.cell.s, +winStart) } : null;
+            for (const r of rows) fillLane(r);
+            if (query) filterRows();
+            if (!order.length) return;
+            // the listings came in before anyone moved: open on what's airing now
+            if (!touched && nowInView()) {
+                landOnNow();
+                return;
+            }
+            if (!keep || vpos(sel.row) < 0) {
+                select(order[0], colAt(order[0], +winStart));
+                return;
+            }
+            const cells = rows[sel.row].cells;
+            const c = keep.id ? cells.findIndex((x) => x.p.Id === keep.id) : -1;
+            select(sel.row, c >= 0 ? c : colAt(sel.row, keep.t), { scroll: !!query });
         };
 
         // The grid scrolls in pixels, like any list: the trackpad moves it freely, and
@@ -529,10 +817,12 @@
                 else if (top + ROW_H > scrollY + viewH()) setScroll(top + ROW_H - viewH(), true);
             }
             showInfo(row.ch, row.cells[c]);
+            updateLegend();
         };
 
         const showInfo = (ch, cell) => {
-            const { p, s, e, unknown } = cell;
+            const { p, s, e, unknown, gap } = cell;
+            const now = new Date();
             const live = s <= now && e > now;
             $('.cg-info-channel').innerHTML = '';
             $('.cg-info-channel').appendChild(logoChip(ch));
@@ -545,11 +835,12 @@
                 const rn = recordingNow(cell);
                 const verb = rn ? 'stop' : 'cancel';
                 meta.appendChild(el('span', 'cg-chip rec' + (rn ? ' now' : ''), rn ? 'Recording' : 'Set to record'));
+                const key = armed && armed.via === 'ok' ? 'OK' : 'R';
                 meta.appendChild(armed && armed.cell === cell
-                    ? el('span', 'cg-rec-hint confirming', `Press <span class="cg-key">R</span>again to ${verb}`)
+                    ? el('span', 'cg-rec-hint confirming', `Press <span class="cg-key">${key}</span>again to ${verb}`)
                     : el('span', 'cg-rec-hint', `<span class="cg-key">R</span>to ${verb}`));
             }
-            if (!unknown) meta.appendChild(el('span', 'cg-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
+            if (!unknown) meta.appendChild(el('span', 'cg-chip', fmtWhen(s, e)));
             const g = genreOf(p);
             if (g) {
                 const chip = el('span', 'cg-chip genre', genreLabel[g]);
@@ -558,7 +849,10 @@
             }
             if (p.ParentIndexNumber && p.IndexNumber) meta.appendChild(el('span', 'cg-chip', `S${p.ParentIndexNumber} E${p.IndexNumber}`));
             if (p.OfficialRating) meta.appendChild(el('span', 'cg-chip', esc(p.OfficialRating)));
-            $('.cg-info-desc').textContent = unknown ? 'No listing information from this channel\'s guide.' : (p.EpisodeTitle ? p.EpisodeTitle + ' — ' : '') + (p.Overview || '');
+            $('.cg-info-desc').textContent = gap === 'loading' ? 'Loading the listings for this time…'
+                : gap === 'failed' ? 'The listings for this time didn\'t load. The guide will try again.'
+                    : unknown ? 'No listing information from this channel\'s guide.'
+                        : (p.EpisodeTitle ? p.EpisodeTitle + ' — ' : '') + (p.Overview || '');
 
             // preview window
             const art = $('.cg-preview-art');
@@ -568,7 +862,9 @@
             if (!(p.ImageTags && p.ImageTags.Primary)) logo.appendChild(logoChip(ch));
             $('.cg-preview-badge').innerHTML = live ? '<span class="cg-chip live">Live</span>' : '<span class="cg-chip">Upcoming</span>';
             $('.cg-preview-left').textContent = `CH ${ch.Number}`;
-            $('.cg-preview-right').textContent = live && !unknown ? `${Math.round((e - now) / 60000)} min left` : unknown ? '' : `Starts ${fmtTime(s)}`;
+            const day = dayWord(s);
+            $('.cg-preview-right').textContent = live && !unknown ? `${Math.round((e - now) / 60000)} min left`
+                : unknown ? '' : `Starts ${day === 'Today' ? '' : day + ' · '}${fmtTime(s)}`;
             $('.cg-progress > i').style.width = live && !unknown ? Math.round(((now - s) / (e - s)) * 100) + '%' : '0';
         };
 
@@ -584,16 +880,46 @@
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
 
+        // OK (or a click) watches what's on. A program that hasn't started yet
+        // has nothing to watch, so there OK records it, the same as R.
+        const upcoming = (c) => c.s > new Date();
+        const ok = () => {
+            const cur = current();
+            if (!cur || !cur.cell) return;
+            if (upcoming(cur.cell)) toggleRecord(cur.row, cur.cell, 'ok');
+            else watch();
+        };
+
+        // The legend says what OK does for the highlighted program, and offers
+        // N (back to now) while now is off the screen.
+        const okLabel = $('.cg-legend-ok-label');
+        const okItem = $('.cg-legend-ok');
+        const nowItem = $('.cg-legend-now');
+        const updateLegend = () => {
+            nowItem.hidden = nowInView();
+            const cur = current();
+            const c = cur && cur.cell;
+            if (!c || !upcoming(c)) {
+                okLabel.textContent = 'Watch';
+                okItem.classList.remove('off');
+                return;
+            }
+            okLabel.textContent = !isSet(c) ? 'Record' : recordingNow(c) ? 'Stop recording' : 'Cancel recording';
+            okItem.classList.toggle('off', !recordable(c));
+        };
+
         // ---------- Recording ----------
         // R, or the record button on a hovered program, toggles that program's
         // recording. Cancelling takes a second press within a few seconds, so a
         // stray press never throws a recording away.
         const CONFIRM_MS = 4000;
         let recBusy = false;
+        let busyText = ''; // what a press says while a request is still out
 
         const reshow = () => {
             const cur = current();
             if (cur && cur.cell) showInfo(cur.row.ch, cur.cell);
+            updateLegend();
         };
         const disarm = () => {
             if (!armed) return;
@@ -605,10 +931,16 @@
         };
 
         const toggleRecord = (row, cell, via) => {
-            if (recBusy || !row || !cell) return;
+            if (!row || !cell) return;
+            // one request at a time; Jellyfin is slow to answer, so say so
+            if (recBusy || scheduling.has(cell.p.Id)) {
+                toast(busyText || `Still scheduling ${cell.p.Name}…`);
+                return;
+            }
             const again = !!armed && armed.cell === cell;
             disarm();
-            if (!recordable(cell)) toast('No listing to record', 'err');
+            if (cell.gap === 'loading') toast('The listings for this time are still loading');
+            else if (!recordable(cell)) toast('No listing to record', 'err');
             else if (cell.e <= new Date()) toast('That program has already ended', 'err');
             else if (!timersByProgram.has(cell.p.Id)) schedule(cell);
             else if (again) cancelRecording(cell);
@@ -616,24 +948,38 @@
         };
 
         const armCancel = (cell, via) => {
-            armed = { cell, timer: setTimeout(disarm, CONFIRM_MS) };
+            armed = { cell, via, timer: setTimeout(disarm, CONFIRM_MS) };
             paintCell(cell);
             reshow();
             const q = recordingNow(cell) ? 'Stop recording ' : 'Cancel recording of ';
-            const hint = via === 'click' ? 'Click again' : 'Press <span class="cg-key">R</span>again';
+            const hint = via === 'click' ? 'Click again'
+                : `Press <span class="cg-key">${via === 'ok' ? 'OK' : 'R'}</span>again`;
             showToast(`<span class="cg-toast-q"><span>${q}</span><span class="cg-toast-name">${esc(cell.p.Name)}</span><span>?</span></span>`
                 + `<span class="cg-toast-hint">${hint}</span>`, 'confirm', CONFIRM_MS);
         };
 
+        // Jellyfin can take 20 seconds or more to set a recording up (seen on the
+        // NAS: 6 s for the defaults, 21 s for the POST), so the guide says it's on
+        // it right away, and checks again just before sending that nothing else
+        // (another tab, a guide closed and reopened) has set it up meanwhile.
         const schedule = async (cell) => {
+            const id = cell.p.Id;
             recBusy = true;
+            busyText = `Still scheduling ${cell.p.Name}…`;
+            scheduling.add(id);
+            toast(`Scheduling ${cell.p.Name}…`, '', 60000);
             try {
-                const defaults = await api(`/LiveTv/Timers/Defaults?programId=${encodeURIComponent(cell.p.Id)}`);
-                await request('POST', '/LiveTv/Timers', defaults);
+                const defaults = await api(`/LiveTv/Timers/Defaults?programId=${encodeURIComponent(id)}`);
                 try {
                     await loadTimers();
-                } catch { /* the timer was created; it's marked below even if the refresh failed */ }
-                if (!timersByProgram.has(cell.p.Id)) timersByProgram.set(cell.p.Id, null);
+                } catch { /* can't tell; send it */ }
+                if (!timersByProgram.has(id)) {
+                    await request('POST', '/LiveTv/Timers', defaults);
+                    try {
+                        await loadTimers();
+                    } catch { /* the timer was created; it's marked below even if the refresh failed */ }
+                    if (!timersByProgram.has(id)) timersByProgram.set(id, null);
+                }
                 if (guide !== self) return;
                 markRecorded();
                 reshow();
@@ -643,6 +989,8 @@
                 if (guide === self) toast('Couldn\'t schedule that recording', 'err');
             } finally {
                 recBusy = false;
+                busyText = '';
+                scheduling.delete(id);
             }
         };
 
@@ -650,6 +998,8 @@
         const cancelRecording = async (cell) => {
             recBusy = true;
             const stopping = recordingNow(cell);
+            busyText = `Still ${stopping ? 'stopping' : 'cancelling'} ${cell.p.Name}…`;
+            toast(`${stopping ? 'Stopping' : 'Cancelling'} ${cell.p.Name}…`, '', 60000);
             const gone = () => !timersByProgram.has(cell.p.Id);
             try {
                 let t = timersByProgram.get(cell.p.Id);
@@ -684,6 +1034,7 @@
                 else toast('Couldn\'t cancel that recording', 'err');
             } finally {
                 recBusy = false;
+                busyText = '';
             }
         };
 
@@ -693,19 +1044,134 @@
         };
 
         // ---------- Input ----------
+        // the cell at time t in a row: the one airing then, else the next one
+        const colAt = (r, t) => {
+            const cells = rows[r].cells;
+            let i = cells.findIndex((c) => c.s <= t && c.e > t);
+            if (i < 0) i = cells.findIndex((c) => c.s > t);
+            return i < 0 ? cells.length - 1 : i;
+        };
+        // the last cell in a row that starts before t
+        const colBefore = (r, t) => {
+            const cells = rows[r].cells;
+            for (let i = cells.length - 1; i >= 0; i--) if (cells[i].s < t) return i;
+            return 0;
+        };
+
         // moving up/down keeps the same point in time, like a real guide
         const nearestCol = (r) => {
             if (!rows[r]) return 0;
             const cur = rows[sel.row].cells[sel.col];
-            const t = cur ? Math.max(cur.s, now) : now;
-            const i = rows[r].cells.findIndex((c) => c.s <= t && c.e > t);
-            return i < 0 ? 0 : i;
+            return colAt(r, Math.max(cur ? +cur.s : 0, +winStart, Date.now()));
         };
 
         const step = (d) => {
             const v = vpos(sel.row) + d;
             if (v < 0 || v >= order.length) return;
             select(order[v], nearestCol(order[v]));
+        };
+
+        // Move the window to start at `start` (clamped to now … the end of the
+        // listings) and redraw the grid. The caller picks the new highlight.
+        const shiftWindow = (start) => {
+            start = Math.max(earliest(), Math.min(latest(), start));
+            if (start === +winStart) return false;
+            winStart = new Date(start);
+            winEnd = new Date(start + WINDOW_MIN * MIN_MS);
+            touched = true;
+            drawTimebar();
+            placeNeedle();
+            for (const r of rows) fillLane(r);
+            if (query) filterRows();
+            pump();
+            return true;
+        };
+        // after the window moved: highlight a program on the same channel (or
+        // the first one showing, if a filter dropped it)
+        const reselect = (pick) => {
+            const r = vpos(sel.row) >= 0 ? sel.row : order[0];
+            if (r === undefined) return;
+            select(r, pick(r), { scroll: !!query || r !== sel.row });
+        };
+
+        // ◀▶ go program to program. Past the edge of the window they page it,
+        // like a cable box: at least half a screen, and far enough that the next
+        // (or previous) program lands mid-screen.
+        const moveTime = (d) => {
+            const row = rows[sel.row];
+            if (!row) return;
+            const next = sel.col + d;
+            if (next >= 0 && next < row.cells.length) {
+                select(sel.row, next);
+                return;
+            }
+            const cur = row.cells[sel.col];
+            const ws = +winStart;
+            const half = PAGE_MIN * MIN_MS;
+            if (d > 0) {
+                const t = +cur.e; // where the next program starts
+                const start = Math.min(latest(), Math.max(ws + half, floorSlot(t) - half));
+                if (start <= ws || !shiftWindow(start)) {
+                    toast('That\'s as far ahead as the listings go');
+                    return;
+                }
+                reselect((r) => colAt(r, t));
+            } else {
+                const t = +cur.s; // where the previous program ends
+                const start = Math.max(earliest(), Math.min(ws - half, floorSlot(t) - half));
+                if (start >= ws || !shiftWindow(start)) return;
+                reselect((r) => colBefore(r, t));
+            }
+        };
+
+        // N: back to now, on the program airing now on this channel
+        const backToNow = () => {
+            shiftWindow(earliest());
+            reselect((r) => colAt(r, Date.now()));
+        };
+
+        // Sideways on the trackpad (or Shift+wheel) moves through time a half hour
+        // at a time, a step for every half slot of finger travel. The highlight
+        // stays on its program while that's on screen, else on the edge it left by.
+        let scrubPx = 0;
+        let scrubAt = 0;
+        let scrubTimer = 0;
+        const scrub = (dx) => {
+            const t = Date.now();
+            if (t - scrubAt > 300 || Math.sign(dx) !== Math.sign(scrubPx)) scrubPx = 0;
+            scrubAt = t;
+            scrubPx += dx;
+            if (scrubTimer) return;
+            scrubTimer = setTimeout(() => {
+                scrubTimer = 0;
+                const stepPx = (SLOT_MIN * pxPerMin * stageScale) / 2;
+                const n = Math.trunc(scrubPx / stepPx);
+                if (!n) return;
+                scrubPx -= n * stepPx;
+                const cur = current();
+                const keep = cur && cur.cell;
+                const ws = +winStart;
+                const start = Math.max(earliest(), Math.min(latest(), ws + n * SLOT_MIN * MIN_MS));
+                if ((n > 0 ? start <= ws : start >= ws) || !shiftWindow(start)) {
+                    scrubPx = 0;
+                    return;
+                }
+                reselect((r) => {
+                    const cells = rows[r].cells;
+                    const i = keep && keep.p.Id ? cells.findIndex((c) => c.p.Id === keep.p.Id) : -1;
+                    if (i >= 0) return i;
+                    const at = keep ? Math.max(+winStart, Math.min(+winEnd - 1, +keep.s)) : +winStart;
+                    return colAt(r, at);
+                });
+            }, 40);
+        };
+
+        // The pointer counts as "in use" for a moment after it moves or scrolls.
+        // Otherwise a redraw under a resting pointer would hand it the highlight.
+        let lastPointerAt = 0;
+        const pointerActive = () => Date.now() - lastPointerAt < 500;
+        const onPointerMove = (ev) => {
+            if (ev.movementX || ev.movementY) lastPointerAt = Date.now();
         };
 
         // ---------- Filter ----------
@@ -715,8 +1181,8 @@
         let category = 'all';
         let country = 'all';
         const inScope = (row) => row.cats.has(category) && (country === 'all' || row.country === country);
-        const applyFilter = (text) => {
-            query = lc(text).trim();
+        // which rows show, and which programs match, for the current window
+        const filterRows = () => {
             order = [];
             rows.forEach((row, i) => {
                 if (!inScope(row)) {
@@ -744,17 +1210,23 @@
                 country !== 'all' ? (COUNTRIES.find((c) => c.key === country) || {}).label : ''
             ].filter(Boolean).join(' · ') || 'these';
             empty.textContent = order.length ? ''
-                : query ? `Nothing in ${catLabel} matches “${text.trim()}”`
+                : query ? `Nothing in ${catLabel} matches “${searchInput.value.trim()}”`
                     : category === 'fav' ? 'No favorite channels yet. Heart a channel in Jellyfin to add it here.'
                         : `No ${catLabel} channels`;
             empty.classList.toggle('show', !order.length);
+            setScroll(scrollY, false); // fewer rows: don't leave the list scrolled past its end
+        };
+        const applyFilter = (text) => {
+            query = lc(text).trim();
+            touched = true;
+            filterRows();
             setScroll(0, false);
             if (!order.length) return;
-            // land on the first match: a matching show airing now or next, else what's on now
+            // land on the first match: a matching show airing (or starting) first, else what's on
             const r = order[0];
-            let c = rows[r].cells.findIndex((x) => x.el.classList.contains('match') && x.e > now);
-            if (c < 0) c = Math.max(0, rows[r].cells.findIndex((x) => x.s <= now && x.e > now));
-            select(r, c);
+            const t = Math.max(Date.now(), +winStart);
+            const c = rows[r].cells.findIndex((x) => x.el.classList.contains('match') && x.e > t);
+            select(r, c >= 0 ? c : colAt(r, t));
         };
         searchInput.addEventListener('input', () => applyFilter(searchInput.value));
 
@@ -875,20 +1347,23 @@
                 clearFilter();
                 return;
             }
-            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G'];
+            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G', 'n', 'N'];
             if (!handled.includes(k)) return;
             ev.preventDefault();
             ev.stopPropagation();
-            if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R')) return;
+            if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R' || k === 'n' || k === 'N')) return;
             if (!rows.length && !['Escape', 'Backspace', 'GoBack', 'BrowserBack', 'g', 'G'].includes(k)) return;
+            touched = true;
+            lastPointerAt = 0; // the keys have the highlight now
             if (k === 'ArrowDown') step(1);
             else if (k === 'ArrowUp') step(-1);
             else if (k === 'PageDown') pageBy(1);
             else if (k === 'PageUp') pageBy(-1);
-            else if (k === 'ArrowRight') select(sel.row, sel.col + 1);
-            else if (k === 'ArrowLeft') select(sel.row, sel.col - 1);
-            else if (k === 'Enter') watch();
+            else if (k === 'ArrowRight') moveTime(1);
+            else if (k === 'ArrowLeft') moveTime(-1);
+            else if (k === 'Enter') ok();
             else if (k === 'r' || k === 'R') record();
+            else if (k === 'n' || k === 'N') backToNow();
             else close();
         };
         // Page Up / Page Down keys still jump a screen at a time.
@@ -901,14 +1376,22 @@
         const onWheel = (ev) => {
             ev.preventDefault();
             if (!rows.length) return;
-            const px = ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * viewH() : ev.deltaY;
-            setScroll(scrollY + px, false);
+            lastPointerAt = Date.now();
+            touched = true;
+            const unit = ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? viewH() : 1;
+            // sideways moves through time; up and down scrolls the channels
+            if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+                scrub(ev.deltaX * unit);
+                return;
+            }
+            setScroll(scrollY + ev.deltaY * unit, false);
         };
         const onLegendClick = (ev) => {
             const item = ev.target.closest('[data-action]');
             if (!item) return;
             const action = item.dataset.action;
-            if (action === 'watch') watch();
+            if (action === 'ok') ok();
+            else if (action === 'now') backToNow();
             else if (action === 'search') focusSearch();
             else if (action === 'cat-next') cycleCategory(1);
             else if (action === 'country-next') cycleCountry();
@@ -929,6 +1412,7 @@
             if (root.contains(ev.target)) onWheel(ev);
         };
         window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+        root.addEventListener('mousemove', onPointerMove, { passive: true });
         $('.cg-legend').addEventListener('click', onLegendClick);
         $('.cg-brand').addEventListener('click', () => goHome());
 
@@ -974,22 +1458,25 @@
                 wxDetach();
                 clearInterval(needleTimer);
                 clearTimeout(toastTimer);
+                clearTimeout(retryTimer);
+                clearTimeout(scrubTimer);
                 if (armed) clearTimeout(armed.timer);
                 root.remove();
             }
         };
 
+        // The channels go up as soon as they're in; the first 3 hours of listings
+        // load alongside them and fill in the grid when they arrive.
         (async () => {
-            const [ch, progs] = await Promise.all([
+            await null; // until createGuide returns, `guide` isn't this one yet
+            pump();
+            const [ch] = await Promise.all([
                 api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1&EnableUserData=true`),
-                api(`/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${winStart.toISOString()}&MaxStartDate=${winEnd.toISOString()}&limit=5000&fields=Overview&EnableImages=true&ImageTypeLimit=1`),
                 loadTimers().catch((err) => console.warn('[Channel Guide] Could not read timers:', err))
             ]);
             if (guide !== self) return;
-            const byChannel = {};
-            for (const p of progs.Items) (byChannel[p.ChannelId] = byChannel[p.ChannelId] || []).push(p);
             const channels = ch.Items.sort((a, b) => (parseFloat(a.Number) || 0) - (parseFloat(b.Number) || 0) || a.Name.localeCompare(b.Name));
-            render(channels, byChannel);
+            render(channels);
         })().catch((err) => {
             console.error('[Channel Guide]', err);
             if (guide === self) $('.cg-info-title').textContent = 'Couldn\'t load the guide';
