@@ -32,4 +32,5 @@
     js('home/home.js');
     js('library/library.js');
     js('settings/settings.js');
+    js('search/search.js');
 })();

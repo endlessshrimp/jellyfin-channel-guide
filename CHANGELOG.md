@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.2
+
+- Search: a HOMER Search screen replaces Jellyfin's search results. Movies, TV
+  Shows, Episodes, Channels and what's On TV (now and the next 3 hours), with
+  filter chips, the search box in the top bar, and Watch / Details actions.
+
 ## v0.3.1
 
 - Guide recording: hovering a program shows a ● button on that program;
