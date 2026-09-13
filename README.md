@@ -59,12 +59,20 @@ Settings → Weather location):
 
 - A title band with the place and what's coming, in a sentence.
 - **Now**: the temperature and conditions, feels like, humidity, wind, and the
-  next sunrise or sunset.
-- **Next 3 days**: conditions, high and low, and the chance of rain.
-- **Hour by hour**: twelve hours of conditions, temperature and chance of
-  rain. **◀ ▶** show earlier or later hours, **OK** comes back to now.
+  next sunrise or sunset. Below them, the next 14 hours two at a time:
+  conditions, temperature and chance of rain.
+- **Radar**: the last hour of the National Weather Service's radar, played as
+  a loop over a navy map centered on the place (county and state lines, dim
+  interstates, the bigger towns), with the time of each picture. The rain is
+  exactly as the NWS draws it. US only; elsewhere the panel says there's no
+  radar.
+- **Next 3 days**: a panel a day with conditions, high and low, chance of rain
+  and how much, wind, sunrise and sunset.
 
-It refreshes every 10 minutes while it's up. Data from Open-Meteo.
+Now and each day sit on an illustrated sky that matches the weather (and, for
+Now, the time of day: day, dawn, dusk or night). The forecast refreshes every
+10 minutes while the screen is up, the radar every 5. Data from Open-Meteo and
+the National Weather Service.
 
 ## Channel Guide
 
@@ -147,13 +155,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.3.10/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.3.11/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.3.10`), so an update never changes
+The URL is pinned to a release tag (`@v0.3.11`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 
@@ -237,4 +245,7 @@ brand.
 
 Weather icons in `shared/wx/` are [Meteocons](https://github.com/basmilius/meteocons)
 by Bas Milius, MIT licensed (see `shared/wx/LICENSE`). Weather data comes from
-[Open-Meteo](https://open-meteo.com/).
+[Open-Meteo](https://open-meteo.com/); the radar is the National Weather
+Service's MRMS mosaic (from its map server, opengeo.ncep.noaa.gov, public
+domain), and the radar's map is the Census Bureau's
+([TIGERweb](https://tigerweb.geo.census.gov/), public domain).
