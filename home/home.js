@@ -8,14 +8,12 @@
  * select; mouse hover highlights, click selects, the trackpad scrolls.
  *
  * Watch plays the channel inside the On Now preview window so you can keep
- * browsing; Full screen (or F, or a click on the preview) hands it to Jellyfin's
- * player, and the player's Home button (or H) brings it back to the preview.
- * H, or the HOMER logo on every other HOMER screen, comes back to Home.
+ * browsing; shared/player.js does the playing, docking and Full screen.
  *
- * window.HomerHome = { open, close, fullscreen, destroy, version }
+ * window.HomerHome = { open, close, fullscreen, goHome, destroy, version }
  */
 (() => {
-    const VERSION = '0.2.2';
+    const VERSION = '0.3.0';
 
     if (window.HomerHome && typeof window.HomerHome.destroy === 'function') {
         window.HomerHome.destroy();
@@ -66,12 +64,6 @@
             const Data = { PlayCommand: 'PlayNow', ItemIds: [itemId] };
             if (startTicks) Data.StartPositionTicks = startTicks;
             ac.handleMessageReceived({ MessageType: 'Play', Data });
-        }
-    };
-    const stopPlayback = () => {
-        const ac = window.ApiClient;
-        if (ac && typeof ac.handleMessageReceived === 'function') {
-            ac.handleMessageReceived({ MessageType: 'Playstate', Data: { Command: 'Stop' } });
         }
     };
 
@@ -135,192 +127,17 @@
         return cssReady;
     };
 
-    // ---------- Watching in the preview window ----------
-    // Jellyfin stops a video the moment you leave its player page, so the video
-    // stays on that page (#/video) and Home sits on top of it, with Jellyfin's
-    // real video element pinned over Home's preview window. Full frame rate,
-    // nothing re-encoded, and handing it back to full screen is instant.
-
-    let previewMode = false; // the playing video sits in Home's preview window
-    let nowPlaying = null; // { program } for live TV, { item } for anything else
-    let sawPlayer = false; // Jellyfin's player page has opened since the preview began
-    let previewSince = 0;
-    let pendingFullscreen = false; // Full screen pressed while the channel was still tuning
-    let holdOpenUntil = 0; // after Stop, keep Home up while Jellyfin leaves its player page
-    let previewItemId = null; // what Watch asked Jellyfin to play
-
-    const isVideoRoute = () => /^#\/video/.test(location.hash);
-    const playerBox = () => document.querySelector('.videoPlayerContainer');
-    const PINNED = ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'z-index', 'border-radius', 'overflow', 'pointer-events'];
-
-    const pinVideo = () => {
-        const box = playerBox();
-        const frame = document.querySelector('#hm-root .hm-preview');
-        if (!box || !frame) return;
-        const r = frame.getBoundingClientRect();
-        if (!r.width) return;
-        const set = (k, v) => box.style.setProperty(k, v, 'important');
-        box.classList.add('hm-pinned');
-        set('position', 'fixed');
-        set('left', r.left + 'px');
-        set('top', r.top + 'px');
-        set('width', r.width + 'px');
-        set('height', r.height + 'px');
-        set('right', 'auto');
-        set('bottom', 'auto');
-        set('z-index', '99995'); // above Home (99990), below the guide (99999)
-        set('border-radius', (16 * r.height / 315) + 'px');
-        set('overflow', 'hidden');
-        set('pointer-events', 'none'); // clicks land on the preview window underneath
-    };
-    const unpinVideo = () => {
-        const box = playerBox();
-        if (!box || !box.classList.contains('hm-pinned')) return;
-        box.classList.remove('hm-pinned');
-        PINNED.forEach((k) => box.style.removeProperty(k));
-    };
-
-    const startPreview = (program) => {
-        nowPlaying = { program };
-        previewMode = true;
-        pendingFullscreen = false;
-        sawPlayer = isVideoRoute();
-        previewSince = Date.now();
-        previewItemId = program.ChannelId;
-        play(program.ChannelId);
-        if (home) home.refresh();
-    };
-    const endPreview = () => {
-        previewMode = false;
-        pendingFullscreen = false;
-        nowPlaying = null;
-        unpinVideo();
-        if (home) home.refresh();
-    };
-    const goFullscreen = () => {
-        if (!previewMode) return;
-        if (!isVideoRoute()) { pendingFullscreen = true; return; } // still tuning
-        previewMode = false;
-        pendingFullscreen = false;
-        unpinVideo();
-        close();
-    };
-    const stopPreview = () => {
-        holdOpenUntil = Date.now() + 8000;
-        endPreview();
-        stopPlayback();
-    };
-
-    // Jellyfin ignores Stop while a video is still tuning, so a channel you left
-    // Home on before it started is hidden and muted when it arrives, checked
-    // against this browser's session (so nothing else you start gets caught),
-    // and stopped.
-    let cancelId = null;
-    let cancelUntil = 0;
-    let cancelTimer = 0;
-    let confirmed = false;
-    let checking = false;
-    let lastCheck = 0;
-    let stopSentAt = 0;
-    let backedOut = false;
-    const sessionNowPlayingId = async () => {
-        const ac = window.ApiClient;
-        const deviceId = ac && ac.deviceId && ac.deviceId();
-        if (!deviceId) return null;
-        const sessions = await api(`/Sessions?DeviceId=${encodeURIComponent(deviceId)}`);
-        const sess = (sessions || []).find((x) => x.DeviceId === deviceId && x.NowPlayingItem);
-        return sess ? sess.NowPlayingItem.Id : null;
-    };
-    const finishCancel = () => {
-        cancelUntil = 0;
-        clearInterval(cancelTimer);
-        const v = document.querySelector('.videoPlayerContainer video');
-        if (v && !confirmed) v.muted = false; // it was something else; hand it back
-        setTimeout(() => document.documentElement.classList.remove('hm-cancelling'), 300);
-    };
-    const cancelTuning = (itemId) => {
-        cancelId = itemId;
-        cancelUntil = Date.now() + 60000;
-        confirmed = false;
-        stopSentAt = 0;
-        backedOut = false;
-        document.documentElement.classList.add('hm-cancelling');
-        clearInterval(cancelTimer);
-        cancelTimer = setInterval(checkCancel, 250);
-        checkCancel();
-    };
-    const checkCancel = () => {
-        if (!cancelUntil) return;
-        const now = Date.now();
-        const box = playerBox();
-        const v = box && box.querySelector('video');
-        if (now > cancelUntil || (confirmed && stopSentAt && !box && !isVideoRoute())) { finishCancel(); return; }
-        if (v) v.muted = true;
-        const started = isVideoRoute() || (v && !v.paused && v.currentTime > 0);
-        if (!started) return;
-        if (!confirmed) {
-            if (checking || now - lastCheck < 1000) return;
-            checking = true;
-            lastCheck = now;
-            sessionNowPlayingId()
-                .then((id) => {
-                    if (!cancelUntil || !id) return;
-                    if (id === cancelId) confirmed = true;
-                    else finishCancel();
-                })
-                .catch(() => {})
-                .finally(() => { checking = false; });
-            return;
-        }
-        // keep asking until Jellyfin has actually taken the player down
-        if (now - stopSentAt > 1000) { stopSentAt = now; stopPlayback(); }
-        if (isVideoRoute() && !backedOut && now - stopSentAt > 800) { backedOut = true; history.back(); }
-    };
-
-    // what this browser is playing, from its Jellyfin session
-    let resolving = false;
-    let lastResolve = 0;
-    const resolveNowPlaying = async () => {
-        const server = getServer();
-        const ac = window.ApiClient;
-        const deviceId = ac && ac.deviceId && ac.deviceId();
-        if (!server || !deviceId || resolving) return;
-        resolving = true;
-        lastResolve = Date.now();
-        try {
-            const sessions = await api(`/Sessions?DeviceId=${encodeURIComponent(deviceId)}`);
-            const s = (sessions || []).find((x) => x.DeviceId === deviceId && x.NowPlayingItem);
-            const it = s && s.NowPlayingItem;
-            if (!it || !previewMode) return;
-            if (it.Type === 'TvChannel') {
-                const r = await api(`/LiveTv/Programs?UserId=${server.UserId}&ChannelIds=${it.Id}&IsAiring=true&Limit=1&EnableImages=true&ImageTypeLimit=1&Fields=ChannelInfo,Overview`).catch(() => null);
-                const p = r && r.Items && r.Items.find((x) => !PLACEHOLDER.test(x.Name || ''));
-                nowPlaying = { program: p || { Name: it.Name, ChannelId: it.Id, ChannelName: it.Name, ChannelNumber: it.Number || it.ChannelNumber || '' } };
-            } else {
-                const full = await api(`/Users/${server.UserId}/Items/${it.Id}`).catch(() => null);
-                nowPlaying = { item: full || it };
-            }
-            if (previewMode && home) home.refresh();
-        } catch (err) {
-            console.warn('[HOMER Home]', err);
-        } finally {
-            resolving = false;
-        }
-    };
-
-    // from Jellyfin's full-screen player back to Home, the video in the preview
-    const previewFromPlayer = () => {
-        if (!getServer() || !playerBox() || !isVideoRoute()) return;
-        if (window.ChannelGuide && window.ChannelGuide.close) window.ChannelGuide.close({ returnToLiveTv: false });
-        previewMode = true;
-        pendingFullscreen = false;
-        sawPlayer = true;
-        previewSince = Date.now();
-        nowPlaying = null;
-        if (home) home.refresh();
-        else open();
-        resolveNowPlaying();
-    };
+    // ---------- The player (shared/player.js) ----------
+    // HomerPlayer keeps a playing video going under HOMER's screens and pins it
+    // over this screen's preview window; Home just draws the panel around it.
+    const P = () => window.HomerPlayer || null;
+    const previewing = () => !!(P() && P().docked());
+    const nowPlayingInfo = () => (P() ? P().nowPlaying() : null);
+    const currentRoute = () => (P() ? P().route() : location.hash);
+    const go = (hash) => { if (P()) P().go(hash); else location.hash = hash; };
+    const startPreview = (program) => { if (P()) P().watch(program.ChannelId, { program }); else play(program.ChannelId); };
+    const goFullscreen = () => { if (P()) P().fullscreen(); };
+    const stopPreview = () => { if (P()) P().stop(); };
 
     // ---------- Home ----------
 
@@ -495,7 +312,7 @@
 
         // ---------- Menu ----------
         let views = [];
-        const route = (hash) => { location.hash = hash; };
+        const route = go;
         const viewRoute = (type) => {
             const v = views.find((x) => x.CollectionType === type);
             if (!v) return null;
@@ -583,9 +400,10 @@
                 b._act = act;
                 actions.appendChild(b);
             };
-            const watching = previewMode;
-            const p = watching ? nowPlaying && nowPlaying.program : hero && hero.program;
-            const item = watching && nowPlaying && nowPlaying.item;
+            const watching = previewing();
+            const np = nowPlayingInfo();
+            const p = watching ? np && np.program : hero && hero.program;
+            const item = watching && np && np.item;
             $('.hm-eyebrow').textContent = watching ? 'Now watching' : p ? 'On now' : 'Live TV';
             if (p) showProgram(p);
             else if (item) showItem(item);
@@ -613,7 +431,7 @@
         const canvas = $('.hm-preview canvas');
         const c2d = canvas.getContext('2d');
         const mirror = () => {
-            if (previewMode) { root.classList.remove('hm-live-on'); return; }
+            if (previewing()) { root.classList.remove('hm-live-on'); return; }
             const v = [...document.querySelectorAll('video')]
                 .find((x) => !root.contains(x) && x !== document.pictureInPictureElement && !x.paused && x.readyState >= 2 && x.videoWidth > 0);
             root.classList.toggle('hm-live-on', !!v);
@@ -627,20 +445,6 @@
             try { c2d.drawImage(v, sx, sy, sw, sh, 0, 0, cw, chh); } catch { root.classList.remove('hm-live-on'); }
         };
         const mirrorTimer = setInterval(mirror, 66);
-
-        // keep the pinned video on the preview window, and notice when it ends
-        const previewTick = () => {
-            root.classList.toggle('hm-previewing', previewMode);
-            if (!previewMode) return;
-            if (isVideoRoute()) sawPlayer = true;
-            if (pendingFullscreen && isVideoRoute()) { goFullscreen(); return; }
-            if (playerBox()) pinVideo();
-            if (sawPlayer && !isVideoRoute()) endPreview();
-            else if (!sawPlayer && Date.now() - previewSince > 45000) { cancelTuning(previewItemId); endPreview(); } // never started
-            else if (nowPlaying && nowPlaying.program && nowPlaying.program.EndDate
-                && Date.parse(nowPlaying.program.EndDate) < Date.now() && Date.now() - lastResolve > 20000) resolveNowPlaying();
-        };
-        const previewTimer = setInterval(previewTick, 250);
 
         // ---------- Rows ----------
         const rowsBox = rowsInner();
@@ -723,23 +527,9 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 focusSearch();
-            } else if ((k === 'f' || k === 'F') && previewMode) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                goFullscreen();
-            } else if (isVideoRoute()) {
-                // Home is over Jellyfin's player page: keep its shortcuts (space
-                // pauses, Esc/Backspace leave the page and stop the video) from firing
-                ev.stopPropagation();
-                if (k === ' ' || k === 'Escape' || k === 'Backspace') ev.preventDefault();
             }
         };
-        const onKeyUp = (ev) => {
-            if (!isVideoRoute() || ev.target === searchInput || document.getElementById('cg-root')) return;
-            if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); }
-        };
         const onClick = (ev) => {
-            if (previewMode && ev.target.closest('.hm-preview')) { goFullscreen(); return; }
             const t = ev.target.closest('.hm-focusable');
             if (t && stage.contains(t)) { setFocus(t, { scroll: false }); activate(); return; }
             const leg = ev.target.closest('.hm-legend [data-action]');
@@ -768,7 +558,6 @@
         };
 
         document.addEventListener('keydown', onKey, true);
-        document.addEventListener('keyup', onKeyUp, true);
         window.addEventListener('resize', fit);
         window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
         stage.addEventListener('click', onClick);
@@ -780,23 +569,20 @@
             refresh() {
                 const inHero = focused && !stage.contains(focused) || (focused && focused.closest('.hm-hero-actions'));
                 showHero();
-                previewTick();
+                root.classList.toggle('hm-previewing', previewing());
                 if (inHero) setFocus($('.hm-hero-actions').firstChild, { scroll: false });
             },
             teardown() {
                 document.removeEventListener('keydown', onKey, true);
-                document.removeEventListener('keyup', onKeyUp, true);
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
                 clearInterval(mirrorTimer);
-                clearInterval(previewTimer);
-                unpinVideo();
                 root.remove();
             }
         };
 
-        if (previewMode) showHero(); // Now watching shows straight away when Home opens over the player
+        if (previewing()) { showHero(); root.classList.add('hm-previewing'); } // Now watching straight away
 
         // ---------- Data ----------
         (async () => {
@@ -858,78 +644,16 @@
     };
 
     // ---------- Take over Jellyfin's home route ----------
-    const isHomeRoute = () => /^#\/(home(\.html)?)?(\?.*)?$/.test(location.hash) || location.hash === '' || location.hash === '#/';
+    // (the player's route: Home can be the screen on top of a playing video)
+    const isHomeRoute = (h) => /^#\/(home(\.html)?)?(\?.*)?$/.test(h) || h === '' || h === '#/';
     const sync = () => {
-        syncOsdButton();
-        if (cancelUntil) { checkCancel(); if (isVideoRoute()) return; }
-        if (holdOpenUntil && !isVideoRoute()) {
-            // Stop sent Jellyfin back to wherever playback began; land on Home
-            holdOpenUntil = 0;
-            if (!isHomeRoute()) { location.hash = '#/home'; return; }
-        }
-        const overPlayer = isVideoRoute() && (previewMode || Date.now() < holdOpenUntil);
-        if ((isHomeRoute() || overPlayer) && getServer()) { open(); return; }
-        if (previewMode && !isVideoRoute()) {
-            // navigated away: Jellyfin stops a playing video itself, but one that's
-            // still tuning would otherwise pop up full screen once it starts
-            if (!sawPlayer && previewItemId) cancelTuning(previewItemId);
-            endPreview();
-        }
-        close();
+        if (isHomeRoute(currentRoute()) && getServer()) open();
+        else close();
     };
-
-    // A Home button in the player's control bar: back to Home, video in the preview
-    const OSD_BTN_CLASS = 'hmOsdHomeButton';
-    const syncOsdButton = () => {
-        const bar = document.querySelector('.videoOsdBottom .buttons');
-        if (!bar || bar.querySelector('.' + OSD_BTN_CLASS) || !getServer()) return;
-        let btn;
-        try {
-            btn = document.createElement('button', { is: 'paper-icon-button-light' });
-        } catch {
-            btn = document.createElement('button');
-        }
-        btn.type = 'button';
-        btn.setAttribute('is', 'paper-icon-button-light');
-        btn.className = `autoSize paper-icon-button-light ${OSD_BTN_CLASS}`;
-        btn.title = 'Home (H)';
-        btn.setAttribute('aria-label', 'Home');
-        btn.innerHTML = '<span class="xlargePaperIconButton material-icons home" aria-hidden="true"></span>';
-        btn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            previewFromPlayer();
-        });
-        const before = bar.querySelector('.cgOsdGuideButton, .btnPip, .btnVideoOsdSettings, .btnFullscreen');
-        bar.insertBefore(btn, before || null);
-    };
-    // ---------- Home from anywhere: the HOMER logo, or H ----------
-    // From the full-screen player the video comes along into the preview window;
-    // over the guide, the guide closes; anywhere else, Jellyfin goes to #/home.
     const goHome = () => {
-        if (!getServer()) return;
-        if (isVideoRoute() && playerBox()) { previewFromPlayer(); return; }
-        if (document.getElementById('cg-root') && window.ChannelGuide && window.ChannelGuide.close) {
-            window.ChannelGuide.close({ returnToLiveTv: false });
-        }
-        if (isHomeRoute()) open();
+        if (P()) { P().goHome(); return; }
+        if (isHomeRoute(location.hash)) open();
         else location.hash = '#/home';
-    };
-    const isTyping = (t) => {
-        if (!t || !t.tagName) return false;
-        if (t.isContentEditable) return true;
-        if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
-        if (t.tagName !== 'INPUT') return false;
-        return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'image', 'color', 'file'].includes((t.type || '').toLowerCase());
-    };
-    const onHomeKey = (ev) => {
-        if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat || (ev.key !== 'h' && ev.key !== 'H')) return;
-        if (isTyping(ev.target) || isTyping(document.activeElement)) return;
-        if (home && !document.getElementById('cg-root')) return; // already home
-        if (!getServer()) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        goHome();
     };
     let queued = false;
     const queue = () => {
@@ -941,11 +665,19 @@
 
     window.addEventListener('hashchange', onRoute);
     window.addEventListener('popstate', onRoute);
-    document.addEventListener('keydown', onHomeKey, true);
+    // the player changes the route (docking, Back) and what's playing
+    const onPlayer = () => { if (home) home.refresh(); queue(); };
+    let offPlayer = null;
+    const hookPlayer = () => {
+        if (offPlayer || !P()) return;
+        offPlayer = P().onChange(onPlayer);
+    };
+    hookPlayer();
     let observer = null;
     const start = () => {
+        hookPlayer();
         observer = new MutationObserver(queue);
-        observer.observe(document.body, { childList: true, subtree: true }); // subtree: the player's control bar
+        observer.observe(document.body, { childList: true });
         queue();
     };
     if (document.body) start();
@@ -962,8 +694,7 @@
             observer && observer.disconnect();
             window.removeEventListener('hashchange', onRoute);
             window.removeEventListener('popstate', onRoute);
-            document.removeEventListener('keydown', onHomeKey, true);
-            document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
+            if (offPlayer) offPlayer();
             document.getElementById('hm-css')?.remove();
             cssReady = null;
         }

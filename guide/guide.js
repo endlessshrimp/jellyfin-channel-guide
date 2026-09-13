@@ -198,6 +198,7 @@
     // Home: HOMER Home knows how (it keeps a playing video going); without it,
     // close and go to Jellyfin's home route
     const goHome = () => {
+        if (window.HomerPlayer) { window.HomerPlayer.goHome(); return; }
         if (window.HomerHome && window.HomerHome.goHome) { window.HomerHome.goHome(); return; }
         close({ returnToLiveTv: false });
         location.hash = '#/home';
@@ -523,7 +524,7 @@
             nowWatching = cur.row.ch;
             // watching from the guide is always full screen, even if Home had the
             // channel playing in its preview window
-            if (window.HomerHome && window.HomerHome.fullscreen) window.HomerHome.fullscreen();
+            if (window.HomerPlayer && window.HomerPlayer.docked()) window.HomerPlayer.fullscreen();
             close({ returnToLiveTv: false });
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };

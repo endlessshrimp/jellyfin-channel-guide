@@ -13,14 +13,28 @@ Watching, Up Next, On Now and Recently Added.
 - **Watch** plays the channel in the On Now preview window, and Home stays up
   so you can keep browsing. The panel shows what you're watching, with
   **Full screen**, **Guide** and **Stop**.
-- **Full screen**, **F**, or a click on the preview hands it to Jellyfin's
-  full-screen player. The **Home** button in the player's controls (or **H**)
-  brings it back to the preview.
 - **H**, or the HOMER logo at the top left of any HOMER screen, comes back to
   Home from anywhere.
-- Opening Movies, TV Shows or any other page stops the channel. Jellyfin stops
-  video whenever you leave its player. The guide is the exception: it opens on
-  top, and the channel keeps playing in its preview.
+
+## Watching while you browse
+
+A video keeps playing while you move around HOMER. Every HOMER screen (Home,
+Movies, TV Shows, show and movie pages) has a preview window, and the video
+sits in it, still playing, as you go from screen to screen.
+
+- **Back** from full screen (the player's ← button, **Esc** or **Backspace**)
+  shrinks the video into the screen you came from, and it keeps playing there.
+- **Full screen**, **F**, or a click on the preview window takes it back to
+  full screen. **Play** on something else also goes full screen.
+- **H** or the player's **Home** button takes the video to Home's preview.
+- **Stop** on Home ends it. When a video ends by itself, you stay on the screen
+  you're on.
+- While a video plays behind HOMER, the arrow keys, space and the trackpad
+  control HOMER, not the player. The trackpad never changes the volume, even
+  in the full-screen player.
+- Jellyfin's own pages (Search results, Recordings, Settings) still stop the
+  video when you open them, because Jellyfin stops video whenever you leave
+  its player. The browser's own Back (trackpad swipe, Cmd+[) does too.
 
 ## Movies and TV Shows
 
@@ -69,13 +83,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.3/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.3.0/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.2.3`), so an update never changes
+The URL is pinned to a release tag (`@v0.3.0`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

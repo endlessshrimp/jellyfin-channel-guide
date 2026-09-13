@@ -185,6 +185,7 @@
     // Hand Jellyfin Web's own remote-control handler a Play message, exactly as
     // if the server had told this client to play it (the guide does the same).
     const play = async (id, startTicks) => {
+        if (docked()) P().fullscreen(); // Play means full screen, even while something plays docked
         const ac = window.ApiClient;
         const server = getServer();
         // always explicit: 0 means "from the beginning" (Restart), never "wherever it was"
@@ -201,6 +202,16 @@
         await request('POST', `/Sessions/${mine.Id}/Playing?playCommand=PlayNow&itemIds=${id}${startTicks > 0 ? '&startPositionTicks=' + startTicks : ''}`);
     };
 
+    // ---------- The player (shared/player.js) ----------
+    // While a video plays docked in a preview window, HOMER screens sit on top of
+    // Jellyfin's player page and move between each other without touching the
+    // address (leaving the player page would stop the video). HomerPlayer keeps
+    // that screen stack; this module asks it where it is and goes through it.
+    const P = () => window.HomerPlayer || null;
+    const docked = () => !!(P() && P().docked());
+    const currentRoute = () => (P() ? P().route() : location.hash);
+    const nav = (hash) => { if (P()) P().go(hash); else location.hash = hash; };
+
     const detailsHash = (id) => {
         const server = getServer();
         return `#/details?id=${id}${server && server.Id ? '&serverId=' + server.Id : ''}`;
@@ -209,6 +220,7 @@
     // Back, like a remote: the previous page, or somewhere sensible when this was
     // the first page in the tab.
     const goBack = (fallback) => {
+        if (docked()) { P().back(); return; }
         const before = location.href;
         history.back();
         setTimeout(() => {
@@ -218,7 +230,8 @@
 
     // Home: HOMER Home handles it when it's loaded, otherwise Jellyfin's home route
     const goHome = () => {
-        if (window.HomerHome && window.HomerHome.goHome) window.HomerHome.goHome();
+        if (P()) P().goHome();
+        else if (window.HomerHome && window.HomerHome.goHome) window.HomerHome.goHome();
         else location.hash = '#/home';
     };
 
@@ -356,11 +369,16 @@
         // legend: [{ key, label, action }] with 'spacer' for the gap. Every screen
         // gets H Home, just before Back.
         const HOME_ITEM = { key: 'H', label: 'Home', action: 'home' };
+        const FULL_ITEM = { key: 'F', label: 'Full screen', action: 'fullscreen' };
+        let lastLegend = [];
         const setLegend = (list) => {
+            lastLegend = list;
             const items = list.slice();
             const at = items.indexOf('spacer');
-            if (at >= 0) items.splice(at + 1, 0, HOME_ITEM);
-            else items.push('spacer', HOME_ITEM);
+            if (at >= 0) items.splice(at, 0, ...(docked() ? [FULL_ITEM] : []));
+            const sp = items.indexOf('spacer');
+            if (sp >= 0) items.splice(sp + 1, 0, HOME_ITEM);
+            else items.push(...(docked() ? [FULL_ITEM] : []), 'spacer', HOME_ITEM);
             $('.hl-legend').innerHTML = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hl-key">${i.key}</span>${esc(i.label)}</span>`)).join('');
@@ -438,6 +456,7 @@
         $('.hl-brand').addEventListener('click', goHome);
         $('.hl-legend').addEventListener('click', (ev) => {
             if (ev.target.closest('[data-action="home"]')) goHome();
+            else if (ev.target.closest('[data-action="fullscreen"]') && P()) P().fullscreen();
         });
         root.addEventListener('wheel', wheelHandler, { passive: false });
 
@@ -451,6 +470,7 @@
             $,
             toast,
             setLegend,
+            refreshLegend() { setLegend(lastLegend); },
             setAmbient,
             renderInfo,
             renderActions,
@@ -722,7 +742,7 @@
             if (a.id === 'episodes') {
                 typeCache.set(it.Id, 'Series');
                 fresh.set(it.Id, it); // the show screen can draw its header at once
-                location.hash = detailsHash(it.Id);
+                nav(detailsHash(it.Id));
                 return;
             }
             const target = a.item;
@@ -936,6 +956,7 @@
         return {
             key: route.key,
             show: shell.show,
+            refreshLegend: shell.refreshLegend,
             teardown() {
                 alive = false;
                 clearTimeout(nextUpTimer);
@@ -1346,6 +1367,7 @@
         return {
             key: route.key,
             show: shell.show,
+            refreshLegend: shell.refreshLegend,
             teardown() {
                 alive = false;
                 shell.teardown();
@@ -1524,6 +1546,7 @@
         return {
             key: route.key,
             show: shell.show,
+            refreshLegend: shell.refreshLegend,
             teardown() {
                 alive = false;
                 shell.teardown();
@@ -1538,8 +1561,8 @@
     let lookup = null; // details id being looked up
     const fresh = new Map(); // id -> full item fetched by the route lookup (used once)
 
-    const parseRoute = () => {
-        const m = (location.hash || '').match(/^#!?\/([a-z]+)(?:\.html)?(?:\?(.*))?$/i);
+    const parseRoute = (hash = currentRoute()) => {
+        const m = (hash || '').match(/^#!?\/([a-z]+)(?:\.html)?(?:\?(.*))?$/i);
         if (!m) return null;
         const page = m[1].toLowerCase();
         const q = new URLSearchParams(m[2] || '');
@@ -1597,6 +1620,7 @@
             const type = known ? known.Type : typeCache.get(route.id);
             if (type && !SUPPORTED.has(type)) {
                 closeScreen(); // people, channels, collections, …: Jellyfin's page
+                if (docked()) P().leave(currentRoute()); // (which means leaving the player)
                 return;
             }
             // Seasons/episodes need their show's id, so fetch the item itself.
@@ -1628,8 +1652,9 @@
         // setTimeout, not requestAnimationFrame: rAF never fires in a background tab
         setTimeout(() => {
             syncQueued = false;
-            if (location.href === lastHref && (screen || !parseRoute())) return;
-            lastHref = location.href;
+            const here = location.href + '|' + currentRoute();
+            if (here === lastHref && (screen || !parseRoute())) return;
+            lastHref = here;
             sync();
         }, 50);
     };
@@ -1649,6 +1674,16 @@
 
     window.addEventListener('hashchange', onRouteChange);
     window.addEventListener('popstate', onRouteChange);
+    // docking, Back and Home change the route without changing the address
+    let offPlayer = null;
+    const hookPlayer = () => {
+        if (offPlayer || !P()) return;
+        offPlayer = P().onChange(() => {
+            onRouteChange();
+            if (screen && screen.refreshLegend) screen.refreshLegend();
+        });
+    };
+    hookPlayer();
     if (document.body) start();
     else document.addEventListener('DOMContentLoaded', start, { once: true });
 
@@ -1658,8 +1693,8 @@
         // open('#/movies?topParentId=…'): go there (and take it over).
         open(route) {
             suppressedKey = null;
-            if (typeof route === 'string' && route && location.hash !== route) {
-                location.hash = route.startsWith('#') ? route : '#' + route;
+            if (typeof route === 'string' && route && currentRoute() !== route) {
+                nav(route.startsWith('#') ? route : '#' + route);
                 return;
             }
             lastHref = '';
@@ -1678,6 +1713,7 @@
             document.removeEventListener('DOMContentLoaded', start);
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);
+            if (offPlayer) offPlayer();
             document.getElementById('hl-css')?.remove();
             cssReady = null;
         }

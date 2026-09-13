@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.0
+
+- Watching while you browse: a playing video stays up across every HOMER
+  screen. Home, Movies, TV Shows, and show and movie pages all open on top of
+  the player, with the video playing in their preview window and gliding
+  between screens.
+- Back from full screen (the player's ← button, Esc, Backspace) shrinks the
+  video into the screen you came from instead of stopping it. Full screen, F,
+  or a click on the preview window expands it again.
+- Play on a show or movie page while something plays goes full screen. When a
+  video ends, you stay on the screen you were on.
+- The trackpad never changes the volume, including in Jellyfin's full-screen
+  player.
+- New `shared/player.js` (HomerPlayer), loaded first by `homer.js`, owns
+  playback, the preview window, Back, H and F for every screen.
+
 ## v0.2.3
 
 - Home from anywhere: the HOMER logo at the top left of the guide, Movies,
