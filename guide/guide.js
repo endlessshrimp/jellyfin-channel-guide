@@ -210,7 +210,7 @@
     let nowWatching = null; // channel last started from the guide
     let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
     let tabSuppressed = false; // closed from that tab; don't reopen until it's left
-    const LIVETV_HOME = '#/livetv?tab=0';
+    const LIVETV_HOME = '#/home'; // Jellyfin's Live TV pages don't show under HOMER
 
     const open = () => {
         if (guide) return;

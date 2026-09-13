@@ -19,7 +19,7 @@
  *                        destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window.HomerPlayer && typeof window.HomerPlayer.destroy === 'function') {
         window.HomerPlayer.destroy();
@@ -75,9 +75,17 @@
     const isVideoRoute = () => /^#\/video/.test(location.hash);
     const isHomeHash = (h) => /^#\/(home(\.html)?)?(\?.*)?$/.test(h) || h === '' || h === '#/';
     // the pages HOMER draws itself
-    const isHomerHash = (h) => isHomeHash(h) || /^#\/(movies|tv|details)(\.html)?\?/.test(h);
+    const isHomerHash = (h) => isHomeHash(h)
+        || /^#\/(movies|tv|details)(\.html)?\?/.test(h)
+        || /^#\/search(\.html)?(\?|$)/.test(h) // Search
+        || /^#\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h) // Recordings
+        || /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h); // Settings
+    const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
+    // Jellyfin pages HOMER leaves alone: the admin dashboard, sign-in and setup,
+    // and the player itself
+    const isStockOk = (h) => /^#\/(dashboard|configurationpage|metadata|edititemmetadata|login|selectserver|addserver|forgotpassword|startup|wizard|quickconnect|video)/i.test(h);
     const playerBox = () => document.querySelector('.videoPlayerContainer');
-    const overlayOpen = () => !!document.querySelector('#hm-root, #hl-root, #cg-root');
+    const overlayOpen = () => !!document.querySelector('#hm-root, #hl-root, #cg-root, .homer-screen');
 
     // ---------- State ----------
 
@@ -126,10 +134,10 @@
     let lastRect = '';
 
     const dockTarget = () => {
-        for (const sel of ['#hm-root .hm-preview', '#hl-root .hl-preview']) {
+        for (const sel of ['#hm-root .hm-preview', '#hl-root .hl-preview', '.homer-screen [data-homer-preview]']) {
             const t = document.querySelector(sel);
             if (!t) continue;
-            const root = t.closest('#hm-root, #hl-root');
+            const root = t.closest('#hm-root, #hl-root, .homer-screen');
             if (root && getComputedStyle(root).visibility === 'hidden') continue;
             const r = t.getBoundingClientRect();
             if (r.width > 0 && r.height > 0) return t;
@@ -432,6 +440,19 @@
 
     let lastHref = location.href;
     let wasVideo = isVideoRoute();
+    // ---------- No stock Jellyfin pages ----------
+    // Any page HOMER doesn't draw (and isn't the dashboard, sign-in or the player)
+    // goes to Home, and Jellyfin's own pages stay hidden underneath HOMER, so a
+    // stock page never flashes up.
+    const guard = () => {
+        const h = location.hash || HOME;
+        const ok = !getServer() || isStockOk(h);
+        document.documentElement.classList.toggle('homer-stock-ok', ok);
+        if (ok || docked || landing) return;
+        if (isHomerHash(h) || isGuideHash(h)) return;
+        location.replace('#/home');
+    };
+
     const tick = () => {
         checkCancel();
         const href = location.href;
@@ -439,6 +460,7 @@
         if (href !== lastHref) {
             lastHref = href;
             recordTrail(location.hash || HOME);
+            guard();
             if (landing && !video) {
                 if (location.hash === landing) landing = null;
                 else location.hash = landing;
@@ -601,10 +623,15 @@
         .videoPlayerContainer.homer-pinned .videoSubtitles { display: none !important; }
         .homer-cancelling .videoPlayerContainer,
         .homer-cancelling #videoOsdPage { visibility: hidden !important; }
+        html:not(.homer-stock-ok) .mainAnimatedPages,
+        html:not(.homer-stock-ok) .skinHeader,
+        html:not(.homer-stock-ok) .mainDrawer,
+        html:not(.homer-stock-ok) .mainDrawerHandle { visibility: hidden !important; }
     `;
     document.head.appendChild(style);
 
     recordTrail(location.hash || HOME);
+    guard();
 
     window.HomerPlayer = {
         version: VERSION,
@@ -620,6 +647,7 @@
         fullscreen,
         stop,
         isHomerHash,
+        isStockOk,
         isHomeHash,
         destroy() {
             clearInterval(timer);

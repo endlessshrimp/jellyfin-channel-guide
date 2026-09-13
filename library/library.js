@@ -1619,8 +1619,12 @@
             const known = fresh.get(route.id);
             const type = known ? known.Type : typeCache.get(route.id);
             if (type && !SUPPORTED.has(type)) {
-                closeScreen(); // people, channels, collections, …: Jellyfin's page
-                if (docked()) P().leave(currentRoute()); // (which means leaving the player)
+                // people, channels, collections, …: not a HOMER page, and Jellyfin's
+                // pages don't show; go back where you were (or Home)
+                closeScreen();
+                if (docked()) P().back();
+                else if (history.length > 1) history.back();
+                else location.replace('#/home');
                 return;
             }
             // Seasons/episodes need their show's id, so fetch the item itself.
