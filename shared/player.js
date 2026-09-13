@@ -14,7 +14,8 @@
  * or the Full screen button) hands it back to Jellyfin's player. H, the HOMER
  * logo and the player's Home button go Home, taking the video along. The
  * browser's own Back goes back a screen while docked (see "The browser's
- * Back").
+ * Back"). On a phone or tablet, live TV stops after the page has been hidden
+ * for a few minutes.
  *
  * window.HomerPlayer = { route, docked, nowPlaying, onChange, go, leave, back,
  *                        goHome, watch, fullscreen, stop, isHomerHash, isHomeHash,
@@ -187,6 +188,13 @@
         const box = playerBox();
         const target = dockTarget();
         if (!box || !target) return;
+        // iPhones play inline only when the video says so (Jellyfin's does;
+        // this is in case that ever changes)
+        const v = box.querySelector('video');
+        if (v && !v.playsInline) {
+            v.playsInline = true;
+            v.setAttribute('webkit-playsinline', '');
+        }
         const r = target.getBoundingClientRect();
         const scale = target.offsetHeight ? r.height / target.offsetHeight : 1;
         const radius = (parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0) * scale;
@@ -522,6 +530,46 @@
         }
     };
 
+    // ---------- A pocketed phone lets go of the tuner ----------
+    // The provider allows two streams at a time, so on a phone or tablet live
+    // TV stops once the page has been hidden (switched away from, or the phone
+    // locked) for a few minutes. A recording or a library video just stays
+    // paused. A phone that slept through the timer is checked when it wakes.
+
+    const LIVE_IDLE_MS = 3 * 60000;
+    let hiddenAt = 0;
+    let idleTimer = 0;
+    const touchDevice = () => !!(window.HomerLayout && (window.HomerLayout.isPhone() || window.HomerLayout.isTouch()));
+    const watchingLive = async () => {
+        if (nowPlaying && nowPlaying.program) return true;
+        if (nowPlaying && nowPlaying.item) return false;
+        const server = getServer();
+        const ac = window.ApiClient;
+        const deviceId = ac && ac.deviceId && ac.deviceId();
+        if (!server || !deviceId) return false;
+        const sessions = await api(`/Sessions?DeviceId=${encodeURIComponent(deviceId)}`);
+        const s = (sessions || []).find((x) => x.DeviceId === deviceId && x.NowPlayingItem);
+        return !!(s && s.NowPlayingItem.Type === 'TvChannel');
+    };
+    const stopIdleLive = async () => {
+        if (!hiddenAt || Date.now() - hiddenAt < LIVE_IDLE_MS) return;
+        if (!playerBox() || !(docked || isVideoRoute())) return;
+        if (!(await watchingLive().catch(() => false))) return;
+        console.info('[HOMER Player] Live TV stopped: hidden for', Math.round((Date.now() - hiddenAt) / 60000), 'min');
+        if (docked) stop();
+        else stopPlayback();
+    };
+    const onVisibility = () => {
+        clearTimeout(idleTimer);
+        if (document.hidden) {
+            if (!touchDevice()) return;
+            hiddenAt = Date.now();
+            idleTimer = setTimeout(stopIdleLive, LIVE_IDLE_MS + 1000);
+        } else if (hiddenAt) {
+            stopIdleLive().finally(() => { hiddenAt = 0; });
+        }
+    };
+
     // ---------- Watching the address and the player ----------
 
     let lastHref = location.href;
@@ -670,6 +718,7 @@
     document.addEventListener('click', onClickCapture, true);
     document.addEventListener('pointerdown', onPointerCapture, true);
     window.addEventListener('popstate', onPopState);
+    document.addEventListener('visibilitychange', onVisibility);
 
     // ---------- A Home button in the player's control bar ----------
 
@@ -747,6 +796,8 @@
             document.removeEventListener('click', onClickCapture, true);
             document.removeEventListener('pointerdown', onPointerCapture, true);
             window.removeEventListener('popstate', onPopState);
+            document.removeEventListener('visibilitychange', onVisibility);
+            clearTimeout(idleTimer);
             clearTimeout(dropTimer);
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             clearPin(playerBox());

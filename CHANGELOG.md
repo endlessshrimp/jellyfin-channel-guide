@@ -29,6 +29,30 @@
   guide's channels, listings and recordings are in guide/guide-model.js, apart
   from the grid that draws them. The TV screens look and work exactly as
   before.
+- The guide on a phone is a list: one row per channel with its logo and
+  number, what's on (time left and a progress bar), what's next, and a **●**
+  button on every row. A time rail under the chips picks what the rows show,
+  Now or any half hour ahead (with the day), TiVo-style; category and country
+  chips narrow the list as on TV. Channels with nothing listed get a slim
+  row. Only the rows on screen are drawn, so 272 channels scroll smoothly.
+- **●** records with a toast, like on TV. On a program that's set to record,
+  the first tap arms it (**Cancel?**, or **Stop?** while it's recording) and a
+  second tap within a few seconds cancels it. A tap on a row opens a sheet:
+  the channel, the program, its time and how soon it starts, the
+  description, and big **Record** and **Watch** buttons (Watch only for
+  what's on now). No long-presses anywhere.
+- Watching from the phone guide plays the channel in a strip under the top
+  bar, and the list keeps scrolling under it (in landscape the video sits at
+  the left, with the chips and times under it). Tap it for full screen, **✕**
+  to stop. The guide is a screen at its own address on a phone, so the tab
+  bar and Back move to and from it like any other.
+- Live TV stops by itself when a phone or tablet has been locked, or HOMER has
+  been in the background, for 3 minutes (checked again when it wakes up), so a
+  pocketed phone doesn't hold one of the provider's two streams. Recordings
+  and movies just stay paused.
+- iPhones play the docked video inline (Jellyfin's video already asks for
+  that; HOMER makes sure).
+- Landscape phones get shorter rows, with what's next beside what's on.
 
 ## v0.3.10
 

@@ -2,7 +2,7 @@
 
 A TiVo-style TV-appliance interface for Jellyfin Web: a HOMER Home screen, the
 Channel Guide, Movies and TV Shows screens, and a global skin so every remaining
-Jellyfin page matches. It works on phones too (see
+Jellyfin page matches. On a phone, HOMER has a phone layout (see
 [On a phone](#on-a-phone)).
 
 ## Home
@@ -100,13 +100,37 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 ## On a phone
 
 Jellyfin's Android and iOS apps (and a phone's browser) load HOMER too. When
-the screen's shortest side is under 600px, in either orientation, every HOMER
-screen gets a **top bar** (HOMER and the screen's name, the weather,
-**Search**) and a **tab bar** (Home, Guide, Movies, Shows, Recordings). The
-weather opens the Weather screen; Settings is on Home. The screens show their
-TV layout, shrunk to fit between the bars, until they get phone layouts of
-their own. A tablet keeps the TV layout, with touch (see
+the screen's shortest side is under 600px, HOMER switches to its phone layout,
+in either orientation; a tablet keeps the TV layout, with touch (see
 [Controls](#controls)).
+
+![Phone guide](screenshots/phone-guide.png)
+
+- A **top bar** (HOMER and the screen's name, the weather, **Search**) and a
+  **tab bar** (Home, Guide, Movies, Shows, Recordings) on every HOMER screen.
+  The weather opens the Weather screen; Settings is on Home. The phone shows
+  the time, so HOMER doesn't.
+- **The guide** is a list: one row per channel with what's on (time left and a
+  progress bar), what's next, and a **●** button. The time rail picks what the
+  rows show: **Now**, or any half hour ahead. Category and country chips work
+  as on TV (the country chip opens the choices). Channels with nothing listed
+  get a slim row.
+- **●** records the program in its row. On one that's set to record, the first
+  tap says **Cancel?** (or **Stop?** while it's recording) and a second tap
+  within a few seconds cancels it.
+- **A tap on a row** opens a sheet with the program, **Record** and, for what's
+  on now, **Watch**. Drag it down or tap outside it to put it away.
+- **Watch** plays the channel in a strip under the top bar, and the list keeps
+  scrolling under it (in landscape the video sits at the left). Tap the strip
+  for full screen, **✕** to stop. **Back** goes back a screen, not out of the
+  video.
+- On a phone or tablet, live TV stops by itself once the screen has been
+  locked, or HOMER has been in the background, for 3 minutes, so a phone in a
+  pocket doesn't hold one of the provider's two streams. A recording or a
+  movie just stays paused.
+- Home, Movies, TV Shows, Search, Recordings, Settings and Weather don't have
+  their phone layouts yet: they show their TV layout, shrunk to fit between
+  the bars.
 
 ## Install
 
@@ -170,7 +194,8 @@ Scripts can also call `window.ChannelGuide.open()` and
 
 - **Jellyfin Web 10.11.x.** Tested against 10.11.8.
 - **Works in** anything that runs Jellyfin Web: desktop and mobile browsers,
-  Jellyfin Media Player, and the Jellyfin iOS/Android phone apps.
+  Jellyfin Media Player, and the Jellyfin iOS/Android phone apps (with the
+  phone layout).
 - **Doesn't work in** native clients that don't use Jellyfin Web: Android TV /
   Fire TV, Roku, and Swiftfin (iOS / Apple TV). The JavaScript Injector plugin
   can't reach those apps.
@@ -195,7 +220,11 @@ document.head.appendChild(s);
 ```
 
 Loaded on its own like this, the guide fetches its model
-(`guide/guide-model.js`) itself; `homer.js` loads everything.
+(`guide/guide-model.js`) and phone layout (`guide/guide-phone.js`) itself;
+`homer.js` loads everything.
+
+How a screen gets a phone layout, and how to test one without a phone:
+[docs/phone.md](docs/phone.md).
 
 `theme.css` is an older, separate stylesheet that restyles Jellyfin's built-in
 guide page through Dashboard → General → Custom CSS. The guide doesn't need it.

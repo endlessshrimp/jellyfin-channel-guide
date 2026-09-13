@@ -41,6 +41,7 @@
     js('shared/logos.js'); // before the screens: they hand it their channel logos
     js('guide/guide-model.js'); // the guide's channels, listings and recordings
     js('guide/guide.js');
+    js('guide/guide-phone.js'); // the guide's phone layout
     js('home/home.js');
     js('library/library.js');
     js('settings/settings.js');

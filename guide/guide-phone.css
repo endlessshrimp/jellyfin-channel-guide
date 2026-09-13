@@ -1,0 +1,993 @@
+/*
+ * Channel Guide, phone layout (guide/guide-phone.js). Everything is scoped to
+ * .cg-phone; colors, type and the logo chips come from shared/tokens.css, and
+ * the top bar and tab bar around it from shared/phone.css.
+ *
+ * The guide sits above the phone's bars and above a docked video (HomerPlayer
+ * pins the real video at 99995): its own panels start below the top bar and
+ * end above the tab bar, and the video strip is a hole the video shows
+ * through. Only the sheet and its scrim cover the bars.
+ */
+
+/* (#cg-root.cg-phone: over guide.css's #cg-root, which is the TV guide's) */
+#cg-root.cg-phone {
+    --dock-h: calc(100vw * 9 / 16);
+    --gp-row-h: 84px; /* guide-phone.js lays the list out from these */
+    --gp-slim-h: 52px;
+
+    position: fixed;
+    inset: 0;
+    z-index: 99997;
+    overflow: visible;
+    background: none;
+    pointer-events: none;
+    font-family: var(--homer-font);
+    color: var(--homer-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+.cg-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.cg-phone .gp-main {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--homer-phone-top);
+    bottom: var(--homer-phone-tabs);
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+.cg-phone .gp-side {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+}
+
+/* the TV screens' faint scanline texture */
+.cg-phone .gp-side::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+}
+
+/* ---------- Docked video ---------- */
+
+.cg-phone .gp-dock {
+    position: relative;
+    flex: none;
+    display: none;
+    width: 100%;
+    height: var(--dock-h);
+    overflow: hidden;
+    cursor: pointer;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.cg-phone.gp-docked .gp-dock { display: block; }
+
+/* the video is in: let it show through */
+.cg-phone.gp-dock-live .gp-dock { background: none; }
+.cg-phone.gp-dock-live .gp-dock-idle { display: none; }
+
+.cg-phone .gp-dock-idle {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.cg-phone .gp-dock-tuning {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.cg-phone .gp-dock-logo .cg-logo-chip {
+    height: 66px;
+    min-width: 120px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    box-sizing: border-box;
+}
+
+.cg-phone .gp-dock-logo .cg-logo-chip img {
+    max-height: 48px;
+    max-width: 110px;
+}
+
+.cg-phone .gp-badge {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--homer-live);
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cg-phone .gp-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.cg-phone .gp-dock-ctl {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+}
+
+.cg-phone .gp-dock-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.cg-phone .gp-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    font-size: 21px;
+    color: #fff;
+}
+
+.cg-phone .gp-dock-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 22px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), transparent);
+    font-family: var(--homer-font-cond);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.cg-phone .gp-dock-what {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-dock-left { flex: none; }
+
+.cg-phone .gp-dock-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cg-phone .gp-dock-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+/* ---------- Chips and the time rail ---------- */
+
+.cg-phone .gp-head {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.cg-phone .gp-chips,
+.cg-phone .gp-slots {
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
+}
+
+.cg-phone .gp-chips::-webkit-scrollbar,
+.cg-phone .gp-slots::-webkit-scrollbar { display: none; }
+
+.cg-phone .gp-chips {
+    gap: 7px;
+    padding: 8px 16px 6px;
+}
+
+.cg-phone .gp-chip {
+    flex: none;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 13px;
+    border-radius: 18px;
+    box-sizing: border-box;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d6e0ec;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cg-phone .gp-chip i {
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--homer-dim);
+}
+
+.cg-phone .gp-chip.on {
+    background: var(--homer-focus-fill);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 6px 18px rgba(47, 140, 255, 0.4);
+}
+
+.cg-phone .gp-chip.on i { color: rgba(255, 255, 255, 0.8); }
+
+.cg-phone .gp-chip.gp-country {
+    padding-left: 9px;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: transparent;
+    color: #0b1a2e;
+}
+
+.cg-phone .gp-chip.gp-country i { color: #50627a; }
+.cg-phone .gp-chip.gp-country .material-icons { font-size: 17px; color: #2a4a74; }
+
+.cg-phone .gp-chips-rule {
+    flex: none;
+    width: 1.5px;
+    height: 22px;
+    background: var(--homer-line-strong);
+}
+
+.cg-phone .gp-rail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0 10px 16px;
+}
+
+.cg-phone .gp-day {
+    flex: none;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--homer-accent);
+    color: #fff;
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cg-phone .gp-day.later { background: var(--homer-needle); color: #1d1200; }
+
+.cg-phone .gp-slots {
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+    padding-right: 16px;
+}
+
+.cg-phone .gp-slot {
+    flex: none;
+    height: 36px;
+    min-width: 58px;
+    padding: 0 10px;
+    border-radius: 9px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid var(--homer-line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--homer-dim);
+    font-weight: 700;
+    font-size: 14.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cg-phone .gp-slot small {
+    font-family: var(--homer-font-cond);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-needle);
+}
+
+.cg-phone .gp-slot.on {
+    background: var(--homer-needle);
+    border-color: transparent;
+    color: #111;
+}
+
+.cg-phone .gp-slot.on small { color: #3a2600; }
+
+/* ---------- Channel list ---------- */
+
+.cg-phone .gp-list {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 8px 12px 12px;
+}
+
+.cg-phone .gp-canvas { position: relative; }
+
+.cg-phone .gp-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 8px 0 10px;
+    border-radius: 12px;
+    background: var(--homer-cell);
+    border: 1px solid rgba(160, 190, 230, 0.08);
+    overflow: hidden;
+    cursor: pointer;
+    contain: layout paint;
+}
+
+.cg-phone .gp-row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 3.5px;
+    border-radius: 0 3px 3px 0;
+    background: var(--genre, transparent);
+}
+
+.cg-phone .gp-row:active { background: var(--homer-cell-hi); }
+
+.cg-phone .gp-chan {
+    flex: none;
+    width: 66px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.cg-phone .cg-logo-chip {
+    box-sizing: border-box;
+    width: 66px;
+    height: 40px;
+    min-width: 0;
+    padding: 4px 7px;
+    border-radius: 9px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.cg-phone .cg-logo-chip img {
+    max-width: 100%;
+    max-height: 30px;
+}
+
+.cg-phone .cg-chan-fallback {
+    font-size: 10.5px;
+    overflow: hidden;
+}
+
+.cg-phone .gp-num {
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--homer-dim);
+    letter-spacing: 0.04em;
+}
+
+.cg-phone .gp-prog {
+    flex: 1;
+    min-width: 0;
+}
+
+.cg-phone .gp-title {
+    font-size: 16.5px;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--homer-live);
+    box-shadow: 0 0 8px rgba(255, 59, 59, 0.7);
+    vertical-align: 1px;
+}
+
+.cg-phone .gp-meta {
+    margin-top: 3px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-recword { color: #ff7a7a; }
+
+.cg-phone .gp-bar {
+    margin-top: 6px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.cg-phone .gp-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+.cg-phone .gp-next {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--homer-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-next em {
+    margin-right: 5px;
+    font-style: normal;
+    font-family: var(--homer-font-cond);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+/* a channel with nothing listed: slim, number beside the logo */
+.cg-phone .gp-row.slim .gp-chan {
+    width: auto;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.cg-phone .gp-row.slim .cg-logo-chip { height: 34px; }
+
+.cg-phone .gp-row.slim .gp-num { width: 38px; }
+
+.cg-phone .gp-none {
+    font-style: italic;
+    font-size: 14px;
+    color: var(--homer-faint);
+}
+
+/* listings on their way */
+.cg-phone .gp-loading i {
+    display: block;
+    height: 12px;
+    width: 72%;
+    border-radius: 6px;
+    background: repeating-linear-gradient(135deg, rgba(160, 190, 230, 0.1) 0 8px, rgba(160, 190, 230, 0.05) 8px 16px);
+}
+
+.cg-phone .gp-loading i + i {
+    width: 44%;
+    margin-top: 10px;
+}
+
+/* recording right now */
+.cg-phone .gp-row.rec-now {
+    background: rgba(60, 22, 34, 0.82);
+    border-color: rgba(255, 59, 59, 0.35);
+}
+
+/* ---------- ● on every row ---------- */
+
+.cg-phone .gp-rec {
+    flex: none;
+    box-sizing: border-box;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(3, 9, 18, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    color: #fff;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cg-phone .gp-rec[hidden] { display: none; }
+
+.cg-phone .gp-rec i {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--homer-live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.75);
+}
+
+.cg-phone .gp-rec-label:empty { display: none; }
+
+/* set to record: red, with the stop square that cancels it */
+.cg-phone .gp-row.set .gp-rec {
+    background: var(--homer-live);
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 59, 59, 0.3);
+}
+
+.cg-phone .gp-row.set .gp-rec i {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: #fff;
+    box-shadow: none;
+}
+
+/* the first tap on a set one: "Cancel?" (or "Stop?"), tap again */
+.cg-phone .gp-row.armed .gp-rec {
+    padding: 0 16px 0 14px;
+    animation: gp-arm 1s ease-in-out infinite;
+}
+
+@keyframes gp-arm {
+    50% { box-shadow: 0 0 0 7px rgba(255, 59, 59, 0.2); }
+}
+
+/* ---------- Toast ---------- */
+
+.cg-phone .gp-toast {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--homer-phone-top) + 104px);
+    z-index: 7;
+    box-sizing: border-box;
+    max-width: calc(100% - 32px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.55);
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.cg-phone.gp-docked .gp-toast { top: calc(var(--homer-phone-top) + var(--dock-h) + 104px); }
+
+.cg-phone .gp-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.cg-phone .gp-toast.rec { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 12px 30px rgba(0, 0, 0, 0.55); }
+.cg-phone .gp-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 12px 30px rgba(0, 0, 0, 0.55); }
+.cg-phone .gp-toast.confirm { background: rgba(60, 14, 22, 0.97); box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.7), 0 12px 30px rgba(0, 0, 0, 0.55); }
+
+.cg-phone .gp-toast-text,
+.cg-phone .gp-toast-q {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-toast-hint {
+    flex: none;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--homer-live);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* ---------- Empty ---------- */
+
+.cg-phone .gp-empty {
+    display: none;
+    padding: 48px 24px;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.4;
+    color: var(--homer-dim);
+}
+
+.cg-phone .gp-empty.show { display: block; }
+
+/* ---------- Sheet ---------- */
+
+.cg-phone .gp-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.cg-phone.gp-sheet-open .gp-scrim {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.cg-phone .gp-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    box-sizing: border-box;
+    max-height: calc(100% - var(--homer-phone-top) - 12px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px calc(18px + var(--homer-phone-right)) calc(22px + env(safe-area-inset-bottom, 0px)) calc(18px + var(--homer-phone-left));
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(180deg, #11264a, #07142a 60%);
+    border-top: 1px solid var(--homer-line-strong);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.6);
+    transform: translateY(105%);
+    visibility: hidden;
+    transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 240ms;
+}
+
+.cg-phone.gp-docked .gp-sheet { max-height: calc(100% - var(--homer-phone-top) - var(--dock-h) - 8px); }
+
+.cg-phone.gp-sheet-open .gp-sheet {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+
+.cg-phone .gp-grab {
+    width: 40px;
+    height: 5px;
+    margin: 0 auto 16px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.cg-phone .gp-sheet-hd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cg-phone .gp-sheet-hd .cg-logo-chip {
+    width: 72px;
+    height: 42px;
+}
+
+.cg-phone .gp-sheet-ch {
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--homer-dim);
+    letter-spacing: 0.04em;
+}
+
+.cg-phone .gp-sheet-title {
+    margin: 14px 0 0;
+    font-size: 26px;
+    line-height: 1.1;
+    font-weight: 800;
+}
+
+.cg-phone .gp-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 12px;
+}
+
+.cg-phone .gp-pill {
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cg-phone .gp-pill.live { background: var(--homer-live); border-color: transparent; }
+.cg-phone .gp-pill.rec { background: rgba(255, 59, 59, 0.16); border-color: rgba(255, 90, 90, 0.6); color: #ffb3b3; }
+.cg-phone .gp-pill.genre { border-color: transparent; color: #03101f; }
+
+.cg-phone .gp-desc {
+    margin: 12px 0 0;
+    font-size: 14.5px;
+    line-height: 1.4;
+    color: #c5d2e3;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cg-phone .gp-desc:empty { display: none; }
+
+.cg-phone .gp-acts {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.cg-phone .gp-act {
+    flex: 1;
+    min-width: 0;
+    height: 54px;
+    border-radius: 14px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 12px;
+    font-weight: 700;
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.cg-phone .gp-act .material-icons { flex: none; font-size: 24px; }
+
+.cg-phone .gp-act span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cg-phone .gp-act-rec {
+    background: rgba(3, 9, 18, 0.9);
+    border: 1.5px solid rgba(255, 59, 59, 0.75);
+}
+
+.cg-phone .gp-act-rec i {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--homer-live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.75);
+}
+
+.cg-phone .gp-act-rec.set i { border-radius: 2px; width: 13px; height: 13px; }
+
+.cg-phone .gp-act-rec.armed {
+    background: var(--homer-live);
+    border-color: #fff;
+}
+
+.cg-phone .gp-act-rec.armed i { background: #fff; box-shadow: none; }
+
+.cg-phone .gp-act-watch {
+    background: var(--homer-focus-fill);
+    box-shadow: 0 8px 24px rgba(47, 140, 255, 0.35);
+}
+
+/* country choices */
+.cg-phone .gp-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.cg-phone .gp-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 54px;
+    padding: 0 16px;
+    border-radius: 14px;
+    background: var(--homer-cell);
+    border: 1px solid var(--homer-line);
+    font-size: 17px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.cg-phone .gp-option span { flex: 1; }
+.cg-phone .gp-option i { font-style: normal; font-family: var(--homer-font-cond); font-size: 14px; color: var(--homer-dim); }
+.cg-phone .gp-option.on { background: var(--homer-focus-fill); border-color: transparent; }
+.cg-phone .gp-option.on i { color: rgba(255, 255, 255, 0.8); }
+
+/* ---------- Landscape: the video beside the list, chips and time on one line ---------- */
+
+@media (orientation: landscape) {
+    #cg-root.cg-phone {
+        --dock-h: calc((100vw - var(--homer-phone-left) - var(--homer-phone-right)) * 0.42 * 9 / 16);
+        --gp-row-h: 64px;
+        --gp-slim-h: 46px;
+    }
+
+    /* what's next goes beside what's on, so a row is shorter */
+    .cg-phone .gp-prog {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 36%);
+        column-gap: 18px;
+        align-items: center;
+    }
+
+    .cg-phone .gp-title,
+    .cg-phone .gp-meta,
+    .cg-phone .gp-bar { grid-column: 1; }
+
+    .cg-phone .gp-next {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        margin-top: 0;
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .cg-phone .gp-next em { display: block; margin-bottom: 2px; }
+    .cg-phone .gp-bar { margin-top: 5px; }
+    .cg-phone .gp-chan { gap: 3px; }
+    .cg-phone .cg-logo-chip { height: 34px; }
+    .cg-phone .cg-logo-chip img { max-height: 26px; }
+
+    .cg-phone .gp-main {
+        flex-direction: row;
+        left: var(--homer-phone-left);
+        right: var(--homer-phone-right);
+    }
+
+    /* docked: the video at the top left with the chips and times under it,
+       the list down the right */
+    .cg-phone.gp-docked .gp-main {
+        display: grid;
+        grid-template-columns: 42% minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+    }
+
+    .cg-phone.gp-docked .gp-side { display: contents; }
+
+    .cg-phone.gp-docked .gp-dock {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
+    }
+
+    .cg-phone.gp-docked .gp-head {
+        grid-column: 1;
+        grid-row: 2;
+        align-self: start;
+        display: block;
+        border-bottom: 0;
+    }
+
+    .cg-phone.gp-docked .gp-head .gp-chips { padding: 10px 12px 4px 12px; }
+
+    .cg-phone.gp-docked .gp-head .gp-rail {
+        padding: 6px 0 6px 12px;
+        border-left: 0;
+    }
+
+    .cg-phone.gp-docked .gp-list {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        border-left: 1px solid var(--homer-line);
+    }
+
+    .cg-phone .gp-head {
+        display: flex;
+        align-items: center;
+    }
+
+    .cg-phone .gp-chips {
+        flex: 1 1 45%;
+        min-width: 0;
+        padding: 6px 10px 6px 16px;
+    }
+
+    .cg-phone .gp-rail {
+        flex: 1 1 55%;
+        min-width: 0;
+        padding: 6px 0 6px 10px;
+        border-left: 1px solid var(--homer-line);
+    }
+
+    .cg-phone .gp-list { padding-top: 6px; }
+
+    .cg-phone.gp-docked .gp-toast { top: calc(var(--homer-phone-top) + 60px); }
+    .cg-phone.gp-docked .gp-sheet { max-height: calc(100% - var(--homer-phone-top) - 12px); }
+}

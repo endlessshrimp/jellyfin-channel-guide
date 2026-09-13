@@ -133,7 +133,7 @@
                 setTimeout(resolve, 2000);
             });
         };
-        cssReady = Promise.all([link('cg-css', 'guide.css')]);
+        cssReady = Promise.all([link('cg-css', 'guide.css'), link('cg-phone-css', 'guide-phone.css')]);
         return cssReady;
     };
 
@@ -157,7 +157,7 @@
     // The model and the phone layout come from homer.js, just after this file;
     // used on its own, the guide loads them itself. Either way open() waits
     // for them.
-    const DEPS = [['guide-model.js', 'HomerGuideModel']];
+    const DEPS = [['guide-model.js', 'HomerGuideModel'], ['guide-phone.js', 'HomerGuidePhone']];
     let depsReady = null;
     const loadDeps = () => {
         if (!depsReady) {
