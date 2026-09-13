@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.4
+
+- Filter box in the top bar (or press /): narrows the grid to channels whose
+  name/number matches or that air a matching show; matching shows are
+  highlighted. Esc clears the filter, a second Esc closes the guide.
+- Trackpad/wheel now scrolls the grid smoothly like a normal list, without
+  moving the selection. Arrow keys still move the highlight and keep it in
+  view; Page Up/Down jump a screen.
+
 ## v0.1.3
 
 - Wheel/trackpad scrolling pages the grid 5 channels (one screen) at a time,

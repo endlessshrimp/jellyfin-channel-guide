@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.3';
+    const VERSION = '0.1.4';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -190,6 +190,11 @@
         stage.innerHTML = `
             <div class="cg-topbar">
                 <div class="cg-brand"><span class="cg-brand-mark"></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
+                <label class="cg-search">
+                    <span class="material-icons cg-search-icon" aria-hidden="true">search</span>
+                    <input class="cg-search-input" type="text" placeholder="Filter channels or shows" autocomplete="off" spellcheck="false" aria-label="Filter channels or shows">
+                    <span class="cg-search-count"></span>
+                </label>
                 <div class="cg-clock"><div class="cg-clock-time"></div><div class="cg-clock-date"></div></div>
             </div>
             <div class="cg-toast" role="status" aria-live="polite"></div>
@@ -210,13 +215,14 @@
             </div>
             <div class="cg-grid">
                 <div class="cg-timebar"><div class="cg-timebar-day"><b>TODAY</b></div></div>
-                <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div></div>
+                <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div><div class="cg-empty"></div></div>
             </div>
             <div class="cg-legend">
                 <span><span class="cg-key">▲▼</span>Channels</span>
                 <span><span class="cg-key">◀▶</span>Time</span>
                 <span data-action="watch"><span class="cg-key">OK</span>Watch</span>
                 <span data-action="record"><span class="cg-key rec">●</span>Record</span>
+                <span data-action="search"><span class="cg-key">/</span>Filter</span>
                 <span class="spacer"></span>
                 <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
             </div>`;
@@ -268,7 +274,9 @@
 
         // ---------- Data + render ----------
         let rows = [];
+        let order = []; // indices of the rows currently shown (all of them unless filtering)
         let sel = { row: 0, col: 0 };
+        const vpos = (r) => order.indexOf(r);
         const timersByProgram = new Map(); // programId -> timerId
 
         const current = () => {
@@ -345,6 +353,7 @@
                 $('.cg-info-desc').textContent = 'Jellyfin didn\'t return any Live TV channels for this user.';
                 return;
             }
+            order = rows.map((_, i) => i);
             markRecorded();
             // start on the first channel that has real listings, on what's airing now
             const first = Math.max(0, rows.findIndex((r) => r.cells.some((c) => !c.unknown)));
@@ -352,9 +361,19 @@
             select(first, nowCol);
         };
 
-        let viewTop = 0; // first visible row
+        // The grid scrolls in pixels, like any list: the trackpad moves it freely, and
+        // keyboard selection nudges it just enough to keep the highlight in view.
+        let scrollY = 0;
+        const rowsInner = () => $('.cg-rows-inner');
+        const viewH = () => $('.cg-rows').clientHeight || VISIBLE_ROWS * ROW_H;
+        const maxScroll = () => Math.max(0, order.length * ROW_H - viewH());
+        const setScroll = (y, animate) => {
+            scrollY = Math.max(0, Math.min(maxScroll(), y));
+            rowsInner().style.transition = animate ? 'transform 160ms ease' : 'none';
+            rowsInner().style.transform = `translateY(${-scrollY}px)`;
+        };
         const select = (r, c, { scroll = true } = {}) => {
-            if (r < 0 || r >= rows.length) return;
+            if (r < 0 || r >= rows.length || vpos(r) < 0) return;
             const row = rows[r];
             c = Math.max(0, Math.min(row.cells.length - 1, c));
             const prev = rows[sel.row];
@@ -367,11 +386,9 @@
             row.cells[c].el.classList.add('sel');
             // keyboard/wheel: scroll only when the selection leaves the visible rows
             if (scroll) {
-                if (r < viewTop) viewTop = r;
-                else if (r >= viewTop + VISIBLE_ROWS) viewTop = r - VISIBLE_ROWS + 1;
-                viewTop = Math.max(0, Math.min(viewTop, rows.length - VISIBLE_ROWS));
-                $('.cg-rows-inner').style.transform = `translateY(${-viewTop * ROW_H}px)`;
-                $('.cg-rows-inner').style.transition = 'transform 180ms ease';
+                const top = vpos(r) * ROW_H;
+                if (top < scrollY) setScroll(top, true);
+                else if (top + ROW_H > scrollY + viewH()) setScroll(top + ROW_H - viewH(), true);
             }
             showInfo(row.ch, row.cells[c]);
         };
@@ -468,50 +485,115 @@
             return i < 0 ? 0 : i;
         };
 
+        const step = (d) => {
+            const v = vpos(sel.row) + d;
+            if (v < 0 || v >= order.length) return;
+            select(order[v], nearestCol(order[v]));
+        };
+
+        // ---------- Filter ----------
+        const searchInput = $('.cg-search-input');
+        let query = '';
+        const lc = (x) => String(x ?? '').toLowerCase();
+        const applyFilter = (text) => {
+            query = lc(text).trim();
+            order = [];
+            rows.forEach((row, i) => {
+                const chMatch = !query || lc(row.ch.Name).includes(query) || lc(row.ch.Number).startsWith(query);
+                let progMatch = false;
+                for (const c of row.cells) {
+                    const m = !!query && !c.unknown && lc(`${c.p.Name} ${c.p.EpisodeTitle || ''}`).includes(query);
+                    c.el.classList.toggle('match', m);
+                    if (m) progMatch = true;
+                }
+                const show = !query || chMatch || progMatch;
+                row.el.style.display = show ? '' : 'none';
+                row.el.classList.toggle('dim-others', !!query && progMatch && !chMatch);
+                if (show) order.push(i);
+            });
+            root.classList.toggle('filtering', !!query);
+            $('.cg-search-count').textContent = query ? `${order.length} channel${order.length === 1 ? '' : 's'}` : '';
+            const empty = $('.cg-empty');
+            empty.textContent = query && !order.length ? `Nothing matches “${text.trim()}”` : '';
+            empty.classList.toggle('show', !!query && !order.length);
+            setScroll(0, false);
+            if (!order.length) return;
+            // land on the first match: a matching show airing now or next, else what's on now
+            const r = order[0];
+            let c = rows[r].cells.findIndex((x) => x.el.classList.contains('match') && x.e > now);
+            if (c < 0) c = Math.max(0, rows[r].cells.findIndex((x) => x.s <= now && x.e > now));
+            select(r, c);
+        };
+        searchInput.addEventListener('input', () => applyFilter(searchInput.value));
+        const clearFilter = () => {
+            searchInput.value = '';
+            applyFilter('');
+        };
+        const focusSearch = () => {
+            searchInput.focus();
+            searchInput.select();
+        };
+
         const onKey = (ev) => {
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             const k = ev.key;
-            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G'];
+            // typing in the filter box: let the box have the keys, except a few that
+            // hand control back to the grid
+            if (ev.target === searchInput) {
+                if (k === 'Escape') {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (searchInput.value) clearFilter();
+                    else searchInput.blur();
+                } else if (k === 'Enter' || k === 'ArrowDown' || k === 'Tab') {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    searchInput.blur();
+                } else {
+                    ev.stopPropagation();
+                }
+                return;
+            }
+            if (k === '/') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                focusSearch();
+                return;
+            }
+            if ((k === 'Escape' || k === 'Backspace' || k === 'GoBack' || k === 'BrowserBack') && query) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                clearFilter();
+                return;
+            }
+            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G'];
             if (!handled.includes(k)) return;
             ev.preventDefault();
             ev.stopPropagation();
             if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R')) return;
             if (!rows.length && !['Escape', 'Backspace', 'GoBack', 'BrowserBack', 'g', 'G'].includes(k)) return;
-            if (k === 'ArrowDown') select(sel.row + 1, nearestCol(sel.row + 1));
-            else if (k === 'ArrowUp') select(sel.row - 1, nearestCol(sel.row - 1));
+            if (k === 'ArrowDown') step(1);
+            else if (k === 'ArrowUp') step(-1);
+            else if (k === 'PageDown') pageBy(1);
+            else if (k === 'PageUp') pageBy(-1);
             else if (k === 'ArrowRight') select(sel.row, sel.col + 1);
             else if (k === 'ArrowLeft') select(sel.row, sel.col - 1);
             else if (k === 'Enter') watch();
             else if (k === 'r' || k === 'R') record();
             else close();
         };
-        // Wheel/trackpad pages the grid a full screen (5 channels) at a time, like a
-        // cable box's page up/down. The highlight keeps its spot on screen. A short
-        // cooldown keeps one trackpad swipe from paging several screens at once.
-        const WHEEL_STEP = 60;       // px of accumulated scroll per page
-        const WHEEL_COOLDOWN = 320;  // ms between pages
-        let wheelAcc = 0;
-        let wheelLast = 0;
+        // Page Up / Page Down keys still jump a screen at a time.
         const pageBy = (dir) => {
-            const maxTop = Math.max(0, rows.length - VISIBLE_ROWS);
-            const newTop = Math.max(0, Math.min(maxTop, viewTop + dir * VISIBLE_ROWS));
-            const shift = newTop === viewTop ? dir * VISIBLE_ROWS : newTop - viewTop;
-            const r = Math.max(0, Math.min(rows.length - 1, sel.row + shift));
-            viewTop = newTop;
-            select(r, nearestCol(r));
+            if (!order.length) return;
+            const v = Math.max(0, Math.min(order.length - 1, vpos(sel.row) + dir * VISIBLE_ROWS));
+            setScroll(scrollY + dir * VISIBLE_ROWS * ROW_H, true);
+            select(order[v], nearestCol(order[v]));
         };
         const onWheel = (ev) => {
             ev.preventDefault();
             if (!rows.length) return;
-            const px = ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * 400 : ev.deltaY;
-            if (Math.sign(px) !== Math.sign(wheelAcc)) wheelAcc = 0;
-            wheelAcc += px;
-            const t = performance.now();
-            if (Math.abs(wheelAcc) < WHEEL_STEP || t - wheelLast < WHEEL_COOLDOWN) return;
-            wheelLast = t;
-            const dir = wheelAcc > 0 ? 1 : -1;
-            wheelAcc = 0;
-            pageBy(dir);
+            const px = ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * viewH() : ev.deltaY;
+            setScroll(scrollY + px, false);
         };
         const onLegendClick = (ev) => {
             const item = ev.target.closest('[data-action]');
@@ -519,6 +601,7 @@
             const action = item.dataset.action;
             if (action === 'watch') watch();
             else if (action === 'record') record();
+            else if (action === 'search') focusSearch();
             else if (action === 'close') close();
         };
 

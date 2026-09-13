@@ -29,7 +29,7 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "Channel Guide", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.3/guide/guide.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.4/guide/guide.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
@@ -48,10 +48,12 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **◀ ▶** | Move through time on the current channel |
 | **OK / Enter** | Watch the selected channel |
 | **R** | Record the selected program |
+| **/** | Filter by channel name/number or show title (Esc clears) |
+| **Page Up / Page Down** | Jump a screen of channels |
 | **Esc / Backspace / G** | Close the guide |
 
-With a mouse: hover to select, click a program to watch it, scroll to change
-channels. The **OK**, **●** and **ESC** hints along the bottom are clickable too.
+With a mouse or trackpad: scroll the grid freely, hover to select, click a
+program to watch it. Type in the filter box at the top to narrow the grid. The **OK**, **●** and **ESC** hints along the bottom are clickable too.
 
 Scripts can also call `window.ChannelGuide.open()` and
 `window.ChannelGuide.close()`.
