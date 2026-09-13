@@ -11,6 +11,7 @@
  *   Subtitles           user Configuration.SubtitleMode (server)
  *   Subtitle language   user Configuration.SubtitleLanguagePreference (server)
  *   Streaming quality   Jellyfin Web's per-device max bitrate (localStorage)
+ *   Weather location    where the clock's weather comes from (HomerWeather, localStorage)
  *   Sign out            Jellyfin Web's own logout, after a second OK
  *
  * Remote/keyboard: ▲▼ move, ◀▶ between the list and the choices, OK selects,
@@ -434,6 +435,7 @@
         };
 
         // ----- the settings -----
+        const wx = () => window.HomerWeather || null;
         const userSetting = (field) => ({
             field,
             current: () => cfg[field] || '',
@@ -473,6 +475,36 @@
                 save: async (value) => writeQuality(value)
             },
             {
+                id: 'weather', icon: 'wb_sunny', label: 'Weather location', scope: 'device',
+                desc: () => 'Where the temperature next to the clock comes from.'
+                    + (wx() && !wx().canUseDevice()
+                        ? ' Browsers only share their own location over a secure (HTTPS) connection, so this device uses a ZIP code.'
+                        : ''),
+                options: () => {
+                    const W = wx();
+                    if (!W) return [];
+                    const list = [];
+                    if (W.canUseDevice()) {
+                        list.push({
+                            value: 'device', label: 'This device\'s location',
+                            sub: W.deviceState() === 'denied' ? 'Blocked in this browser, so the ZIP code is used' : 'The browser asks once'
+                        });
+                    }
+                    const z = W.zip();
+                    list.push({ value: 'zip', label: 'ZIP code', sub: z.name, zip: z.zip, input: true });
+                    return list;
+                },
+                current: () => (wx() ? wx().mode() : ''),
+                matches: (o, v) => o.value === v,
+                valueLabel: () => {
+                    const W = wx();
+                    if (!W) return '';
+                    const z = W.zip();
+                    return W.mode() === 'device' ? 'This device\'s location' : `${z.zip} · ${z.name}`;
+                },
+                save: async (value) => { if (value === 'device') await wx().useDevice(); }
+            },
+            {
                 id: 'signout', icon: 'exit_to_app', label: 'Sign out', scope: 'device', action: true,
                 desc: 'Sign out of HOMER on this device and go to the sign-in screen.',
                 options: () => [{ value: 'signout', label: 'Sign out' }],
@@ -491,6 +523,7 @@
         };
         const valueLabel = (s) => {
             if (s.action || status !== 'ready') return '';
+            if (s.valueLabel) return s.valueLabel();
             const list = s.options();
             const v = s.current();
             const o = list.find((x) => s.matches(x, v));
@@ -527,7 +560,7 @@
                 ? '<span class="material-icons" aria-hidden="true">devices</span>This device only'
                 : '<span class="material-icons" aria-hidden="true">account_circle</span>Saved to your account';
             $('.hs-info-title').textContent = s.label;
-            $('.hs-info-desc').textContent = s.desc;
+            $('.hs-info-desc').textContent = typeof s.desc === 'function' ? s.desc() : s.desc;
         };
 
         const drawOptions = (revealCurrent) => {
@@ -539,8 +572,11 @@
             optsInner.innerHTML = options.map((o, i) => {
                 const label = s.action && armed ? 'Sign out? OK to confirm' : o.label;
                 const lead = s.action ? `<span class="material-icons hs-opt-lead" aria-hidden="true">${s.icon}</span>` : '<span class="material-icons hs-opt-check" aria-hidden="true">check</span>';
+                const input = o.input
+                    ? `<input class="hs-zip" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" value="${esc(o.zip)}" aria-label="ZIP code">`
+                    : '';
                 return `<div class="hs-opt${i === cur ? ' cur' : ''}${i === opt ? ' sel' : ''}${o.sub ? ' two' : ''}${s.action ? ' action' : ''}${s.action && armed ? ' armed' : ''}" role="button" data-i="${i}">
-                    ${lead}<div class="hs-opt-text"><div class="hs-opt-label">${esc(label)}</div>${o.sub ? `<div class="hs-opt-sub">${esc(o.sub)}</div>` : ''}</div>
+                    ${lead}<div class="hs-opt-text"><div class="hs-opt-label">${esc(label)}</div>${o.sub ? `<div class="hs-opt-sub">${esc(o.sub)}</div>` : ''}</div>${input}
                 </div>`;
             }).join('');
             if (revealCurrent) scroller.reset();
@@ -629,6 +665,11 @@
                 signOut();
                 return;
             }
+            // the ZIP row: OK puts the cursor in its box; Enter there saves
+            if (o.input) {
+                editZip();
+                return;
+            }
             if (s.matches(o, s.current())) {
                 toast('Saved');
                 return;
@@ -653,12 +694,69 @@
             drawList();
         };
 
+        // ----- the ZIP code box -----
+        const zipBox = () => optsInner.querySelector('.hs-zip');
+        let zipBusy = false;
+        const editZip = (clear) => {
+            const box = zipBox();
+            if (!box || zipBusy) return;
+            if (clear) box.value = '';
+            box.focus();
+            if (!clear) box.select();
+        };
+        const endZip = () => {
+            const box = zipBox();
+            if (box && wx()) box.value = wx().zip().zip;
+            if (box) box.blur();
+        };
+        const submitZip = async () => {
+            const box = zipBox();
+            if (!box || zipBusy || !wx()) return;
+            const zip = box.value.trim();
+            if (!/^\d{5}$/.test(zip)) { toast('Enter a 5-digit ZIP code', 'err'); return; }
+            zipBusy = true;
+            const sub = box.closest('.hs-opt').querySelector('.hs-opt-sub');
+            if (sub) sub.textContent = 'Looking it up…';
+            let hit = null;
+            let failed = false;
+            try { hit = await wx().useZip(zip); } catch { failed = true; }
+            zipBusy = false;
+            if (!alive) return;
+            if (hit) toast(`Saved · ${hit.name}`);
+            else toast(failed ? 'Couldn\'t look that up. Try again.' : `Couldn't find ZIP ${zip}`, 'err');
+            drawOptions(false);
+            drawList();
+            if (!hit) editZip();
+        };
+        // typing in the box: digits and editing keys stay in it, Enter saves,
+        // Esc puts the saved ZIP back, ▲▼ leave it
+        const onZipKey = (ev) => {
+            const k = ev.key;
+            ev.stopPropagation(); // nothing underneath should see it
+            if (k === 'Enter') { ev.preventDefault(); submitZip(); return; }
+            if (k === 'Escape' || k === 'GoBack' || k === 'BrowserBack') { ev.preventDefault(); endZip(); return; }
+            if (k === 'ArrowUp' || k === 'ArrowDown') { ev.preventDefault(); endZip(); moveOpt(k === 'ArrowUp' ? -1 : 1); return; }
+            if (k.length === 1 && !/\d/.test(k) && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();
+        };
+        const onZipBlur = (ev) => {
+            if (ev.target.classList && ev.target.classList.contains('hs-zip') && !zipBusy && wx()) {
+                ev.target.value = wx().zip().zip;
+            }
+        };
+
         // ----- keys -----
         const onKey = (ev) => {
             // the guide opens on top of us; it gets the keys while it's up
             if (document.getElementById('cg-root')) return;
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             const t = ev.target;
+            if (t && t.classList && t.classList.contains('hs-zip') && root.contains(t)) { onZipKey(ev); return; }
+            // a digit on the ZIP row starts a new ZIP
+            if (zone === 'options' && status === 'ready' && /^\d$/.test(ev.key) && options[opt] && options[opt].input) {
+                ev.stopPropagation();
+                editZip(true);
+                return;
+            }
             if (t && t !== document.body && !root.contains(t) && t.matches && t.matches('input, textarea, select, [contenteditable="true"]')) return;
             const k = ev.key;
             if (k === 'h' || k === 'H') { stop(ev); goHome(); return; }
@@ -754,6 +852,7 @@
         window.addEventListener('resize', fit);
         stage.addEventListener('mousemove', onMove);
         stage.addEventListener('click', onClick);
+        stage.addEventListener('focusout', onZipBlur);
 
         // don't leave a Jellyfin control underneath focused (Space/Enter would hit it)
         const ae = document.activeElement;

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.7
+
+- Weather location: the weather follows each device instead of always showing
+  Kaufman. A browser that can share its location (over HTTPS) uses it; any
+  other device uses a ZIP code set in Settings → Weather location (type the
+  digits, OK to save). With nothing set, it starts at 75142.
+
 ## v0.3.6
 
 - Weather: the icon sits to the right of the temperature.

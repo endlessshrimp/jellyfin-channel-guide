@@ -1,11 +1,17 @@
 /*
- * HOMER weather bug: current temperature and conditions for Kaufman, TX
- * (75142), shown to the left of each screen's clock. Data from Open-Meteo
- * (free, no key). Icons are Meteocons by Bas Milius (MIT, see shared/wx/LICENSE),
+ * HOMER weather bug: current temperature and conditions, shown to the left of
+ * each screen's clock. Data from Open-Meteo (free, no key). Icons are Meteocons by Bas Milius (MIT, see shared/wx/LICENSE),
  * with the raindrop blue brightened (#0A5AD4 -> #4FAEFF) to read on HOMER navy.
  *
  * Screens call HomerWeather.attach(clockEl) and run the returned function on
  * teardown. Every attached bug shares one fetch, refreshed every 10 minutes.
+ *
+ * Where: saved per device (localStorage), set from HOMER Settings.
+ *   device  the browser's own location. Browsers only share it over HTTPS
+ *           (or localhost), so on plain http this falls back to the ZIP.
+ *   zip     a US ZIP code, looked up once through Open-Meteo's geocoder.
+ * With nothing saved, a browser that can share its location uses it, and
+ * anything else uses 75142 (Kaufman, TX).
  */
 (() => {
     if (window.HomerWeather) return;
@@ -14,12 +20,82 @@
     const BASE = src.replace(/shared\/weather\.js(\?.*)?$/, '');
     const QUERY = (src.match(/\?.*$/) || [''])[0];
 
-    const PLACE = 'Kaufman, TX';
-    const URL = 'https://api.open-meteo.com/v1/forecast?latitude=32.589&longitude=-96.3086'
+    const REFRESH_MS = 10 * 60 * 1000;
+    const forecastUrl = (lat, lon) => 'https://api.open-meteo.com/v1/forecast'
+        + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
         + '&current=temperature_2m,weather_code,is_day'
         + '&daily=temperature_2m_max,temperature_2m_min'
-        + '&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=1';
-    const REFRESH_MS = 10 * 60 * 1000;
+        + '&temperature_unit=fahrenheit&timezone=auto&forecast_days=1';
+
+    // ---------- Location ----------
+
+    const KEY = 'homer-weather-location';
+    const DEFAULT_ZIP = { mode: 'zip', zip: '75142', name: 'Kaufman, TX', lat: 32.589, lon: -96.3089 };
+    const STATES = {
+        Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA', Colorado: 'CO',
+        Connecticut: 'CT', Delaware: 'DE', 'District of Columbia': 'DC', 'Washington, D.C.': 'DC',
+        Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN',
+        Iowa: 'IA', Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
+        Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO',
+        Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+        'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH',
+        Oklahoma: 'OK', Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+        'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT', Virginia: 'VA',
+        Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY', 'Puerto Rico': 'PR'
+    };
+
+    // browsers only hand out a location on a secure page
+    const canUseDevice = () => !!(window.isSecureContext && navigator.geolocation);
+
+    const readSaved = () => {
+        try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; }
+    };
+    const writeSaved = (v) => {
+        try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* storage blocked */ }
+    };
+    // the last ZIP this device picked, or Kaufman
+    const savedZip = () => {
+        const s = readSaved();
+        return s && s.zip && typeof s.lat === 'number' ? s : DEFAULT_ZIP;
+    };
+    const wantedMode = () => {
+        const s = readSaved();
+        if (s && s.mode === 'zip') return 'zip';
+        if (s && s.mode === 'device') return 'device';
+        return canUseDevice() ? 'device' : 'zip';
+    };
+
+    let deviceState = ''; // '' | 'denied' | 'unavailable'
+    const devicePosition = () => new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+            (p) => { deviceState = ''; resolve({ lat: p.coords.latitude, lon: p.coords.longitude }); },
+            (err) => { deviceState = err && err.code === 1 ? 'denied' : 'unavailable'; resolve(null); },
+            { maximumAge: 30 * 60 * 1000, timeout: 15000 }
+        );
+    });
+
+    // where the weather actually comes from right now
+    let place = null; // { mode, lat, lon, name, zip? }
+    const resolvePlace = async () => {
+        if (wantedMode() === 'device' && canUseDevice()) {
+            const pos = await devicePosition();
+            if (pos) return { mode: 'device', name: 'This device\'s location', ...pos };
+        }
+        const z = savedZip();
+        return { mode: 'zip', zip: z.zip, name: z.name, lat: z.lat, lon: z.lon };
+    };
+
+    // US ZIP -> { zip, name, lat, lon } through Open-Meteo's geocoder
+    const lookupZip = async (zip) => {
+        const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&countryCode=US&name='
+            + encodeURIComponent(zip));
+        if (!r.ok) throw new Error('lookup failed');
+        const hits = ((await r.json()).results || []);
+        const hit = hits.find((h) => (h.postcodes || []).includes(zip)) || hits[0];
+        if (!hit) return null;
+        const st = STATES[hit.admin1] || hit.admin1 || '';
+        return { zip, name: st ? `${hit.name}, ${st}` : hit.name, lat: hit.latitude, lon: hit.longitude };
+    };
 
     // WMO weather code -> [label, day icon, night icon]
     const CODES = {
@@ -75,13 +151,14 @@
         bug.temp.textContent = data.temp + '°';
         bug.hi.textContent = data.hi + '°';
         bug.lo.textContent = data.lo + '°';
-        bug.wx.title = `${label} · ${PLACE}`;
+        bug.wx.title = place ? `${label} · ${place.name}` : label;
         group.classList.add('homer-wx-ready');
     };
 
     const load = () => {
         if (inflight) return inflight;
-        inflight = fetch(URL, { cache: 'no-store' })
+        inflight = resolvePlace()
+            .then((p) => { place = p; return fetch(forecastUrl(p.lat, p.lon), { cache: 'no-store' }); })
             .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
             .then((j) => {
                 const cur = j.current || {};
@@ -105,6 +182,13 @@
                 bugs.forEach(paint);
             });
         return inflight;
+    };
+
+    // start over for a new location (after any fetch already on its way)
+    const reload = async () => {
+        if (inflight) await inflight;
+        data = null;
+        return load();
     };
 
     const build = (clockEl) => {
@@ -143,6 +227,30 @@
             };
         },
         refresh: load,
+
+        // ----- for HOMER Settings -----
+        canUseDevice,
+        deviceState: () => deviceState,
+        // what Settings shows as picked: 'device' or 'zip'
+        mode: () => (wantedMode() === 'device' && canUseDevice() ? 'device' : 'zip'),
+        zip: () => savedZip(),
+        // the place in use, once the first reading is in
+        place: () => place,
+        useDevice() {
+            writeSaved(Object.assign({}, savedZip(), { mode: 'device' }));
+            return reload();
+        },
+        // resolves to the saved place, or null for a ZIP that doesn't exist
+        async useZip(zip) {
+            zip = String(zip || '').trim();
+            if (!/^\d{5}$/.test(zip)) return null;
+            const hit = await lookupZip(zip);
+            if (!hit) return null;
+            writeSaved({ mode: 'zip', ...hit });
+            await reload();
+            return hit;
+        },
+
         _describe: describe, // for previews
         _iconUrl: iconUrl,
     };

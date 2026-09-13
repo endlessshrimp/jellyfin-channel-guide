@@ -418,6 +418,37 @@
 
 .hs-zone-options .hs-opt.sel .hs-opt-sub { color: rgba(255, 255, 255, 0.85); }
 
+/* weather: the ZIP code box on its row */
+.hs-zip {
+    flex: none;
+    width: 132px;
+    height: 50px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: rgba(2, 5, 10, 0.45);
+    color: var(--text);
+    font-family: var(--homer-font);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+    cursor: text;
+}
+
+.hs-zone-options .hs-opt.sel .hs-zip {
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+.hs-zip:focus {
+    border-color: #fff;
+    background: rgba(2, 5, 10, 0.72);
+    box-shadow: 0 0 0 3px rgba(111, 211, 255, 0.5);
+}
+
 /* sign out: one row; the first OK arms it, the second confirms */
 .hs-opt.action .hs-opt-label { font-weight: 700; }
 
