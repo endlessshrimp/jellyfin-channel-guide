@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.1
+
+- Jellyfin's own Live TV → Guide tab now opens Channel Guide instead of the
+  stock grid. Closing it returns to Live TV → Programs; Back from a channel you
+  started returns to the guide.
+- Hovering with the mouse only highlights; the grid no longer scrolls under the
+  pointer. Arrow keys and the wheel scroll only when the selection leaves view.
+
 ## v0.1.0 (2026-09-12)
 
 First release of the full-screen guide.

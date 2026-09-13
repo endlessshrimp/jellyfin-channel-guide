@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -147,6 +147,9 @@
     // ---------- Guide ----------
 
     let guide = null; // the open guide instance, or null
+    let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
+    let tabSuppressed = false; // closed from that tab; don't reopen until it's left
+    const LIVETV_HOME = '#/livetv?tab=0';
 
     const open = () => {
         if (guide) return;
@@ -160,11 +163,19 @@
         ensureCss().then(() => g.show());
     };
 
-    const close = () => {
+    // returnToLiveTv: when the guide stands in for Jellyfin's own Guide tab,
+    // closing it goes to Live TV's first tab instead of revealing the stock guide.
+    const close = ({ returnToLiveTv = true } = {}) => {
         if (!guide) return;
         const g = guide;
         guide = null;
         g.teardown();
+        const fromTab = openedFromTab;
+        openedFromTab = false;
+        if (fromTab) {
+            tabSuppressed = true;
+            if (returnToLiveTv && isNativeGuideRoute()) location.hash = LIVETV_HOME;
+        }
     };
 
     const createGuide = (server) => {
@@ -315,9 +326,10 @@
                         cell.appendChild(bar);
                     }
                     const cellData = { el: cell, p, s, e, unknown };
-                    cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData)));
+                    // the mouse only highlights; it never scrolls the grid out from under the pointer
+                    cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false }));
                     cell.addEventListener('click', () => {
-                        select(rows.indexOf(rowData), cells.indexOf(cellData));
+                        select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false });
                         watch();
                     });
                     cells.push(cellData);
@@ -340,7 +352,8 @@
             select(first, nowCol);
         };
 
-        const select = (r, c) => {
+        let viewTop = 0; // first visible row
+        const select = (r, c, { scroll = true } = {}) => {
             if (r < 0 || r >= rows.length) return;
             const row = rows[r];
             c = Math.max(0, Math.min(row.cells.length - 1, c));
@@ -352,10 +365,14 @@
             sel = { row: r, col: c };
             row.el.classList.add('sel');
             row.cells[c].el.classList.add('sel');
-            // keep the selected row in view, TV-style (the grid pages rather than free-scrolls)
-            const top = Math.max(0, Math.min(r - 1, rows.length - VISIBLE_ROWS));
-            $('.cg-rows-inner').style.transform = `translateY(${-top * ROW_H}px)`;
-            $('.cg-rows-inner').style.transition = 'transform 180ms ease';
+            // keyboard/wheel: scroll only when the selection leaves the visible rows
+            if (scroll) {
+                if (r < viewTop) viewTop = r;
+                else if (r >= viewTop + VISIBLE_ROWS) viewTop = r - VISIBLE_ROWS + 1;
+                viewTop = Math.max(0, Math.min(viewTop, rows.length - VISIBLE_ROWS));
+                $('.cg-rows-inner').style.transform = `translateY(${-viewTop * ROW_H}px)`;
+                $('.cg-rows-inner').style.transition = 'transform 180ms ease';
+            }
             showInfo(row.ch, row.cells[c]);
         };
 
@@ -397,7 +414,7 @@
         const watch = () => {
             const cur = current();
             if (!cur) return;
-            close();
+            close({ returnToLiveTv: false });
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
 
@@ -564,6 +581,7 @@
         setTimeout(() => {
             syncQueued = false;
             syncButton();
+            syncTakeover();
         }, 50);
     };
 
@@ -586,10 +604,29 @@
         open();
     };
 
+    // ---------- Stand in for Jellyfin's own Guide tab ----------
+    // Live TV → Guide opens this guide instead of the stock grid. After it's
+    // closed from that tab we stay out of the way until the tab is left, so the
+    // user isn't bounced straight back in.
+
+    const isNativeGuideRoute = () => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(location.hash);
+    const nativeGuideShowing = () => isNativeGuideRoute() || !!document.querySelector('.page:not(.hide) .tvguide.is-active');
+
+    const syncTakeover = () => {
+        if (!nativeGuideShowing()) {
+            tabSuppressed = false;
+            return;
+        }
+        if (guide || tabSuppressed || !getServer()) return;
+        openedFromTab = true;
+        open();
+    };
+
     // Jellyfin Web is a single-page app: leaving the current view (back button,
     // a link) should take the guide down with it.
     const onRouteChange = () => {
-        close();
+        close({ returnToLiveTv: false });
+        tabSuppressed = false;
         queueSync();
     };
 
