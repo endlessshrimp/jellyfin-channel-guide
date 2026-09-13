@@ -31,130 +31,28 @@
         : (homerBase || 'https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@main/') + 'library/';
     const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
 
-    const SUPPORTED = new Set(['Movie', 'Series', 'Season', 'Episode']);
-    const TICKS_PER_MIN = 600000000;
+    // The data (session, loads, watched state, playback, routing) is in
+    // library/library-model.js, shared with the phone layout
+    // (library/library-phone.js). homer.js loads them just before and after
+    // this file; used on its own, this loads them, then itself again.
+    if (!window.HomerLibraryModel) {
+        const add = (file, then) => {
+            const s = document.createElement('script');
+            s.src = BASE + file + QUERY;
+            if (then) s.onload = then;
+            document.head.appendChild(s);
+        };
+        add('library-model.js', () => add('library.js', () => add('library-phone.js')));
+        return;
+    }
+    const M = window.HomerLibraryModel;
+    const { SUPPORTED, getServer, typeCache, remember, memory, fresh, P, docked, currentRoute, nav, detailsHash, goBack, goHome, play } = M;
+    const {
+        el, esc, lc, clamp, fmtTime, fmtDate, fmtMins, runtime, posOf, played, pctOf, minsLeft, endsAt,
+        epCode, yearsOf, plural, isNew, posterUrl, backdropUrl, stillUrl
+    } = M.util;
+
     const Z = 99990; // just under the guide, so the guide can open on top
-
-    // ---------- Jellyfin session ----------
-
-    const getServer = () => {
-        try {
-            const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
-            const server = (creds.Servers || [])[0];
-            return server && server.AccessToken && server.UserId ? server : null;
-        } catch {
-            return null;
-        }
-    };
-
-    // Identify as Jellyfin Web itself, so API use doesn't rename this browser in
-    // the dashboard or split it into a second session (same as the guide).
-    const authHeader = (server) => {
-        const ac = window.ApiClient;
-        const parts = [];
-        try {
-            if (ac && ac.appName && ac.deviceId) {
-                parts.push(`Client="${ac.appName()}"`, `Device="${ac.deviceName()}"`,
-                    `DeviceId="${ac.deviceId()}"`, `Version="${ac.appVersion()}"`);
-            }
-        } catch { /* token only; the server fills in the rest */ }
-        parts.push(`Token="${server.AccessToken}"`);
-        return 'MediaBrowser ' + parts.join(', ');
-    };
-
-    const request = async (method, path, body) => {
-        const server = getServer();
-        if (!server) throw new Error('Not signed in');
-        const headers = { Authorization: authHeader(server) };
-        if (body !== undefined) headers['Content-Type'] = 'application/json';
-        const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-        if (!res.ok) throw new Error(`${method} ${path.split('?')[0]} → ${res.status}`);
-        const text = await res.text();
-        return text ? JSON.parse(text) : null;
-    };
-    const api = (path) => request('GET', path);
-
-    // ---------- Small helpers ----------
-
-    const el = (tag, cls, html) => {
-        const e = document.createElement(tag);
-        if (cls) e.className = cls;
-        if (html != null) e.innerHTML = html;
-        return e;
-    };
-    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const lc = (x) => String(x ?? '').toLowerCase();
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '');
-    const fmtMins = (mins) => {
-        mins = Math.max(1, Math.round(mins));
-        const h = Math.floor(mins / 60);
-        return h ? `${h}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`;
-    };
-    const runtime = (it) => (it.RunTimeTicks > 0 ? fmtMins(it.RunTimeTicks / TICKS_PER_MIN) : '');
-    const posOf = (it) => (it && it.UserData && it.UserData.PlaybackPositionTicks) || 0;
-    const played = (it) => !!(it && it.UserData && it.UserData.Played);
-    const pctOf = (it) => {
-        const pos = posOf(it);
-        if (!pos || !(it.RunTimeTicks > 0)) return 0;
-        return clamp((pos / it.RunTimeTicks) * 100, 1, 100);
-    };
-    const minsLeft = (it) => (it.RunTimeTicks > 0 ? (it.RunTimeTicks - posOf(it)) / TICKS_PER_MIN : 0);
-    const endsAt = (it) => {
-        const left = it.RunTimeTicks > 0 ? minsLeft(it) : 0;
-        return left > 0 ? `Ends at ${fmtTime(new Date(Date.now() + left * 60000))}` : '';
-    };
-    const epCode = (ep) => {
-        if (ep.IndexNumber == null) return '';
-        const e = ep.IndexNumberEnd && ep.IndexNumberEnd !== ep.IndexNumber ? `E${ep.IndexNumber}–${ep.IndexNumberEnd}` : `E${ep.IndexNumber}`;
-        return ep.ParentIndexNumber != null ? `S${ep.ParentIndexNumber} ${e}` : e;
-    };
-    const yearsOf = (it) => {
-        const y = it.ProductionYear;
-        if (!y) return '';
-        if (it.Type !== 'Series') return String(y);
-        if (it.Status === 'Continuing') return `Since ${y}`;
-        const end = it.EndDate ? new Date(it.EndDate).getUTCFullYear() : null;
-        return end && end !== y ? `${y}–${end}` : String(y);
-    };
-    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-    const isNew = (it) => it.DateCreated && Date.now() - new Date(it.DateCreated) < 14 * 86400000;
-
-    const imgUrl = (id, type, tag, q) => `/Items/${id}/Images/${type}?${q}&tag=${encodeURIComponent(tag)}`;
-    const posterUrl = (it, h = 180) => (it.ImageTags && it.ImageTags.Primary ? imgUrl(it.Id, 'Primary', it.ImageTags.Primary, `fillHeight=${h}&quality=90`) : null);
-    const backdropUrl = (it, w = 1280) => {
-        if (it.BackdropImageTags && it.BackdropImageTags.length) return `/Items/${it.Id}/Images/Backdrop/0?maxWidth=${w}&quality=85&tag=${encodeURIComponent(it.BackdropImageTags[0])}`;
-        if (it.ParentBackdropItemId && it.ParentBackdropImageTags && it.ParentBackdropImageTags.length) {
-            return `/Items/${it.ParentBackdropItemId}/Images/Backdrop/0?maxWidth=${w}&quality=85&tag=${encodeURIComponent(it.ParentBackdropImageTags[0])}`;
-        }
-        if (it.ImageTags && it.ImageTags.Thumb) return imgUrl(it.Id, 'Thumb', it.ImageTags.Thumb, `maxWidth=${w}&quality=85`);
-        return null;
-    };
-    // an episode's own still, else the show's art
-    const stillUrl = (ep, w = 640) => {
-        if (ep.ImageTags && ep.ImageTags.Primary) return imgUrl(ep.Id, 'Primary', ep.ImageTags.Primary, `maxWidth=${w}&quality=85`);
-        if (ep.ParentThumbItemId && ep.ParentThumbImageTag) return imgUrl(ep.ParentThumbItemId, 'Thumb', ep.ParentThumbImageTag, `maxWidth=${w}&quality=85`);
-        return backdropUrl(ep, w);
-    };
-
-    const LANGS = {
-        eng: 'English', spa: 'Spanish', fre: 'French', fra: 'French', ger: 'German', deu: 'German', ita: 'Italian',
-        jpn: 'Japanese', por: 'Portuguese', rus: 'Russian', chi: 'Chinese', zho: 'Chinese', kor: 'Korean',
-        dut: 'Dutch', nld: 'Dutch', swe: 'Swedish', nor: 'Norwegian', dan: 'Danish', fin: 'Finnish', pol: 'Polish',
-        hin: 'Hindi', ara: 'Arabic', heb: 'Hebrew', tur: 'Turkish', gre: 'Greek', ell: 'Greek', cze: 'Czech', ces: 'Czech',
-        hun: 'Hungarian', tha: 'Thai', vie: 'Vietnamese', ukr: 'Ukrainian'
-    };
-    const langName = (code) => (code ? LANGS[lc(code)] || code.toUpperCase() : '');
-
-    // Items the screens have seen, by id, so a details route for one of them opens
-    // without a lookup (and routes we don't handle are recognized at once).
-    const typeCache = new Map();
-    const remember = (items) => { for (const it of items || []) if (it && it.Id && it.Type) typeCache.set(it.Id, it.Type); };
-
-    // Where the highlight was on each screen, so coming back (Back, or the end of
-    // a movie) lands where you left.
-    const memory = new Map();
 
     // Stylesheets load on first open. tokens.css normally comes from homer.js;
     // load it here too when this script is used on its own.
@@ -176,72 +74,27 @@
             document.head.appendChild(s);
         }
         if (cssReady && document.getElementById('hl-css')) return cssReady;
-        const css = document.createElement('link');
-        css.id = 'hl-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'library.css' + QUERY;
-        cssReady = new Promise((resolve) => {
-            css.onload = css.onerror = resolve;
-            setTimeout(resolve, 2000);
-        });
-        document.head.appendChild(css);
+        // both layouts' stylesheets (the phone one is scoped to .hl-phone)
+        const link = (id, file) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
+            document.head.appendChild(css);
+            return new Promise((resolve) => {
+                css.onload = css.onerror = resolve;
+                setTimeout(resolve, 2000);
+            });
+        };
+        cssReady = Promise.all([link('hl-css', 'library.css'), link('hl-phone-css', 'library-phone.css')]);
         return cssReady;
     };
 
-    // ---------- Playback ----------
-
-    // Hand Jellyfin Web's own remote-control handler a Play message, exactly as
-    // if the server had told this client to play it (the guide does the same).
-    const play = async (id, startTicks) => {
-        if (docked()) P().fullscreen(); // Play means full screen, even while something plays docked
-        const ac = window.ApiClient;
-        const server = getServer();
-        // always explicit: 0 means "from the beginning" (Restart), never "wherever it was"
-        const data = { PlayCommand: 'PlayNow', ItemIds: [id], StartPositionTicks: startTicks > 0 ? startTicks : 0 };
-        if (ac && typeof ac.handleMessageReceived === 'function' && (!ac.serverId || ac.serverId() === server.Id)) {
-            ac.handleMessageReceived({ MessageType: 'Play', Data: data });
-            return;
-        }
-        // Fallback: remote-control this browser's own session through the server.
-        const deviceId = (ac && ac.deviceId && ac.deviceId()) || localStorage.getItem('_deviceId2');
-        const sessions = await api(`/Sessions?deviceId=${encodeURIComponent(deviceId)}`);
-        const mine = (sessions || []).find((s) => s.DeviceId === deviceId && s.SupportsRemoteControl);
-        if (!mine) throw new Error('Could not find this browser\'s Jellyfin session');
-        await request('POST', `/Sessions/${mine.Id}/Playing?playCommand=PlayNow&itemIds=${id}${startTicks > 0 ? '&startPositionTicks=' + startTicks : ''}`);
-    };
-
-    // ---------- The player (shared/player.js) ----------
-    // While a video plays docked in a preview window, HOMER screens sit on top of
-    // Jellyfin's player page and move between each other without touching the
-    // address (leaving the player page would stop the video). HomerPlayer keeps
-    // that screen stack; this module asks it where it is and goes through it.
-    const P = () => window.HomerPlayer || null;
-    const docked = () => !!(P() && P().docked());
-    const currentRoute = () => (P() ? P().route() : location.hash);
-    const nav = (hash) => { if (P()) P().go(hash); else location.hash = hash; };
-
-    const detailsHash = (id) => {
-        const server = getServer();
-        return `#/details?id=${id}${server && server.Id ? '&serverId=' + server.Id : ''}`;
-    };
-
-    // Back, like a remote: the previous page, or somewhere sensible when this was
-    // the first page in the tab.
-    const goBack = (fallback) => {
-        if (docked()) { P().back(); return; }
-        const before = location.href;
-        history.back();
-        setTimeout(() => {
-            if (location.href === before) location.hash = fallback;
-        }, 400);
-    };
-
-    // Home: HOMER Home handles it when it's loaded, otherwise Jellyfin's home route
-    const goHome = () => {
-        if (P()) P().goHome();
-        else if (window.HomerHome && window.HomerHome.goHome) window.HomerHome.goHome();
-        else location.hash = '#/home';
-    };
+    // The phone layout: shared/layout.js says when; library/library-phone.js
+    // draws it (and registers it with the layout once it has loaded).
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerLibraryPhone && window.HomerLayout.usePhone('library'));
+    const createPhone = (kind, server, route, item) => window.HomerLibraryPhone.create({ kind, server, route, item });
 
     // ---------- Pixel scrolling (lists and the season tabs) ----------
     // The trackpad moves a list freely; keyboard selection nudges it just enough
@@ -734,8 +587,7 @@
             clearTimeout(nextUpTimer);
             nextUpTimer = setTimeout(async () => {
                 try {
-                    const res = await api(`/Shows/NextUp?userId=${server.UserId}&seriesId=${it.Id}&enableResumable=true&Limit=1&Fields=Overview`);
-                    nextUp.set(it.Id, (res && res.Items && res.Items[0]) || null);
+                    nextUp.set(it.Id, await M.load.nextUp(server, it.Id, true));
                 } catch {
                     return; // just no Play button
                 }
@@ -933,16 +785,10 @@
             actions = [];
             drawActions();
             updateLegend();
-            const fields = 'Overview,Genres,DateCreated,ProductionYear,PremiereDate,EndDate,OfficialRating,CommunityRating,SortName,OriginalTitle' + (isTv ? ',RecursiveItemCount,ChildCount,Status' : '');
             try {
-                const [res, lib] = await Promise.all([
-                    api(`/Items?userId=${server.UserId}&ParentId=${route.parentId}&IncludeItemTypes=${isTv ? 'Series' : 'Movie'}&Recursive=true&SortBy=SortName&SortOrder=Ascending&Fields=${fields}&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&EnableTotalRecordCount=false`),
-                    api(`/Items/${route.parentId}?userId=${server.UserId}`).catch(() => null)
-                ]);
+                const { items, name } = await M.load.library(server, route.parentId, isTv);
                 if (!alive) return;
-                if (lib && lib.Name) $('.hl-brand-sub').textContent = lib.Name;
-                const items = (res && res.Items) || [];
-                remember(items);
+                if (name) $('.hl-brand-sub').textContent = name;
                 status = 'ready';
                 rows = items.map((it) => ({ it, el: makeRow(it) }));
                 if (!rows.length) {
@@ -1138,11 +984,8 @@
             if (!list) {
                 setState('<div class="hl-spinner"></div><b>Loading episodes…</b>');
                 try {
-                    const q = season._all ? '' : `&seasonId=${season.Id}`;
-                    const res = await api(`/Shows/${seriesId}/Episodes?userId=${server.UserId}${q}&Fields=Overview,PremiereDate,OfficialRating,CommunityRating&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1`);
-                    list = (res && res.Items) || [];
+                    list = await M.load.episodes(server, seriesId, season);
                     epCache.set(season.Id, list);
-                    remember(list);
                 } catch (err) {
                     console.error('[HOMER Library]', err);
                     if (alive && token === loadToken) {
@@ -1332,23 +1175,21 @@
             shell.renderInfo({ title: item.Type === 'Series' ? item.Name : (item.SeriesName || ''), chips: [], desc: '' });
             updateLegend();
             try {
-                const [s, seasonRes, nu] = await Promise.all([
-                    series ? Promise.resolve(series) : api(`/Items/${seriesId}?userId=${server.UserId}`),
-                    api(`/Shows/${seriesId}/Seasons?userId=${server.UserId}&Fields=Overview`),
+                const [s, seasonList, next] = await Promise.all([
+                    series ? Promise.resolve(series) : M.load.item(server, seriesId),
+                    M.load.seasons(server, seriesId),
                     item.Type === 'Series' && !saved.epId
-                        ? api(`/Shows/NextUp?userId=${server.UserId}&seriesId=${seriesId}&enableResumable=true&Limit=1`).catch(() => null)
+                        ? M.load.nextUp(server, seriesId).catch(() => null)
                         : Promise.resolve(null)
                 ]);
                 if (!alive) return;
                 series = s;
                 remember([s]);
                 shell.setAmbient(backdropUrl(s, 1280));
-                seasons = (seasonRes && seasonRes.Items) || [];
-                remember(seasons);
+                seasons = seasonList;
                 if (!seasons.length) seasons = [{ Id: 'all', Name: 'Episodes', _all: true }];
                 status = 'ready';
                 renderTabs();
-                const next = nu && nu.Items && nu.Items[0];
                 let seasonId = saved.seasonId;
                 let preferId = saved.epId;
                 if (!seasonId) {
@@ -1424,27 +1265,6 @@
             ]);
         };
 
-        const facts = (m) => {
-            const people = m.People || [];
-            const names = (type, n) => people.filter((p) => p.Type === type).slice(0, n).map((p) => p.Name).join(', ');
-            const src = (m.MediaSources || [])[0];
-            const streams = (src && src.MediaStreams) || [];
-            const v = streams.find((s) => s.Type === 'Video');
-            const audio = streams.filter((s) => s.Type === 'Audio');
-            const mainAudio = audio.find((s) => s.IsDefault) || audio[0];
-            const subs = [...new Set(streams.filter((s) => s.Type === 'Subtitle').map((s) => langName(s.Language) || s.Title || s.DisplayTitle).filter(Boolean))];
-            const res = v && v.Height ? (v.Width >= 3200 || v.Height >= 2000 ? '4K' : `${v.Height}p`) : '';
-            return [
-                ['Directed by', names('Director', 3)],
-                ['Written by', names('Writer', 3)],
-                ['Starring', names('Actor', 6)],
-                ['Studio', (m.Studios || []).slice(0, 3).map((s) => s.Name).join(', ')],
-                ['Video', v ? [res, (v.Codec || '').toUpperCase(), v.VideoRangeType && v.VideoRangeType !== 'Unknown' ? v.VideoRangeType : v.VideoRange].filter(Boolean).join(' · ') : ''],
-                ['Audio', mainAudio ? [langName(mainAudio.Language), mainAudio.ChannelLayout, (mainAudio.Codec || '').toUpperCase()].filter(Boolean).join(' · ') + (audio.length > 1 ? `  +${audio.length - 1} more` : '') : ''],
-                ['Subtitles', subs.slice(0, 6).join(', ') + (subs.length > 6 ? ` +${subs.length - 6} more` : '')]
-            ].filter((f) => f[1]);
-        };
-
         const render = () => {
             const chips = [
                 { text: it.ProductionYear ? String(it.ProductionYear) : '' },
@@ -1477,7 +1297,7 @@
                 ? [{ id: 'resume', icon: 'play_arrow', label: 'Resume' }, { id: 'restart', icon: 'replay', label: 'Restart' }]
                 : [{ id: 'play', icon: 'play_arrow', label: 'Play' }];
             drawActions();
-            const rows = facts(it);
+            const rows = M.facts(it);
             $('.hl-facts').innerHTML = rows.map(([k, v]) => `<div class="hl-fact"><div class="hl-fact-k">${esc(k)}</div><div class="hl-fact-v">${esc(v)}</div></div>`).join('');
             setState(rows.length ? '' : '<b>No cast or media details for this movie</b>');
         };
@@ -1535,7 +1355,7 @@
             status = 'loading';
             setState('<div class="hl-spinner"></div><b>Loading…</b>');
             try {
-                const full = await api(`/Items/${item.Id}?userId=${server.UserId}`);
+                const full = await M.load.item(server, item.Id);
                 if (!alive) return;
                 it = full;
                 status = 'ready';
@@ -1571,7 +1391,6 @@
     let screen = null; // the open screen, or null
     let suppressedKey = null; // closed via close(); stay out of the way until the route changes
     let lookup = null; // details id being looked up
-    const fresh = new Map(); // id -> full item fetched by the route lookup (used once)
 
     const parseRoute = (hash = currentRoute()) => {
         const m = (hash || '').match(/^#!?\/([a-z]+)(?:\.html)?(?:\?(.*))?$/i);
@@ -1596,11 +1415,12 @@
 
     const openScreen = (route, server) => {
         let s;
-        if (route.kind === 'library') s = createLibrary(server, route);
+        const phone = phoneLayout();
+        if (route.kind === 'library') s = phone ? createPhone('library', server, route) : createLibrary(server, route);
         else {
             const item = fresh.get(route.id) || { Id: route.id, Type: typeCache.get(route.id) };
             fresh.delete(route.id);
-            if (item.Type === 'Movie') s = createMovie(server, route, item);
+            if (item.Type === 'Movie') s = phone ? createPhone('movie', server, route, item) : createMovie(server, route, item);
             else if (item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Episode') {
                 if (item.Type !== 'Series' && !item.SeriesId) {
                     // need the parent show; look it up first
@@ -1608,7 +1428,7 @@
                     sync();
                     return;
                 }
-                s = createShow(server, route, item);
+                s = phone ? createPhone('show', server, route, item) : createShow(server, route, item);
             } else return;
         }
         if (destroyed) return s.teardown();
@@ -1644,7 +1464,7 @@
                 closeScreen();
                 if (lookup === route.id) return;
                 lookup = route.id;
-                api(`/Items/${route.id}?userId=${server.UserId}`).then((it) => {
+                M.load.item(server, route.id).then((it) => {
                     typeCache.set(route.id, it.Type);
                     if (SUPPORTED.has(it.Type)) fresh.set(route.id, it);
                 }).catch(() => {
@@ -1688,6 +1508,18 @@
         queueSync();
     };
 
+    // The phone and TV layouts switch places (a window resized across the
+    // line, or the phone layout arriving): draw the other one. Where it was
+    // (the title, the season) is in memory, which both layouts keep.
+    const onLayout = () => {
+        if (!screen || !!screen.phone === phoneLayout()) return;
+        const route = parseRoute();
+        const server = getServer();
+        closeScreen();
+        if (route && server && !suppressedKey) openScreen(route, server);
+    };
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
+
     window.addEventListener('hashchange', onRouteChange);
     window.addEventListener('popstate', onRouteChange);
     // docking, Back and Home change the route without changing the address
@@ -1730,7 +1562,9 @@
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);
             if (offPlayer) offPlayer();
+            offLayout();
             document.getElementById('hl-css')?.remove();
+            document.getElementById('hl-phone-css')?.remove();
             cssReady = null;
         }
     };

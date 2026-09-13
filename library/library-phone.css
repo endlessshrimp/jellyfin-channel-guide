@@ -1,0 +1,1167 @@
+/*
+ * HOMER library screens, phone layout (library/library-phone.js). Everything
+ * is scoped to #hl-root.hl-phone, so this and library.css (the TV layout) can
+ * both be loaded; colors and type come from shared/tokens.css, and the top
+ * bar and tab bar around it from shared/phone.css (which also puts #hl-root
+ * between them).
+ *
+ * The root sits above a docked video (HomerPlayer pins the real video at
+ * 99995) so the strip's buttons show over it: the strip is a hole the video
+ * shows through, and everything else paints its own background.
+ */
+
+#hl-root.hl-phone {
+    --dock-h: calc(100vw * 9 / 16);
+    --lp-bg: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+
+    z-index: 99997; /* over a docked video; clear of the bars, which it sits between */
+    display: flex;
+    flex-direction: column;
+    background: none;
+    font-family: var(--homer-font);
+    color: var(--homer-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+.hl-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    text-align: inherit;
+}
+
+.hl-phone [hidden] { display: none !important; }
+
+.hl-phone .lp-main {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--lp-bg);
+}
+
+/* the TV screens' faint scanline texture */
+.hl-phone .lp-main::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+}
+
+.hl-phone .lp-scroll {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Chips (sorts, seasons): 36px to see, 44px to hit ---------- */
+
+.hl-phone .lp-chip {
+    position: relative;
+    isolation: isolate;
+    flex: none;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    color: #d6e0ec;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hl-phone .lp-chip::before {
+    content: "";
+    position: absolute;
+    inset: 4px 0;
+    z-index: -1;
+    border-radius: 18px;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.hl-phone .lp-chip.on { color: #fff; }
+
+.hl-phone .lp-chip.on::before {
+    border-color: transparent;
+    background: var(--homer-focus-fill);
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 6px 18px rgba(47, 140, 255, 0.4);
+}
+
+.hl-phone .lp-chip:active::before { background: var(--homer-cell-hi); }
+.hl-phone .lp-chip.on:active::before { background: var(--homer-focus-fill); }
+
+/* ---------- Movies / TV Shows: filter, sorts, count ---------- */
+
+.hl-phone .lp-head {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px calc(16px + var(--homer-phone-right)) 2px calc(16px + var(--homer-phone-left));
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.hl-phone .lp-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 0 0 14px;
+    border-radius: 22px;
+    box-sizing: border-box;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: text;
+}
+
+.hl-phone .lp-filter:focus-within {
+    border-color: var(--homer-accent);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(47, 140, 255, 0.3);
+}
+
+.hl-phone .lp-filter > .material-icons {
+    flex: none;
+    font-size: 22px;
+    color: var(--homer-dim);
+}
+
+/* 16px at least: iPhones zoom the page into a smaller field */
+.hl-phone .lp-filter-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--homer-text);
+    font-family: var(--homer-font);
+    font-size: 16px;
+    font-weight: 600;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.hl-phone .lp-filter-input::placeholder { color: var(--homer-faint); }
+
+.hl-phone .lp-filter-clear {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.hl-phone .lp-filter-clear .material-icons {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 17px;
+}
+
+.hl-phone .lp-sorts {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.hl-phone .lp-count {
+    margin-left: auto;
+    padding-left: 8px;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+    white-space: nowrap;
+}
+
+/* ---------- The poster grid ---------- */
+
+.hl-phone .lp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 10px;
+    padding: 14px calc(12px + var(--homer-phone-right)) 24px calc(12px + var(--homer-phone-left));
+}
+
+.hl-phone .lp-tile {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    text-align: left;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 220px;
+}
+
+.hl-phone .lp-tile-art {
+    position: relative;
+    display: block;
+    aspect-ratio: 2 / 3;
+    border-radius: 10px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.22), transparent 60%),
+        linear-gradient(135deg, #16335c, #0a1628);
+    box-shadow: 0 0 0 1px rgba(160, 190, 230, 0.1), 0 6px 16px rgba(0, 0, 0, 0.45);
+    transition: transform 120ms ease;
+}
+
+.hl-phone .lp-tile:active .lp-tile-art { transform: scale(0.96); }
+
+.hl-phone .lp-tile-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.hl-phone .lp-tile-art img.in { opacity: 1; }
+
+.hl-phone .lp-tile-letter {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 36px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.22);
+}
+
+.hl-phone .lp-tile-flag {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+}
+
+.hl-phone .lp-tile-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.hl-phone .lp-tile-bar i,
+.hl-phone .lp-ep-bar i,
+.hl-phone .lp-hero-bar i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+    box-shadow: 0 0 8px rgba(111, 211, 255, 0.7);
+}
+
+.hl-phone .lp-tile-name {
+    display: block;
+    margin-top: 7px;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hl-phone .lp-tile-sub {
+    display: block;
+    margin-top: 2px;
+    min-height: 1.2em;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hl-phone .lp-tile-sub em,
+.hl-phone .lp-when em,
+.hl-phone .lp-ep-state em {
+    font-style: normal;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--homer-needle);
+}
+
+/* ---------- Watched state: unwatched dot, count, check ---------- */
+
+/* unwatched: the TV screens' glowing blue dot */
+.hl-phone .lp-dot {
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--homer-accent-2);
+    box-shadow: 0 0 0 2.5px rgba(3, 9, 18, 0.8), 0 0 12px rgba(111, 211, 255, 0.9);
+}
+
+.hl-phone .lp-count-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px 0 7px;
+    border-radius: 11px;
+    background: rgba(3, 9, 18, 0.85);
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--homer-accent-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.hl-phone .lp-count-dot::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--homer-accent-2);
+    box-shadow: 0 0 8px rgba(111, 211, 255, 0.9);
+}
+
+.hl-phone .lp-check {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(3, 9, 18, 0.8);
+    color: #cfe0f2;
+}
+
+.hl-phone .lp-check .material-icons { font-size: 16px; }
+
+/* ---------- A title's page: art, title, chips, buttons ---------- */
+
+.hl-phone .lp-page { padding-bottom: 12px; }
+
+.hl-phone .lp-hero {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.3), transparent 55%),
+        linear-gradient(135deg, #113767, #061326);
+}
+
+/* the art fades into the page under it */
+.hl-phone .lp-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 50%, rgba(6, 17, 38, 0.7) 82%, #061126 100%);
+    pointer-events: none;
+}
+
+.hl-phone .lp-art {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 25%;
+    opacity: 0;
+    transition: opacity 240ms ease;
+}
+
+.hl-phone .lp-art.in { opacity: 1; }
+
+.hl-phone .lp-poster {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.hl-phone .lp-poster img {
+    height: 84%;
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+.hl-phone .lp-hero-badge {
+    position: absolute;
+    left: calc(16px + var(--homer-phone-left));
+    top: 12px;
+    z-index: 1;
+}
+
+.hl-phone .lp-hero-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.hl-phone .lp-flag {
+    display: inline-block;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: rgba(3, 9, 18, 0.82);
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hl-phone .lp-flag.new {
+    background: var(--homer-accent);
+    border-color: transparent;
+}
+
+.hl-phone .lp-flag.resume {
+    background: var(--homer-needle);
+    border-color: transparent;
+    color: #1d1200;
+}
+
+.hl-phone .lp-body {
+    position: relative;
+    z-index: 1;
+    padding: 12px calc(16px + var(--homer-phone-right)) 0 calc(16px + var(--homer-phone-left));
+}
+
+/* a movie's tagline */
+.hl-phone .lp-kicker {
+    margin-top: 6px;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--homer-dim);
+}
+
+.hl-phone .lp-kicker:empty { display: none; }
+
+.hl-phone .lp-title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.005em;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.hl-phone .lp-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 12px;
+}
+
+.hl-phone .lp-pills:empty { display: none; }
+
+.hl-phone .lp-pill {
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hl-phone .lp-pill.genre {
+    background: rgba(47, 140, 255, 0.14);
+    border-color: rgba(111, 211, 255, 0.3);
+    color: #cfe9ff;
+}
+
+.hl-phone .lp-pill.score { color: var(--homer-needle); }
+
+.hl-phone .lp-when {
+    margin-top: 12px;
+    font-family: var(--homer-font-cond);
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hl-phone .lp-when:empty { display: none; }
+
+.hl-phone .lp-when b {
+    margin-right: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--homer-accent-2);
+}
+
+.hl-phone .lp-acts {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.hl-phone .lp-acts:empty { display: none; }
+
+.hl-phone .lp-act {
+    flex: 1;
+    min-width: 0;
+    height: 52px;
+    border-radius: 14px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+    background: rgba(3, 9, 18, 0.9);
+    border: 1.5px solid var(--homer-line-strong);
+    font-size: 17px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hl-phone .lp-act.primary {
+    flex: 1.5;
+    border-color: transparent;
+    background: var(--homer-focus-fill);
+    box-shadow: 0 8px 24px rgba(47, 140, 255, 0.35);
+}
+
+.hl-phone .lp-act:active { filter: brightness(1.2); }
+.hl-phone .lp-act .material-icons { flex: none; font-size: 24px; }
+
+.hl-phone .lp-act span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hl-phone .lp-desc {
+    margin: 16px 0 0;
+    font-size: 15px;
+    line-height: 1.45;
+    color: #c5d2e3;
+}
+
+.hl-phone .lp-desc:empty { display: none; }
+
+.hl-phone .lp-desc.clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hl-phone .lp-more {
+    height: 40px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-accent-2);
+}
+
+/* ---------- About ---------- */
+
+.hl-phone .lp-about {
+    padding: 22px calc(16px + var(--homer-phone-right)) 12px calc(16px + var(--homer-phone-left));
+}
+
+.hl-phone .lp-label {
+    margin: 0 0 4px;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.hl-phone .lp-fact {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.hl-phone .lp-fact:last-child { border-bottom: 0; }
+
+.hl-phone .lp-fact-k {
+    padding-top: 1px;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-faint);
+}
+
+.hl-phone .lp-fact-v {
+    font-size: 14.5px;
+    line-height: 1.35;
+    color: #dbe5f0;
+}
+
+/* ---------- A show: seasons and episodes ---------- */
+
+/* the season chips stay at the top while its episodes scroll */
+.hl-phone .lp-seasons-bar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    margin-top: 18px;
+    background: rgba(6, 17, 38, 0.97);
+    border-top: 1px solid var(--homer-line);
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.hl-phone .lp-seasons {
+    display: flex;
+    gap: 7px;
+    padding: 2px calc(16px + var(--homer-phone-right)) 2px calc(16px + var(--homer-phone-left));
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.hl-phone .lp-seasons::-webkit-scrollbar { display: none; }
+
+.hl-phone .lp-chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--homer-accent-2);
+    box-shadow: 0 0 8px rgba(111, 211, 255, 0.8);
+}
+
+.hl-phone .lp-chip.on .lp-chip-dot { background: #fff; }
+
+.hl-phone .lp-eps-head {
+    padding: 14px calc(16px + var(--homer-phone-right)) 6px calc(16px + var(--homer-phone-left));
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.hl-phone .lp-eps-head:empty { display: none; }
+
+.hl-phone .lp-eps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 calc(12px + var(--homer-phone-right)) 4px calc(12px + var(--homer-phone-left));
+}
+
+.hl-phone .lp-ep {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 84px;
+    box-sizing: border-box;
+    padding: 8px 6px 8px 8px;
+    border-radius: 12px;
+    background: var(--homer-cell);
+    border: 1px solid rgba(160, 190, 230, 0.08);
+    cursor: pointer;
+    outline: 0;
+}
+
+.hl-phone .lp-ep:active { background: var(--homer-cell-hi); }
+.hl-phone .lp-ep.next { border-color: rgba(111, 211, 255, 0.4); }
+
+.hl-phone .lp-ep.focus {
+    border-color: rgba(255, 255, 255, 0.7);
+    background: var(--homer-cell-hi);
+}
+
+.hl-phone .lp-ep-thumb {
+    position: relative;
+    flex: none;
+    width: 124px;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #16335c, #0a1628);
+}
+
+.hl-phone .lp-ep-thumb img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.hl-phone .lp-ep-thumb img.in { opacity: 1; }
+
+.hl-phone .lp-ep-thumb .material-icons {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 32px;
+    height: 32px;
+    margin: -16px 0 0 -16px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    font-size: 22px;
+    color: #fff;
+}
+
+.hl-phone .lp-ep-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.hl-phone .lp-ep-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.hl-phone .lp-ep-num {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.hl-phone .lp-ep-next {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--homer-accent-2);
+    color: #04121f;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+}
+
+.hl-phone .lp-ep-title {
+    margin-top: 3px;
+    font-size: 15.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hl-phone .lp-ep-state {
+    margin-top: 3px;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--homer-faint);
+}
+
+.hl-phone .lp-ep.played .lp-ep-title { color: #b7c5d6; }
+.hl-phone .lp-ep.played .lp-ep-thumb { opacity: 0.7; }
+
+.hl-phone .lp-ep-flag {
+    flex: none;
+    width: 28px;
+    display: grid;
+    place-items: center;
+}
+
+.hl-phone .lp-ep-flag .lp-check { background: none; color: var(--homer-faint); }
+.hl-phone .lp-ep-flag .lp-check .material-icons { font-size: 22px; }
+
+.hl-phone .lp-ep-restart {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(3, 9, 18, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+.hl-phone .lp-ep-restart .material-icons { font-size: 22px; }
+
+/* ---------- Loading, empty, error ---------- */
+
+.hl-phone .lp-state { padding: 40px 24px; }
+
+.hl-phone .lp-state-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.hl-phone .lp-state-box b {
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.hl-phone .lp-state-box span {
+    font-size: 14.5px;
+    line-height: 1.4;
+    color: var(--homer-dim);
+}
+
+.hl-phone .lp-retry {
+    margin-top: 10px;
+    height: 44px;
+    padding: 0 22px !important;
+    border-radius: 22px;
+    background: var(--homer-focus-fill) !important;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.hl-phone .lp-spinner {
+    position: relative;
+    width: 120px;
+    height: 4px;
+    margin-bottom: 8px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.hl-phone .lp-spinner::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+    box-shadow: 0 0 10px var(--homer-accent-2);
+    animation: lp-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes lp-sweep {
+    0% { left: -40%; }
+    100% { left: 100%; }
+}
+
+/* ---------- Toast ---------- */
+
+.hl-phone .lp-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    z-index: 7;
+    box-sizing: border-box;
+    max-width: calc(100% - 32px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.55);
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.hl-phone .lp-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.hl-phone .lp-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 12px 30px rgba(0, 0, 0, 0.55); }
+
+.hl-phone .lp-toast-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- Docked video (as on the phone guide) ---------- */
+
+.hl-phone .lp-dock {
+    position: relative;
+    flex: none;
+    display: none;
+    width: 100%;
+    height: var(--dock-h);
+    overflow: hidden;
+    cursor: pointer;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.hl-phone.lp-docked .lp-dock { display: block; }
+
+/* a title's page while a video's docked: the video stands in for the art */
+.hl-phone.lp-docked .lp-hero { display: none; }
+
+/* the video is in: let it show through */
+.hl-phone.lp-dock-live .lp-dock { background: none; }
+.hl-phone.lp-dock-live .lp-dock-idle { display: none; }
+
+.hl-phone .lp-dock-idle {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.hl-phone .lp-dock-loading {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hl-phone .lp-badge {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--homer-live);
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hl-phone .lp-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.hl-phone .lp-dock-ctl {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+}
+
+.hl-phone .lp-dock-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.hl-phone .lp-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    font-size: 21px;
+    color: #fff;
+}
+
+.hl-phone .lp-dock-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 22px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), transparent);
+    font-family: var(--homer-font-cond);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.hl-phone .lp-dock-what {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hl-phone .lp-dock-left { flex: none; }
+
+.hl-phone .lp-dock-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.hl-phone .lp-dock-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+/* ---------- Landscape ---------- */
+
+@media (orientation: landscape) {
+    #hl-root.hl-phone {
+        --dock-h: calc((100vw - var(--homer-phone-left) - var(--homer-phone-right)) * 0.42 * 9 / 16);
+    }
+
+    /* the filter, the sorts and the count on one line */
+    .hl-phone .lp-head {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+
+    .hl-phone .lp-filter { flex: 0 1 300px; }
+    .hl-phone .lp-sorts { flex: 1; }
+
+    .hl-phone .lp-grid {
+        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        padding-top: 12px;
+    }
+
+    /* a title's page: the art at the left, beside everything else */
+    .hl-phone .lp-page {
+        display: grid;
+        grid-template-columns: 40% minmax(0, 1fr);
+        grid-auto-rows: min-content;
+        column-gap: 18px;
+        align-items: start;
+    }
+
+    .hl-phone .lp-hero {
+        grid-column: 1;
+        grid-row: 1 / span 20;
+        position: sticky;
+        top: 12px;
+        margin: 12px 0 12px calc(16px + var(--homer-phone-left));
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .hl-phone .lp-hero::after { display: none; }
+
+    .hl-phone .lp-page > :not(.lp-hero) { grid-column: 2; }
+
+    .hl-phone .lp-body {
+        padding-top: 14px;
+        padding-left: 0;
+    }
+
+    .hl-phone .lp-title { font-size: 26px; }
+    .hl-phone .lp-seasons-bar { margin-top: 14px; }
+
+    .hl-phone .lp-about,
+    .hl-phone .lp-eps-head,
+    .hl-phone .lp-seasons { padding-left: 0; }
+
+    .hl-phone .lp-eps { padding-left: 0; }
+
+    /* docked: the video at the top left, the screen at the right */
+    #hl-root.hl-phone.lp-docked {
+        display: grid;
+        grid-template-columns: 42% minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    #hl-root.hl-phone.lp-docked::before {
+        content: "";
+        grid-column: 1;
+        grid-row: 2;
+        background: var(--lp-bg);
+        border-right: 1px solid var(--homer-line);
+    }
+
+    .hl-phone.lp-docked .lp-dock {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
+        margin-left: var(--homer-phone-left);
+    }
+
+    .hl-phone.lp-docked .lp-main {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+
+    .hl-phone.lp-docked .lp-page { display: block; }
+
+    .hl-phone.lp-docked .lp-body { padding-left: 16px; }
+
+    .hl-phone.lp-docked .lp-about,
+    .hl-phone.lp-docked .lp-eps-head,
+    .hl-phone.lp-docked .lp-seasons { padding-left: 16px; }
+
+    .hl-phone.lp-docked .lp-eps { padding-left: 12px; }
+    .hl-phone.lp-docked .lp-head .lp-filter { flex-basis: 220px; }
+}
