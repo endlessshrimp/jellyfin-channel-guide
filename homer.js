@@ -31,11 +31,15 @@
     };
 
     css('shared/tokens.css', 'homer-tokens');
+    css('shared/shell.css', 'homer-shell'); // the TV screens' shared stage, top bar and legend
     css('skin/skin.css', 'homer-skin');
     css('shared/weather.css', 'homer-weather');
-    js('shared/player.js'); // first: every screen plays through it
+    css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
+    js('shared/layout.js'); // first: TV or phone layout, and touch
+    js('shared/player.js'); // every screen plays through it
     js('shared/weather.js');
     js('shared/logos.js'); // before the screens: they hand it their channel logos
+    js('guide/guide-model.js'); // the guide's channels, listings and recordings
     js('guide/guide.js');
     js('home/home.js');
     js('library/library.js');

@@ -108,9 +108,17 @@
             t.href = BASE + '../shared/tokens.css' + QUERY;
             document.head.appendChild(t);
         }
-        if (cssReady && document.getElementById('hs-css')) return cssReady;
+        // and the screen shell every TV screen shares, ahead of this screen's own
+        if (!document.getElementById('homer-shell')) {
+            const s = document.createElement('link');
+            s.id = 'homer-shell';
+            s.rel = 'stylesheet';
+            s.href = BASE + '../shared/shell.css' + QUERY;
+            document.head.appendChild(s);
+        }
+        if (cssReady && document.getElementById('hx-css')) return cssReady;
         const css = document.createElement('link');
-        css.id = 'hs-css';
+        css.id = 'hx-css';
         css.rel = 'stylesheet';
         css.href = BASE + 'settings.css' + QUERY;
         cssReady = new Promise((resolve) => {
@@ -329,40 +337,40 @@
 
     const createScreen = (server) => {
         const uid = server.UserId;
-        const root = el('div', 'homer-screen hs-root');
+        const root = el('div', 'homer-screen hx-root');
         root.id = 'hx-root';
         root.style.visibility = 'hidden'; // until settings.css has loaded
         root.style.zIndex = Z;
-        const stage = el('div', 'hs-stage');
+        const stage = el('div', 'hx-stage');
         root.appendChild(stage);
         stage.innerHTML = `
-            <div class="hs-topbar">
-                <div class="hs-brand homer-home" role="button" title="Home (H)"><span class="hs-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="hs-brand-sub">Settings</span></div>
-                <div class="hs-clock"><div class="hs-clock-time"></div><div class="hs-clock-date"></div></div>
+            <div class="hx-topbar">
+                <div class="hx-brand homer-home" role="button" title="Home (H)"><span class="hx-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="hx-brand-sub">Settings</span></div>
+                <div class="hx-clock"><div class="hx-clock-time"></div><div class="hx-clock-date"></div></div>
             </div>
-            <div class="hs-toast" role="status" aria-live="polite"></div>
-            <div class="hs-body">
-                <div class="hs-list">
-                    <div class="hs-items"></div>
-                    <div class="hs-account">
-                        <div class="hs-account-row"><span class="material-icons" aria-hidden="true">person</span><span class="hs-account-user"></span></div>
-                        <div class="hs-account-row"><span class="material-icons" aria-hidden="true">dns</span><span class="hs-account-server"></span></div>
+            <div class="hx-toast" role="status" aria-live="polite"></div>
+            <div class="hx-body">
+                <div class="hx-list">
+                    <div class="hx-items"></div>
+                    <div class="hx-account">
+                        <div class="hx-account-row"><span class="material-icons" aria-hidden="true">person</span><span class="hx-account-user"></span></div>
+                        <div class="hx-account-row"><span class="material-icons" aria-hidden="true">dns</span><span class="hx-account-server"></span></div>
                     </div>
                 </div>
-                <div class="hs-options">
-                    <div class="hs-opts"><div class="hs-opts-inner"></div></div>
-                    <div class="hs-state"></div>
+                <div class="hx-options">
+                    <div class="hx-opts"><div class="hx-opts-inner"></div></div>
+                    <div class="hx-state"></div>
                 </div>
-                <div class="hs-info">
-                    <div class="hs-preview" data-homer-preview>
-                        <div class="hs-preview-idle"><span class="hs-preview-mark"></span><span class="hs-preview-word">HOMER</span></div>
+                <div class="hx-info">
+                    <div class="hx-preview" data-homer-preview>
+                        <div class="hx-preview-idle"><span class="hx-preview-mark"></span><span class="hx-preview-word">HOMER</span></div>
                     </div>
-                    <div class="hs-info-scope"></div>
-                    <div class="hs-info-title"></div>
-                    <div class="hs-info-desc"></div>
+                    <div class="hx-info-scope"></div>
+                    <div class="hx-info-title"></div>
+                    <div class="hx-info-desc"></div>
                 </div>
             </div>
-            <div class="hs-legend"></div>`;
+            <div class="hx-legend"></div>`;
         document.body.appendChild(root);
 
         const $ = (s) => stage.querySelector(s);
@@ -371,9 +379,11 @@
         // the other HOMER screens, so the screen fills the window instead of
         // letterboxing
         const fit = () => {
-            let s = window.innerHeight / 1080;
-            let w = window.innerWidth / s;
-            if (w < 1600) { s = window.innerWidth / 1600; w = 1600; }
+            // the window, or on a phone the room between HOMER's bars (shared/layout.js)
+            const box = window.HomerLayout ? window.HomerLayout.stageBox() : { width: window.innerWidth, height: window.innerHeight };
+            let s = box.height / 1080;
+            let w = box.width / s;
+            if (w < 1600) { s = box.width / 1600; w = 1600; }
             stage.style.width = w + 'px';
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
         };
@@ -381,20 +391,20 @@
 
         const tick = () => {
             const d = new Date();
-            $('.hs-clock-time').textContent = fmtTime(d);
-            $('.hs-clock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+            $('.hx-clock-time').textContent = fmtTime(d);
+            $('.hx-clock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
-        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hs-clock')) : () => {};
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hx-clock')) : () => {};
 
-        const toastEl = $('.hs-toast');
+        const toastEl = $('.hx-toast');
         let toastTimer = 0;
         const toast = (msg, kind = '') => {
-            toastEl.innerHTML = `<span class="material-icons" aria-hidden="true">${kind === 'err' ? 'error_outline' : 'check_circle'}</span><span class="hs-toast-text">${esc(msg)}</span>`;
-            toastEl.className = 'hs-toast show' + (kind ? ' ' + kind : '');
+            toastEl.innerHTML = `<span class="material-icons" aria-hidden="true">${kind === 'err' ? 'error_outline' : 'check_circle'}</span><span class="hx-toast-text">${esc(msg)}</span>`;
+            toastEl.className = 'hx-toast show' + (kind ? ' ' + kind : '');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => { toastEl.className = 'hs-toast'; }, 2200);
+            toastTimer = setTimeout(() => { toastEl.className = 'hx-toast'; }, 2200);
         };
 
         // ----- state -----
@@ -531,11 +541,11 @@
         };
 
         // ----- drawing -----
-        const itemsBox = $('.hs-items');
-        const optsView = $('.hs-opts');
-        const optsInner = $('.hs-opts-inner');
+        const itemsBox = $('.hx-items');
+        const optsView = $('.hx-opts');
+        const optsInner = $('.hx-opts-inner');
         const scroller = makeScroller(optsView, optsInner);
-        const stateEl = $('.hs-state');
+        const stateEl = $('.hx-state');
         const setState = (html) => {
             stateEl.innerHTML = html || '';
             stateEl.classList.toggle('show', !!html);
@@ -543,24 +553,24 @@
 
         const drawList = () => {
             itemsBox.innerHTML = visible.map((s, i) => `
-                <div class="hs-item${i === sel ? ' sel' : ''}${s.action ? ' action' : ''}" role="button" data-i="${i}">
-                    <span class="material-icons hs-item-icon" aria-hidden="true">${s.icon}</span>
-                    <div class="hs-item-text"><div class="hs-item-label">${esc(s.label)}</div>${s.action ? '' : `<div class="hs-item-value">${esc(valueLabel(s)) || '&nbsp;'}</div>`}</div>
-                    <span class="material-icons hs-item-go" aria-hidden="true">chevron_right</span>
+                <div class="hx-item${i === sel ? ' sel' : ''}${s.action ? ' action' : ''}" role="button" data-i="${i}">
+                    <span class="material-icons hx-item-icon" aria-hidden="true">${s.icon}</span>
+                    <div class="hx-item-text"><div class="hx-item-label">${esc(s.label)}</div>${s.action ? '' : `<div class="hx-item-value">${esc(valueLabel(s)) || '&nbsp;'}</div>`}</div>
+                    <span class="material-icons hx-item-go" aria-hidden="true">chevron_right</span>
                 </div>`).join('');
         };
 
         const markList = () => {
-            itemsBox.querySelectorAll('.hs-item').forEach((r, i) => r.classList.toggle('sel', i === sel));
+            itemsBox.querySelectorAll('.hx-item').forEach((r, i) => r.classList.toggle('sel', i === sel));
         };
 
         const drawInfo = () => {
             const s = setting();
-            $('.hs-info-scope').innerHTML = s.scope === 'device'
+            $('.hx-info-scope').innerHTML = s.scope === 'device'
                 ? '<span class="material-icons" aria-hidden="true">devices</span>This device only'
                 : '<span class="material-icons" aria-hidden="true">account_circle</span>Saved to your account';
-            $('.hs-info-title').textContent = s.label;
-            $('.hs-info-desc').textContent = typeof s.desc === 'function' ? s.desc() : s.desc;
+            $('.hx-info-title').textContent = s.label;
+            $('.hx-info-desc').textContent = typeof s.desc === 'function' ? s.desc() : s.desc;
         };
 
         const drawOptions = (revealCurrent) => {
@@ -571,12 +581,12 @@
             opt = clamp(opt, 0, Math.max(0, options.length - 1));
             optsInner.innerHTML = options.map((o, i) => {
                 const label = s.action && armed ? 'Sign out? OK to confirm' : o.label;
-                const lead = s.action ? `<span class="material-icons hs-opt-lead" aria-hidden="true">${s.icon}</span>` : '<span class="material-icons hs-opt-check" aria-hidden="true">check</span>';
+                const lead = s.action ? `<span class="material-icons hx-opt-lead" aria-hidden="true">${s.icon}</span>` : '<span class="material-icons hx-opt-check" aria-hidden="true">check</span>';
                 const input = o.input
-                    ? `<input class="hs-zip" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" value="${esc(o.zip)}" aria-label="ZIP code">`
+                    ? `<input class="hx-zip" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" value="${esc(o.zip)}" aria-label="ZIP code">`
                     : '';
-                return `<div class="hs-opt${i === cur ? ' cur' : ''}${i === opt ? ' sel' : ''}${o.sub ? ' two' : ''}${s.action ? ' action' : ''}${s.action && armed ? ' armed' : ''}" role="button" data-i="${i}">
-                    ${lead}<div class="hs-opt-text"><div class="hs-opt-label">${esc(label)}</div>${o.sub ? `<div class="hs-opt-sub">${esc(o.sub)}</div>` : ''}</div>${input}
+                return `<div class="hx-opt${i === cur ? ' cur' : ''}${i === opt ? ' sel' : ''}${o.sub ? ' two' : ''}${s.action ? ' action' : ''}${s.action && armed ? ' armed' : ''}" role="button" data-i="${i}">
+                    ${lead}<div class="hx-opt-text"><div class="hx-opt-label">${esc(label)}</div>${o.sub ? `<div class="hx-opt-sub">${esc(o.sub)}</div>` : ''}</div>${input}
                 </div>`;
             }).join('');
             if (revealCurrent) scroller.reset();
@@ -607,15 +617,15 @@
                     { key: 'OK', label: s.action ? (armed ? 'Confirm sign out' : 'Sign out') : 'Select', action: 'ok' });
             }
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' }, { key: 'ESC', label: 'Back', action: 'back' });
-            $('.hs-legend').innerHTML = items.map((i) => (i === 'spacer'
+            $('.hx-legend').innerHTML = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
-                : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hs-key">${i.key}</span>${esc(i.label)}</span>`)).join('');
+                : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hx-key">${i.key}</span>${esc(i.label)}</span>`)).join('');
         };
 
         const setZone = (z) => {
             zone = z;
-            stage.classList.toggle('hs-zone-list', z === 'list');
-            stage.classList.toggle('hs-zone-options', z === 'options');
+            stage.classList.toggle('hx-zone-list', z === 'list');
+            stage.classList.toggle('hx-zone-options', z === 'options');
             updateLegend();
         };
 
@@ -661,7 +671,7 @@
                 }
                 clearTimeout(armTimer);
                 signingOut = true;
-                optsInner.querySelector('.hs-opt-label').textContent = 'Signing out…';
+                optsInner.querySelector('.hx-opt-label').textContent = 'Signing out…';
                 signOut();
                 return;
             }
@@ -695,7 +705,7 @@
         };
 
         // ----- the ZIP code box -----
-        const zipBox = () => optsInner.querySelector('.hs-zip');
+        const zipBox = () => optsInner.querySelector('.hx-zip');
         let zipBusy = false;
         const editZip = (clear) => {
             const box = zipBox();
@@ -715,7 +725,7 @@
             const zip = box.value.trim();
             if (!/^\d{5}$/.test(zip)) { toast('Enter a 5-digit ZIP code', 'err'); return; }
             zipBusy = true;
-            const sub = box.closest('.hs-opt').querySelector('.hs-opt-sub');
+            const sub = box.closest('.hx-opt').querySelector('.hx-opt-sub');
             if (sub) sub.textContent = 'Looking it up…';
             let hit = null;
             let failed = false;
@@ -739,7 +749,7 @@
             if (k.length === 1 && !/\d/.test(k) && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();
         };
         const onZipBlur = (ev) => {
-            if (ev.target.classList && ev.target.classList.contains('hs-zip') && !zipBusy && wx()) {
+            if (ev.target.classList && ev.target.classList.contains('hx-zip') && !zipBusy && wx()) {
                 ev.target.value = wx().zip().zip;
             }
         };
@@ -750,7 +760,7 @@
             if (document.getElementById('cg-root')) return;
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             const t = ev.target;
-            if (t && t.classList && t.classList.contains('hs-zip') && root.contains(t)) { onZipKey(ev); return; }
+            if (t && t.classList && t.classList.contains('hx-zip') && root.contains(t)) { onZipKey(ev); return; }
             // a digit on the ZIP row starts a new ZIP
             if (zone === 'options' && status === 'ready' && /^\d$/.test(ev.key) && options[opt] && options[opt].input) {
                 ev.stopPropagation();
@@ -801,13 +811,13 @@
         const moved = hoverTracker();
         const onMove = (ev) => {
             if (!moved(ev) || status !== 'ready' || signingOut) return;
-            const item = ev.target.closest('.hs-item');
+            const item = ev.target.closest('.hx-item');
             if (item) {
                 if (zone !== 'list') { disarm(); setZone('list'); }
                 selectSetting(Number(item.dataset.i));
                 return;
             }
-            const o = ev.target.closest('.hs-opt');
+            const o = ev.target.closest('.hx-opt');
             if (o) {
                 const i = Number(o.dataset.i);
                 if (zone !== 'options') setZone('options');
@@ -815,8 +825,8 @@
             }
         };
         const onClick = (ev) => {
-            if (ev.target.closest('.hs-brand')) { goHome(); return; }
-            const leg = ev.target.closest('.hs-legend [data-action]');
+            if (ev.target.closest('.hx-brand')) { goHome(); return; }
+            const leg = ev.target.closest('.hx-legend [data-action]');
             if (leg) {
                 const a = leg.dataset.action;
                 if (a === 'home') goHome();
@@ -830,7 +840,7 @@
                 return;
             }
             if (status !== 'ready' || signingOut) return;
-            const item = ev.target.closest('.hs-item');
+            const item = ev.target.closest('.hx-item');
             if (item) {
                 selectSetting(Number(item.dataset.i));
                 opt = Math.max(0, curIndex(setting()));
@@ -838,7 +848,7 @@
                 setZone('options');
                 return;
             }
-            const o = ev.target.closest('.hs-opt');
+            const o = ev.target.closest('.hx-opt');
             if (o) {
                 opt = Number(o.dataset.i);
                 markOptions();
@@ -861,7 +871,7 @@
         // ----- data -----
         const load = async () => {
             status = 'loading';
-            setState('<div class="hs-spinner"></div><b>Loading settings…</b>');
+            setState('<div class="hx-spinner"></div><b>Loading settings…</b>');
             optsInner.innerHTML = '';
             drawList();
             drawInfo();
@@ -882,8 +892,8 @@
                 const current = setting();
                 visible = SETTINGS.filter((s) => s.id !== 'quality' || canTranscode);
                 sel = Math.max(0, visible.indexOf(current));
-                $('.hs-account-user').innerHTML = `Signed in as <b>${esc(user.Name || '')}</b>`;
-                $('.hs-account-server').innerHTML = info
+                $('.hx-account-user').innerHTML = `Signed in as <b>${esc(user.Name || '')}</b>`;
+                $('.hx-account-server').innerHTML = info
                     ? `<b>${esc(info.ServerName || 'Jellyfin')}</b>${info.Version ? ` · Jellyfin ${esc(info.Version)}` : ''}`
                     : '';
                 status = 'ready';
@@ -1022,7 +1032,7 @@
             document.removeEventListener('DOMContentLoaded', start);
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);
-            document.getElementById('hs-css')?.remove();
+            document.getElementById('hx-css')?.remove();
             cssReady = null;
         }
     };

@@ -1,156 +1,8 @@
 /*
- * HOMER Search. Same stage, palette, type, focus rings and key legend as the
- * library screens (library/library.css); colors come from shared/tokens.css
- * with the guide's values as fallbacks.
+ * HOMER Search. The stage, top bar, legend, toast, chips, buttons and loading
+ * state come from shared/shell.css, as for the library screens; colors come
+ * from shared/tokens.css with the guide's values as fallbacks.
  */
-
-#hs-root {
-    --bg0: var(--homer-bg0, #02050a);
-    --bg1: var(--homer-bg1, #07142a);
-    --panel: var(--homer-panel, rgba(9, 20, 38, 0.72));
-    --line: var(--homer-line, rgba(160, 190, 230, 0.12));
-    --line-strong: var(--homer-line-strong, rgba(160, 190, 230, 0.24));
-    --cell: var(--homer-cell, rgba(20, 36, 60, 0.78));
-    --cell-hi: var(--homer-cell-hi, rgba(32, 62, 102, 0.9));
-    --text: var(--homer-text, #f4f7fb);
-    --dim: var(--homer-dim, #8ea3bd);
-    --faint: var(--homer-faint, #5a6f89);
-    --accent: var(--homer-accent, #2f8cff);
-    --accent-2: var(--homer-accent-2, #6fd3ff);
-    --needle: var(--homer-needle, #ffb020);
-    --live: var(--homer-live, #ff3b3b);
-    --focus-ring: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
-    --focus-fill: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
-    --font: var(--homer-font, "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
-    --cond: var(--homer-font-cond, "Barlow Semi Condensed", "Barlow", sans-serif);
-
-    position: fixed;
-    inset: 0;
-    z-index: 99990;
-    background: #000;
-    font-family: var(--font);
-    color: var(--text);
-    overflow: hidden;
-    -webkit-font-smoothing: antialiased;
-    user-select: none;
-}
-
-#hs-stage {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 1920px;
-    height: 1080px;
-    transform-origin: center center;
-    background:
-        radial-gradient(1200px 700px at 12% -10%, rgba(47, 140, 255, 0.22), transparent 60%),
-        radial-gradient(900px 600px at 100% 0%, rgba(111, 211, 255, 0.10), transparent 55%),
-        linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 70%);
-    overflow: hidden;
-}
-
-/* same faint scanline texture as the guide */
-#hs-stage::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
-    mix-blend-mode: overlay;
-    z-index: 20;
-}
-
-/* ---------- Top bar ---------- */
-
-.hs-topbar {
-    position: absolute;
-    left: 72px;
-    right: 72px;
-    top: 44px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 2;
-}
-
-.hs-brand {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    font-weight: 800;
-    letter-spacing: 0.24em;
-    font-size: 26px;
-}
-
-.hs-brand-mark {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: linear-gradient(145deg, var(--accent-2), var(--accent) 60%, #1450c8);
-    box-shadow: 0 6px 22px rgba(47, 140, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-    display: grid;
-    place-items: center;
-}
-
-.hs-brand-mark::before {
-    content: "";
-    width: 18px;
-    height: 13px;
-    border: 3px solid #fff;
-    border-radius: 4px;
-}
-
-.hs-brand-sub {
-    color: var(--dim);
-    font-weight: 600;
-    letter-spacing: 0.3em;
-    font-size: 18px;
-    padding-left: 18px;
-    border-left: 2px solid var(--line-strong);
-    text-transform: uppercase;
-}
-
-/* the HOMER logo is the way Home (so is H) */
-.hs-brand.homer-home {
-    cursor: pointer;
-    margin: -8px -16px;
-    padding: 8px 16px;
-    border-radius: 16px;
-    transition: background 120ms ease;
-}
-
-.hs-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
-
-.hs-brand-mark .material-icons {
-    display: none;
-    font-size: 28px;
-    color: #fff;
-}
-
-.hs-brand.homer-home:hover .hs-brand-mark::before { display: none; }
-.hs-brand.homer-home:hover .hs-brand-mark .material-icons { display: block; }
-
-.hs-clock {
-    text-align: right;
-    line-height: 1;
-}
-
-.hs-clock-time {
-    font-size: 40px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-}
-
-.hs-clock-date {
-    margin-top: 6px;
-    font-size: 17px;
-    color: var(--dim);
-    font-weight: 600;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-}
 
 /* ---------- Search box (the library's filter pill, a size up) ---------- */
 
@@ -781,26 +633,6 @@
 
 .hs-meta:empty { display: none; }
 
-.hs-chip {
-    font-family: var(--cond);
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 5px 12px;
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid var(--line-strong);
-    color: var(--text);
-    white-space: nowrap;
-}
-
-.hs-chip.genre {
-    background: rgba(47, 140, 255, 0.14);
-    border-color: rgba(111, 211, 255, 0.3);
-    color: #cfe9ff;
-}
-
 .hs-chip.live {
     background: var(--live);
     border-color: transparent;
@@ -871,67 +703,13 @@
 
 .hs-actions:empty { visibility: hidden; }
 
-.hs-btn {
-    height: 60px;
-    min-width: 176px;
-    padding: 0 26px 0 20px;
-    border-radius: 12px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    background: var(--cell);
-    border: 1px solid var(--line-strong);
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    color: var(--text);
-    cursor: pointer;
-    white-space: nowrap;
-    box-sizing: border-box;
-    transition: background 120ms ease, box-shadow 120ms ease;
-}
-
-.hs-btn .material-icons { font-size: 30px; }
-
-/* the button OK will press when the highlight is in the list */
-.hs-btn.cur { border-color: rgba(160, 200, 255, 0.45); background: var(--cell-hi); }
-
-.hs-btn.focus {
-    background: var(--focus-fill);
-    border-color: transparent;
-    box-shadow: var(--focus-ring);
-    color: #fff;
-}
+.hs-btn { box-sizing: border-box; }
 
 /* ---------- Empty / loading / error ---------- */
 
 .hs-state {
-    position: absolute;
     inset: 0;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    text-align: center;
     padding: 0 40px;
-    pointer-events: none;
-}
-
-.hs-state.show { display: flex; }
-
-.hs-state b {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--text);
-}
-
-.hs-state span {
-    font-family: var(--cond);
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--dim);
 }
 
 .hs-spinner {
@@ -961,83 +739,15 @@
     100% { left: 100%; }
 }
 
-/* ---------- Remote legend ---------- */
-
-.hs-legend {
-    position: absolute;
-    left: 72px;
-    right: 72px;
-    bottom: 30px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    gap: 36px;
-    font-family: var(--cond);
-    font-size: 19px;
-    font-weight: 600;
-    color: var(--dim);
-}
-
-.hs-key {
-    display: inline-grid;
-    place-items: center;
-    min-width: 34px;
-    height: 30px;
-    padding: 0 8px;
-    margin-right: 10px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid var(--line-strong);
-    color: var(--text);
-    font-weight: 700;
-    font-size: 16px;
-}
-
-.hs-legend .spacer { flex: 1; }
-
-.hs-legend [data-action] {
-    cursor: pointer;
-    transition: color 120ms ease;
-}
-
-.hs-legend [data-action]:hover { color: var(--text); }
-
 /* ---------- Toast (over the preview window, where a channel you Watch appears) ---------- */
 
+/* the toast sits over the detail panel, below its preview */
 .hs-toast {
-    position: absolute;
     left: auto;
-    right: calc(72px + 409px); /* centered on the 818px detail panel */
+    right: calc(72px + 409px);
     top: 156px;
-    z-index: 10;
     max-width: 760px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 24px;
-    border-radius: 12px;
-    background: rgba(9, 20, 38, 0.94);
-    box-shadow: 0 0 0 1px var(--line-strong), 0 16px 40px rgba(0, 0, 0, 0.55);
-    font-family: var(--cond);
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-    color: var(--text);
-    opacity: 0;
     transform: translate(50%, -10px);
-    transition: opacity 180ms ease, transform 180ms ease;
-    pointer-events: none;
 }
 
-.hs-toast-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.hs-toast.show {
-    opacity: 1;
-    transform: translate(50%, 0);
-}
-
-.hs-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
+.hs-toast.show { transform: translate(50%, 0); }

@@ -11,6 +11,11 @@
  * selected program (R twice cancels a recording), N comes back to now,
  * Esc/Back closes.
  *
+ * The guide's data and actions (channels, listings, recordings, watching) are
+ * in guide/guide-model.js. This file draws the TV layout; on a phone
+ * (shared/layout.js) the guide draws guide/guide-phone.js instead, from the
+ * same model, and lives at its route (#/livetv?tab=1) like any other screen.
+ *
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
@@ -33,11 +38,6 @@
     const WINDOW_MIN = 180; // one screen of the grid
     const PAGE_MIN = WINDOW_MIN / 2; // ◀▶ past the edge moves at least half a screen
     const SLOT_MIN = 30;
-    // Listings load a screen's worth (3 hours) at a time, as they're needed, plus
-    // the next 3 hours ahead of time. One request at a time: the NAS is slow
-    // under load, and the whole EPG is several days of ~400 channels.
-    const CHUNK_MIN = 180;
-    const RETRY_MS = 15000; // a chunk that failed is tried again after this
     const MIN_MS = 60000;
     // The stage is always 1080 tall and as wide as the window's shape allows
     // (never narrower than MIN_STAGE_W), so it fills a desktop window edge to edge
@@ -62,33 +62,8 @@
         }
     };
 
-    // Identify as Jellyfin Web itself. Jellyfin writes the Device/Version from the
-    // auth header onto the token's device record, so a different name here would
-    // rename this browser in the dashboard and split it into a second session.
-    const authHeader = (server) => {
-        const ac = window.ApiClient;
-        const parts = [];
-        try {
-            if (ac && ac.appName && ac.deviceId) {
-                parts.push(`Client="${ac.appName()}"`, `Device="${ac.deviceName()}"`,
-                    `DeviceId="${ac.deviceId()}"`, `Version="${ac.appVersion()}"`);
-            }
-        } catch { /* fall back to token only; the server fills in the rest */ }
-        parts.push(`Token="${server.AccessToken}"`);
-        return 'MediaBrowser ' + parts.join(', ');
-    };
-
-    const request = async (method, path, body) => {
-        const server = getServer();
-        if (!server) throw new Error('Not signed in');
-        const headers = { Authorization: authHeader(server) };
-        if (body !== undefined) headers['Content-Type'] = 'application/json';
-        const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-        if (!res.ok) throw new Error(`${method} ${path.split('?')[0]} → ${res.status}`);
-        const text = await res.text();
-        return text ? JSON.parse(text) : null;
-    };
-    const api = (path) => request('GET', path);
+    // the guide's model: channels, listings, recordings (guide/guide-model.js)
+    const M = () => window.HomerGuideModel;
 
     // ---------- Small helpers ----------
 
@@ -125,55 +100,6 @@
     const genreOf = (p) => (p.IsSports ? 'sports' : p.IsNews ? 'news' : p.IsMovie ? 'movie' : p.IsKids ? 'kids' : null);
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
 
-    // ---------- Channel categories ----------
-    // Worked out from the channel name. A channel can be in more than one:
-    // Sky Sports (UK) is both Sports and International.
-    const CATEGORIES = [
-        { key: 'all', label: 'All' },
-        { key: 'fav', label: 'Favorites' },
-        { key: 'local', label: 'Local' },
-        { key: 'news', label: 'News' },
-        { key: 'sports', label: 'Sports' },
-        { key: 'movies', label: 'Movies' },
-        { key: 'kids', label: 'Kids' },
-        { key: 'ent', label: 'Entertainment' }
-    ];
-    // Country is a separate switch that combines with the category (Sports + UK).
-    // Irish channels (IE) sit under UK.
-    const COUNTRIES = [
-        { key: 'all', label: 'All' },
-        { key: 'us', label: 'USA' },
-        { key: 'uk', label: 'UK' },
-        { key: 'fr', label: 'France' }
-    ];
-    const countryOf = (ch) => {
-        const name = String(ch.Name || '');
-        if (/\((UK|IE)\)/i.test(name)) return 'uk';
-        if (/\(FR\)/i.test(name)) return 'fr';
-        return 'us';
-    };
-    const RULES = {
-        // French names alongside: BFM, LCI, franceinfo, Canal+ Sport, L'Equipe, …
-        news: /^(CNN|CNN International|HLN|FOX News|FOX Business|CNBC|MSNBC|Bloomberg|BBC News|BBC World News|Sky News|ABC News|The Weather Channel|NewsNation|Newsmax|BFM|CNews|LCI|France ?Info|France 24|LCP|Euronews|i24|La Cha[iî]ne M[eé]t[eé]o)\b/i,
-        sports: /(ESPN|FOX Sports|FOX Soccer|FOX Deportes|\bFS[12]\b|NFL|NBA TV|MLB|NHL|Golf|Tennis|SEC Network|Big Ten|Pac 12|CBS Sports|Sky Sports|TNT Sports|beIN|Premier Sports?|La Liga|GOL TV|MASN|Altitude|SportsNet|Racing|Olympic|Canal\+ Sport|Foot\+|Eurosport|L'?[EÉ]quipe|Info ?Sport|Multisports?|RMC Sport)/i,
-        movies: /^(HBO|Cinemax|MoreMax|ActionMax|MovieMax|Showtime|Starz|MGM\+|TCM|AMC|IFC|Sundance|Hallmark Movies|Lifetime Movies|Film 4|Epix|Canal\+ Cin[eé]ma|OCS|Cin[eé]\+|Paramount Channel)/i,
-        kids: /^(Nick|TeenNick|Nicktoons|Disney|Cartoon Network|Boomerang|Universal Kids|PBS Kids|Canal J|Gulli|TiJi|Piwi)/i,
-        local: /(\([KW][A-Z]{2,3}\)|^(ABC|CBS NY|CBS|NBC \d+|FOX \d+|The CW|ION|MeTV|Cozi TV|Laff|Comet TV|Telemundo|Univision|TXA \d+|PBS)\b)/i
-    };
-    const categorize = (ch) => {
-        const name = String(ch.Name || '');
-        const base = name.replace(/\s*\((UK|IE|FR)\)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
-        const cats = new Set(['all']);
-        if (RULES.news.test(base)) cats.add('news');
-        else if (RULES.sports.test(base)) cats.add('sports');
-        else if (RULES.movies.test(base)) cats.add('movies');
-        else if (RULES.kids.test(base)) cats.add('kids');
-        else if (RULES.local.test(base) && countryOf(ch) === 'us') cats.add('local');
-        else cats.add('ent');
-        if (ch.UserData && ch.UserData.IsFavorite) cats.add('fav');
-        return cats;
-    };
-
     const logoChip = (ch) => {
         const chip = el('div', 'cg-logo-chip');
         if (ch.ImageTags && ch.ImageTags.Primary) {
@@ -191,41 +117,24 @@
 
     // The stylesheet is fetched on first open (not on every Jellyfin page load);
     // resolves once it has loaded, or after a timeout so a slow CDN can't block.
+    // (Both layouts' stylesheets: the phone one is scoped to .cg-phone.)
     let cssReady = null;
     const ensureCss = () => {
         if (cssReady && document.getElementById('cg-css')) return cssReady;
-        const css = document.createElement('link');
-        css.id = 'cg-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'guide.css' + QUERY;
-        cssReady = new Promise((resolve) => {
-            css.onload = css.onerror = resolve;
-            setTimeout(resolve, 2000);
-        });
-        document.head.appendChild(css);
+        const link = (id, file) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
+            document.head.appendChild(css);
+            return new Promise((resolve) => {
+                css.onload = css.onerror = resolve;
+                setTimeout(resolve, 2000);
+            });
+        };
+        cssReady = Promise.all([link('cg-css', 'guide.css')]);
         return cssReady;
-    };
-
-    // ---------- Playback ----------
-
-    // Start the channel in this browser tab. Jellyfin Web's own "Play" remote
-    // command handler is registered on window.ApiClient, so handing it a Play
-    // message locally is exactly what happens when the server tells this client
-    // to play something, minus the round trip (and minus the ambiguity when
-    // several tabs share one Jellyfin device id).
-    const playChannel = async (ch) => {
-        const ac = window.ApiClient;
-        const server = getServer();
-        if (ac && typeof ac.handleMessageReceived === 'function' && (!ac.serverId || ac.serverId() === server.Id)) {
-            ac.handleMessageReceived({ MessageType: 'Play', Data: { PlayCommand: 'PlayNow', ItemIds: [ch.Id] } });
-            return;
-        }
-        // Fallback: remote-control this browser's own session through the server.
-        const deviceId = (ac && ac.deviceId && ac.deviceId()) || localStorage.getItem('_deviceId2');
-        const sessions = await api(`/Sessions?deviceId=${encodeURIComponent(deviceId)}`);
-        const mine = (sessions || []).find((s) => s.DeviceId === deviceId && s.SupportsRemoteControl);
-        if (!mine) throw new Error('Could not find this browser\'s Jellyfin session');
-        await request('POST', `/Sessions/${mine.Id}/Playing?playCommand=PlayNow&itemIds=${ch.Id}`);
     };
 
     // Home: HOMER Home knows how (it keeps a playing video going); without it,
@@ -241,20 +150,58 @@
     // highlights it and shows its ● button, and a tap on the highlighted
     // program does what OK does. A touch on a screen that can also hover (a
     // touch laptop) counts too.
+    // (shared/layout.js decides, from the same media query, when it's loaded)
     const touchMq = window.matchMedia ? window.matchMedia('(hover: none)') : null;
-    const touchScreen = () => !!(touchMq && touchMq.matches);
+    const touchScreen = () => (window.HomerLayout ? window.HomerLayout.isTouch() : !!(touchMq && touchMq.matches));
+
+    // The model and the phone layout come from homer.js, just after this file;
+    // used on its own, the guide loads them itself. Either way open() waits
+    // for them.
+    const DEPS = [['guide-model.js', 'HomerGuideModel']];
+    let depsReady = null;
+    const loadDeps = () => {
+        if (!depsReady) {
+            depsReady = Promise.all(DEPS.map(([file, global]) => new Promise((resolve) => {
+                if (window[global]) { resolve(); return; }
+                let s = [...document.querySelectorAll('script[src*="guide/' + file + '"]')].pop();
+                if (!s) {
+                    s = document.createElement('script');
+                    s.src = BASE + file + QUERY;
+                    document.head.appendChild(s);
+                }
+                s.addEventListener('load', resolve);
+                s.addEventListener('error', resolve);
+                setTimeout(resolve, 5000);
+            })));
+        }
+        return depsReady;
+    };
+    const depsLoaded = () => DEPS.every(([, global]) => !!window[global]);
+    let depsTried = false; // waited for them once; a missing phone layout means the TV one
 
     // ---------- Guide ----------
 
-    let guide = null; // the open guide instance, or null
-    // Programs with a recording request on its way to Jellyfin, from any guide
-    // opened in this tab. Jellyfin can take half a minute to answer one, and a
-    // guide closed and reopened in the meantime mustn't send a second.
-    const scheduling = new Set();
+    let guide = null; // the open guide (its TV or its phone layout), or null
+    let model = null; // the open guide's data; a change of layout keeps it
     let nowWatching = null; // channel last started from the guide
     let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
     let tabSuppressed = false; // closed from that tab; don't reopen until it's left
     const LIVETV_HOME = '#/home'; // Jellyfin's Live TV pages don't show under HOMER
+    const GUIDE_HASH = '#/livetv?tab=1';
+
+    // The phone layout: shared/layout.js says when; guide/guide-phone.js draws
+    // it (and registers it with the layout once it has loaded).
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerGuidePhone && window.HomerLayout.usePhone('guide'));
+
+    // On a phone, full screen and back (or a quick look at another tab) closes
+    // the guide and opens it again; it comes back where it was, with the
+    // listings it had, if that's within a few minutes.
+    const KEEP_MS = 10 * 60000;
+    let kept = null; // { model, state, at }
+    const forget = () => {
+        if (kept) kept.model.dispose();
+        kept = null;
+    };
 
     const open = () => {
         if (guide) return;
@@ -263,10 +210,47 @@
             console.warn('[Channel Guide] Not signed in to Jellyfin');
             return;
         }
-        guide = createGuide(server);
+        if (!depsLoaded() && !depsTried) {
+            loadDeps().then(() => {
+                depsTried = true;
+                if (!guide) open();
+            });
+            return;
+        }
+        if (!M()) return; // the model didn't load
+        // on a phone the guide is a screen like the others, at its own route
+        if (phoneLayout() && !onGuideRoute()) {
+            if (window.HomerPlayer) window.HomerPlayer.go(GUIDE_HASH);
+            else location.hash = GUIDE_HASH;
+            return;
+        }
+        let state = null;
+        if (kept && phoneLayout() && Date.now() - kept.at < KEEP_MS && kept.model.server.Id === server.Id) {
+            model = kept.model;
+            state = kept.state;
+            kept = null;
+        } else {
+            forget();
+            model = M().create(server);
+        }
+        guide = draw(server, state);
         const g = guide;
         ensureCss().then(() => g.show());
     };
+
+    // the layout for the screen we're on, drawn from the model (and from where
+    // the other layout was, when the layout changes)
+    const draw = (server, state) => (phoneLayout()
+        ? window.HomerGuidePhone.create({
+            server,
+            model,
+            state,
+            logoChip,
+            isOpen: (v) => guide === v,
+            goHome,
+            watching: (ch) => { nowWatching = ch; }
+        })
+        : createGuide(server, state));
 
     // returnToLiveTv: when the guide stands in for Jellyfin's own Guide tab,
     // closing it goes to Live TV's first tab instead of revealing the stock guide.
@@ -274,7 +258,15 @@
         if (!guide) return;
         const g = guide;
         guide = null;
+        const state = g.phone ? g.state() : null;
         g.teardown();
+        if (g.phone && model) {
+            forget();
+            kept = { model, state, at: Date.now() };
+        } else if (model) {
+            model.dispose();
+        }
+        model = null;
         const fromTab = openedFromTab;
         openedFromTab = false;
         if (fromTab) {
@@ -283,7 +275,34 @@
         }
     };
 
-    const createGuide = (server) => {
+    // The phone and TV layouts switch places (a window resized across the
+    // line, mostly): draw the other one, at the same channel and time.
+    const onLayout = () => {
+        if (!guide || guide.phone === phoneLayout()) return;
+        const server = getServer();
+        const g = guide;
+        const state = g.state();
+        g.teardown();
+        guide = null;
+        if (!server || !model) return;
+        if (phoneLayout() && !onGuideRoute()) {
+            // the phone layout lives at the guide's route: go there
+            forget();
+            kept = { model, state, at: Date.now() };
+            model = null;
+            openedFromTab = false;
+            if (window.HomerPlayer) window.HomerPlayer.go(GUIDE_HASH);
+            else location.hash = GUIDE_HASH;
+            return;
+        }
+        guide = draw(server, state);
+        const next = guide;
+        ensureCss().then(() => { if (guide === next) next.show(); });
+    };
+
+    const createGuide = (server, state) => {
+        const m = model; // channels, listings and recordings (guide-model.js)
+        const { CATEGORIES, COUNTRIES } = M();
         const root = el('div');
         root.id = 'cg-root';
         root.style.visibility = 'hidden'; // until guide.css has loaded
@@ -347,9 +366,11 @@
         let stageScale = 1;
         let relayout = () => {};
         const fit = () => {
-            let s = window.innerHeight / 1080;
-            let w = window.innerWidth / s;
-            if (w < MIN_STAGE_W) { s = window.innerWidth / MIN_STAGE_W; w = MIN_STAGE_W; }
+            // the window, or on a phone the room between HOMER's bars (shared/layout.js)
+            const box = window.HomerLayout ? window.HomerLayout.stageBox() : { width: window.innerWidth, height: window.innerHeight };
+            let s = box.height / 1080;
+            let w = box.width / s;
+            if (w < MIN_STAGE_W) { s = box.width / MIN_STAGE_W; w = MIN_STAGE_W; }
             stageScale = s;
             stage.style.width = w + 'px';
             // narrower than 16:9: tighten the legend so every hint still fits
@@ -376,18 +397,11 @@
         // The grid shows WINDOW_MIN at a time. It starts on the current half hour
         // and moves through the listings in half-hour steps, but never earlier
         // than now.
-        const base = floorSlot(Date.now()); // listing chunks count from here
-        let winStart = new Date(base);
-        let winEnd = new Date(base + WINDOW_MIN * MIN_MS);
-        const earliest = () => floorSlot(Date.now());
-        // how far ahead there are real listings: found once the first chunk is
-        // in (see probeEnd), and pushed later by any chunk that goes further.
-        // Until then, a week.
-        let listingsEnd = 0;
-        const latest = () => {
-            const end = listingsEnd || base + 7 * 1440 * MIN_MS;
-            return Math.max(earliest(), floorSlot(end - 1) + SLOT_MIN * MIN_MS - WINDOW_MIN * MIN_MS);
-        };
+        const earliest = m.earliest;
+        let winStart = new Date(earliest());
+        let winEnd = new Date(+winStart + WINDOW_MIN * MIN_MS);
+        // as late as the real listings go (the model finds out where they end)
+        const latest = () => m.latest(WINDOW_MIN);
         const nowInView = () => {
             const t = Date.now();
             return t >= winStart && t < winEnd;
@@ -457,9 +471,8 @@
         let sel = { row: 0, col: 0 };
         const vpos = (r) => order.indexOf(r);
         fit(); // after `rows` exists: fit() relayouts the grid when the width changes
-        // programId -> Jellyfin timer, or null when we just created one and
-        // couldn't read it back yet
-        const timersByProgram = new Map();
+        // programId -> Jellyfin timer (the model keeps them)
+        const timersByProgram = m.timersByProgram;
         let armed = null; // { cell, timer } while a cancel waits for its confirming press
 
         const current = () => {
@@ -467,19 +480,8 @@
             return row ? { row, cell: row.cells[sel.col] } : null;
         };
 
-        const recordable = (c) => !c.unknown && !!c.p.Id;
-        const isSet = (c) => recordable(c) && timersByProgram.has(c.p.Id);
-        const airing = (c) => {
-            const t = new Date();
-            return c.s <= t && c.e > t;
-        };
-        // recording right now: Jellyfin says so, or the timer is on a program
-        // that's airing and Jellyfin hasn't caught up yet
-        const recordingNow = (c) => {
-            const t = timersByProgram.get(c.p.Id);
-            if (!t) return airing(c);
-            return t.Status === 'InProgress' || (t.Status === 'New' && airing(c));
-        };
+        // a program: can it be recorded, is it set to, is it recording right now
+        const { recordable, isSet, recordingNow } = m;
 
         const paintCell = (c) => {
             const on = isSet(c);
@@ -499,143 +501,24 @@
             for (const row of rows) for (const c of row.cells) paintCell(c);
         };
 
-        const loadTimers = async () => {
-            const res = await api('/LiveTv/Timers');
-            timersByProgram.clear();
-            for (const t of (res && res.Items) || []) {
-                if (t.ProgramId && t.Status !== 'Cancelled') timersByProgram.set(t.ProgramId, t);
-            }
-        };
-
-        // ---------- Listings, loaded in chunks ----------
-        // Chunk i is [base + i·CHUNK_MIN, base + (i+1)·CHUNK_MIN). A program that
-        // spans a chunk edge comes back with both chunks; it's kept once, by Id.
-        const CHUNK_MS = CHUNK_MIN * MIN_MS;
-        const chunkOf = (t) => Math.floor((t - base) / CHUNK_MS);
-        const chunkStart = (i) => base + i * CHUNK_MS;
-        const chunks = new Map(); // i -> 'loading' | 'done' | { failedAt }
-        const listings = new Map(); // channelId -> { byId: Map, sorted: [] | null }
-        let loadingChunk = false;
-        let probed = false; // listingsEnd has been looked up
-        let retryTimer = 0;
+        // ---------- Listings ----------
+        // The model loads them in 3-hour chunks, what's on screen first; it asks
+        // this layout what time it's showing, and says when a chunk is in.
+        const { chunkOf, chunkStart, chunkReady, chunkFailed, sortedFor } = m;
         let touched = false; // the user has moved; don't jump them back to "now"
-
-        const chunkDone = (i) => chunks.get(i) === 'done';
-        // in, or past the end of the real listings (so there's nothing to load)
-        const chunkReady = (i) => chunkDone(i) || (!!listingsEnd && chunkStart(i) >= listingsEnd);
-        const chunkFailed = (i) => {
-            const c = chunks.get(i);
-            return !!c && typeof c === 'object';
-        };
-        const wantsChunk = (i) => {
-            const c = chunks.get(i);
-            if (c === 'done' || c === 'loading') return false;
-            if (c && Date.now() - c.failedAt < RETRY_MS) return false;
-            return i >= 0 && chunkStart(i) < (listingsEnd || Infinity);
-        };
-
-        const addListings = (items) => {
-            let realEnd = 0;
-            for (const p of items) {
-                if (!p.Id || !p.ChannelId) continue;
-                let l = listings.get(p.ChannelId);
-                if (!l) listings.set(p.ChannelId, (l = { byId: new Map(), sorted: null }));
-                if (l.byId.has(p.Id)) continue;
-                p._s = Date.parse(p.StartDate);
-                p._e = Date.parse(p.EndDate);
-                l.byId.set(p.Id, p);
-                l.sorted = null;
-                if (!PLACEHOLDER.test(p.Name)) realEnd = Math.max(realEnd, p._e);
-            }
-            if (listingsEnd && realEnd > listingsEnd) listingsEnd = realEnd;
-        };
-        const sortedFor = (chId) => {
-            const l = listings.get(chId);
-            if (!l) return [];
-            if (!l.sorted) l.sorted = [...l.byId.values()].sort((a, b) => a._s - b._s);
-            return l.sorted;
-        };
-
-        // Where the real listings end: the latest-starting programs, skipping the
-        // "(Mo. 18:00 - 00:00)" placeholders the provider fills the tail with.
-        const probeEnd = async () => {
-            const res = await api(`/LiveTv/Programs?userId=${server.UserId}&MinStartDate=${new Date(base).toISOString()}&SortBy=StartDate&SortOrder=Descending&limit=400&EnableImages=false&EnableUserData=false`);
-            const items = (res && res.Items) || [];
-            const real = items.filter((p) => !PLACEHOLDER.test(p.Name));
-            if (real.length) listingsEnd = Math.max(...real.map((p) => Date.parse(p.EndDate)));
-            // only placeholders that far out: the real listings end before them
-            else if (items.length) listingsEnd = Math.min(...items.map((p) => Date.parse(p.StartDate)));
-            else listingsEnd = base + WINDOW_MIN * MIN_MS; // no listings at all
-            for (const l of listings.values()) {
-                for (const p of l.byId.values()) {
-                    if (!PLACEHOLDER.test(p.Name) && p._e > listingsEnd) listingsEnd = p._e;
-                }
-            }
-        };
-
-        const fetchChunk = async (i) => {
-            const q = `/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${new Date(chunkStart(i)).toISOString()}`
-                + `&MaxStartDate=${new Date(chunkStart(i + 1)).toISOString()}&fields=Overview&EnableImages=true&ImageTypeLimit=1&limit=5000`;
-            const items = [];
-            // a chunk bigger than one page comes back in pages
-            for (;;) {
-                const res = await api(q + `&StartIndex=${items.length}`);
-                const page = (res && res.Items) || [];
-                items.push(...page);
-                if (!page.length || !(res.TotalRecordCount > items.length)) return items;
-            }
-        };
-
-        // Load what's on screen first, then look up where the real listings end,
-        // then the next chunk ahead. One request at a time.
-        const pump = () => {
-            if (loadingChunk || guide !== self) return;
-            const first = chunkOf(+winStart);
-            const last = chunkOf(+winEnd - 1);
-            for (let i = first; i <= last; i++) {
-                if (wantsChunk(i)) {
-                    loadChunk(i);
-                    return;
-                }
-            }
-            if (!probed && chunkDone(0)) {
-                probed = true;
-                loadingChunk = true;
-                probeEnd()
-                    .catch((err) => console.warn('[Channel Guide] Could not find where the listings end:', err))
-                    .finally(() => {
-                        loadingChunk = false;
-                        if (guide !== self) return;
-                        // paged past the end before it was known: nothing more is coming
-                        if (rows.length && listingsEnd && winEnd > listingsEnd) refill();
-                        pump();
-                    });
-                return;
-            }
-            if (wantsChunk(last + 1)) loadChunk(last + 1);
-        };
-
-        const loadChunk = async (i) => {
-            loadingChunk = true;
-            chunks.set(i, 'loading');
-            try {
-                const items = await fetchChunk(i);
-                if (guide !== self) return;
-                addListings(items);
-                chunks.set(i, 'done');
-            } catch (err) {
-                console.warn('[Channel Guide] Listings didn\'t load:', err);
-                chunks.set(i, { failedAt: Date.now() });
-                clearTimeout(retryTimer);
-                retryTimer = setTimeout(pump, RETRY_MS + 100);
-            } finally {
-                loadingChunk = false;
-            }
-            if (guide !== self) return;
+        const pump = () => m.pump();
+        const detachModel = m.attach({
+            window: () => ({ start: +winStart, end: +winEnd }),
             // on screen: put the listings (or the failure) in the grid
-            if (rows.length && chunkStart(i) < winEnd && chunkStart(i + 1) > winStart) refill();
-            pump();
-        };
+            onChunk: (i) => {
+                if (rows.length && chunkStart(i) < winEnd && chunkStart(i + 1) > winStart) refill();
+            },
+            // paged past the end before it was known: nothing more is coming
+            onProbed: () => {
+                const end = m.listingsEnd();
+                if (rows.length && end && winEnd > end) refill();
+            }
+        });
 
         // ---------- Lanes ----------
         // A row's cells for the current window: its programs, plus a "loading"
@@ -759,7 +642,7 @@
                 const lane = el('div', 'cg-lane');
                 row.appendChild(lane);
                 inner.appendChild(row);
-                const rowData = { i, el: row, ch, lane, cells: [], cats: categorize(ch), country: countryOf(ch) };
+                const rowData = { i, el: row, ch, lane, cells: [], cats: M().categorize(ch), country: M().countryOf(ch) };
                 fillLane(rowData);
                 return rowData;
             });
@@ -893,7 +776,7 @@
             // channel playing in its preview window
             if (window.HomerPlayer && window.HomerPlayer.docked()) window.HomerPlayer.fullscreen();
             close({ returnToLiveTv: false });
-            playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
+            M().playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
 
         // OK (or a click) watches what's on. A program that hasn't started yet
@@ -937,8 +820,6 @@
         // recording. Cancelling takes a second press within a few seconds, so a
         // stray press never throws a recording away.
         const CONFIRM_MS = 4000;
-        let recBusy = false;
-        let busyText = ''; // what a press says while a request is still out
 
         const reshow = () => {
             const cur = current();
@@ -957,8 +838,8 @@
         const toggleRecord = (row, cell, via) => {
             if (!row || !cell) return;
             // one request at a time; Jellyfin is slow to answer, so say so
-            if (recBusy || scheduling.has(cell.p.Id)) {
-                toast(busyText || `Still scheduling ${cell.p.Name}…`);
+            if (m.isBusy(cell.p.Id)) {
+                toast(m.busyText() || `Still scheduling ${cell.p.Name}…`);
                 return;
             }
             const again = !!armed && armed.cell === cell;
@@ -982,84 +863,34 @@
                 + `<span class="cg-toast-hint">${hint}</span>`, 'confirm', CONFIRM_MS);
         };
 
-        // Jellyfin can take 20 seconds or more to set a recording up (seen on the
-        // NAS: 6 s for the defaults, 21 s for the POST), so the guide says it's on
-        // it right away, and checks again just before sending that nothing else
-        // (another tab, a guide closed and reopened) has set it up meanwhile.
+        // Jellyfin can take 20 seconds or more to set a recording up, so the
+        // guide says it's on it right away (the model sends the request, and
+        // checks first that nothing else has set it up meanwhile).
         const schedule = async (cell) => {
-            const id = cell.p.Id;
-            recBusy = true;
-            busyText = `Still scheduling ${cell.p.Name}…`;
-            scheduling.add(id);
             toast(`Scheduling ${cell.p.Name}…`, '', 60000);
-            try {
-                const defaults = await api(`/LiveTv/Timers/Defaults?programId=${encodeURIComponent(id)}`);
-                try {
-                    await loadTimers();
-                } catch { /* can't tell; send it */ }
-                if (!timersByProgram.has(id)) {
-                    await request('POST', '/LiveTv/Timers', defaults);
-                    try {
-                        await loadTimers();
-                    } catch { /* the timer was created; it's marked below even if the refresh failed */ }
-                    if (!timersByProgram.has(id)) timersByProgram.set(id, null);
-                }
-                if (guide !== self) return;
-                markRecorded();
-                reshow();
-                toast(`${recordingNow(cell) ? 'Recording' : 'Set to record'} ${cell.p.Name}`, 'rec');
-            } catch (err) {
-                console.error('[Channel Guide] Recording failed:', err);
-                if (guide === self) toast('Couldn\'t schedule that recording', 'err');
-            } finally {
-                recBusy = false;
-                busyText = '';
-                scheduling.delete(id);
+            const ok = await m.schedule(cell.p);
+            if (guide !== self) return;
+            if (!ok) {
+                toast('Couldn\'t schedule that recording', 'err');
+                return;
             }
+            markRecorded();
+            reshow();
+            toast(`${recordingNow(cell) ? 'Recording' : 'Set to record'} ${cell.p.Name}`, 'rec');
         };
 
         // Deleting the timer also stops a recording that's in progress.
         const cancelRecording = async (cell) => {
-            recBusy = true;
             const stopping = recordingNow(cell);
-            busyText = `Still ${stopping ? 'stopping' : 'cancelling'} ${cell.p.Name}…`;
             toast(`${stopping ? 'Stopping' : 'Cancelling'} ${cell.p.Name}…`, '', 60000);
-            const gone = () => !timersByProgram.has(cell.p.Id);
-            try {
-                let t = timersByProgram.get(cell.p.Id);
-                if (!t || !t.Id) {
-                    // scheduled from here but not read back yet: look up its id
-                    await loadTimers();
-                    t = timersByProgram.get(cell.p.Id);
-                }
-                if (t && t.Id) {
-                    await request('DELETE', `/LiveTv/Timers/${encodeURIComponent(t.Id)}`);
-                    timersByProgram.delete(cell.p.Id);
-                    try {
-                        await loadTimers();
-                    } catch { /* keep the local delete */ }
-                }
-                if (guide !== self) return;
-                markRecorded();
-                reshow();
-                if (!t || !t.Id) toast(`${cell.p.Name} isn't set to record`);
-                else if (gone()) toast(`${stopping ? 'Recording stopped' : 'Recording cancelled'}: ${cell.p.Name}`);
-                else toast('Jellyfin still has that recording scheduled', 'err');
-            } catch (err) {
-                console.error('[Channel Guide] Cancelling the recording failed:', err);
-                if (guide !== self) return;
-                // it may be gone anyway (cancelled somewhere else): show what the server has
-                try {
-                    await loadTimers();
-                } catch { /* leave the dots as they were */ }
-                markRecorded();
-                reshow();
-                if (gone()) toast(`${cell.p.Name} isn't set to record`);
-                else toast('Couldn\'t cancel that recording', 'err');
-            } finally {
-                recBusy = false;
-                busyText = '';
-            }
+            const result = await m.cancel(cell.p, stopping);
+            if (guide !== self) return;
+            markRecorded();
+            reshow();
+            if (result === 'gone') toast(`${stopping ? 'Recording stopped' : 'Recording cancelled'}: ${cell.p.Name}`);
+            else if (result === 'unset') toast(`${cell.p.Name} isn't set to record`);
+            else if (result === 'kept') toast('Jellyfin still has that recording scheduled', 'err');
+            else toast('Couldn\'t cancel that recording', 'err');
         };
 
         const record = () => {
@@ -1245,6 +1076,7 @@
         rowsBox.addEventListener('pointercancel', onTouchEnd);
         rowsBox.addEventListener('click', onClickAfterDrag, true);
         if (touchMq && touchMq.addEventListener) touchMq.addEventListener('change', syncTouch);
+        const offTouch = window.HomerLayout ? window.HomerLayout.onChange(syncTouch) : () => {};
 
         // ---------- Filter ----------
         const searchInput = $('.cg-search-input');
@@ -1517,9 +1349,33 @@
         };
         const mirrorTimer = setInterval(mirror, 66);
 
+        // Drawn again after a change of layout: the same category, country,
+        // channel and time as the other layout had.
+        const restore = (st) => {
+            if (st.country && st.country !== country) setCountry(st.country);
+            if (st.category && st.category !== category) setCategory(st.category);
+            touched = true;
+            if (st.start) shiftWindow(floorSlot(st.start));
+            const r = rows.findIndex((x) => x.ch.Id === st.channelId);
+            const target = r >= 0 && vpos(r) >= 0 ? r : order[0];
+            if (target !== undefined) select(target, colAt(target, Math.max(st.time || 0, +winStart, Date.now())));
+        };
+
         const self = {
+            phone: false,
             show() {
                 root.style.visibility = '';
+            },
+            // where the guide is, for the other layout to pick up from
+            state() {
+                const cur = current();
+                return {
+                    category,
+                    country,
+                    start: +winStart,
+                    channelId: cur ? cur.row.ch.Id : null,
+                    time: cur && cur.cell ? +cur.cell.s : 0
+                };
             },
             teardown() {
                 clearInterval(mirrorTimer);
@@ -1530,10 +1386,11 @@
                 wxDetach();
                 clearInterval(needleTimer);
                 clearTimeout(toastTimer);
-                clearTimeout(retryTimer);
                 clearTimeout(scrubTimer);
                 if (touchMq && touchMq.removeEventListener) touchMq.removeEventListener('change', syncTouch);
+                offTouch();
                 if (armed) clearTimeout(armed.timer);
+                detachModel();
                 root.remove();
             }
         };
@@ -1543,13 +1400,10 @@
         (async () => {
             await null; // until createGuide returns, `guide` isn't this one yet
             pump();
-            const [ch] = await Promise.all([
-                api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1&EnableUserData=true`),
-                loadTimers().catch((err) => console.warn('[Channel Guide] Could not read timers:', err))
-            ]);
+            const channels = await m.channels();
             if (guide !== self) return;
-            const channels = ch.Items.sort((a, b) => (parseFloat(a.Number) || 0) - (parseFloat(b.Number) || 0) || a.Name.localeCompare(b.Name));
             render(channels);
+            if (state && rows.length) restore(state);
         })().catch((err) => {
             console.error('[Channel Guide]', err);
             if (guide === self) $('.cg-info-title').textContent = 'Couldn\'t load the guide';
@@ -1630,12 +1484,19 @@
     // closed from that tab we stay out of the way until the tab is left, so the
     // user isn't bounced straight back in.
 
-    const isNativeGuideRoute = () => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(location.hash);
-    const nativeGuideShowing = () => isNativeGuideRoute() || !!document.querySelector('.page:not(.hide) .tvguide.is-active');
+    const GUIDE_ROUTE = /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/;
+    const isNativeGuideRoute = () => GUIDE_ROUTE.test(location.hash);
+    // On a phone the guide is a screen like the others: it's up while HOMER's
+    // route is the guide's, even with a video docked in it (when the address
+    // is the player's).
+    const onGuideRoute = () => GUIDE_ROUTE.test(window.HomerPlayer ? window.HomerPlayer.route() : location.hash);
+    const nativeGuideShowing = () => (phoneLayout() ? onGuideRoute()
+        : isNativeGuideRoute() || !!document.querySelector('.page:not(.hide) .tvguide.is-active'));
 
     const syncTakeover = () => {
         if (!nativeGuideShowing()) {
             tabSuppressed = false;
+            if (guide && guide.phone) close({ returnToLiveTv: false }); // left the guide's route
             return;
         }
         if (guide || tabSuppressed || !getServer()) return;
@@ -1694,9 +1555,11 @@
     };
 
     // Jellyfin Web is a single-page app: leaving the current view (back button,
-    // a link) should take the guide down with it.
+    // a link) should take the guide down with it. (The phone guide stays while
+    // HOMER's route is still the guide, e.g. when a channel starts in its
+    // preview and the address becomes the player's.)
     const onRouteChange = () => {
-        close({ returnToLiveTv: false });
+        if (!(guide && guide.phone && onGuideRoute())) close({ returnToLiveTv: false });
         tabSuppressed = false;
         queueSync();
         if (pipPendingUntil && Date.now() < pipPendingUntil) {
@@ -1706,7 +1569,12 @@
     };
 
     let observer = null;
+    // HomerPlayer moves between screens without touching the address while a
+    // video is docked; the phone guide follows it. The layout can change too.
+    let offPlayer = null;
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
     const start = () => {
+        if (window.HomerPlayer) offPlayer = window.HomerPlayer.onChange(queueSync);
         observer = new MutationObserver(queueSync);
         observer.observe(document.body, { childList: true, subtree: true });
         queueSync();
@@ -1726,7 +1594,10 @@
         close,
         destroy() {
             close();
+            forget();
             observer && observer.disconnect();
+            if (offPlayer) offPlayer();
+            offLayout();
             document.removeEventListener('keydown', onGlobalKey, true);
             document.removeEventListener('enterpictureinpicture', onEnterPip, true);
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
@@ -1735,6 +1606,7 @@
             window.removeEventListener('popstate', onRouteChange);
             document.querySelectorAll('.' + BTN_CLASS).forEach((b) => b.remove());
             document.getElementById('cg-css')?.remove();
+            document.getElementById('cg-phone-css')?.remove();
             cssReady = null;
         }
     };

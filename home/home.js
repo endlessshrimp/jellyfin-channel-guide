@@ -193,9 +193,11 @@
         // always 1080 tall and as wide as the window allows (min 1600), so Home
         // fills a desktop window edge to edge instead of letterboxing
         const fit = () => {
-            let s = window.innerHeight / 1080;
-            let w = window.innerWidth / s;
-            if (w < 1600) { s = window.innerWidth / 1600; w = 1600; }
+            // the window, or on a phone the room between HOMER's bars (shared/layout.js)
+            const box = window.HomerLayout ? window.HomerLayout.stageBox() : { width: window.innerWidth, height: window.innerHeight };
+            let s = box.height / 1080;
+            let w = box.width / s;
+            if (w < 1600) { s = box.width / 1600; w = 1600; }
             stage.style.width = w + 'px';
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
         };

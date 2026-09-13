@@ -12,14 +12,16 @@
  * Back (the player's ← button, Esc, Backspace) from full screen docks the
  * video into the screen you came from. Full screen (F, a click on the preview,
  * or the Full screen button) hands it back to Jellyfin's player. H, the HOMER
- * logo and the player's Home button go Home, taking the video along.
+ * logo and the player's Home button go Home, taking the video along. The
+ * browser's own Back goes back a screen while docked (see "The browser's
+ * Back").
  *
  * window.HomerPlayer = { route, docked, nowPlaying, onChange, go, leave, back,
  *                        goHome, watch, fullscreen, stop, isHomerHash, isHomeHash,
  *                        destroy, version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     if (window.HomerPlayer && typeof window.HomerPlayer.destroy === 'function') {
         window.HomerPlayer.destroy();
@@ -81,11 +83,15 @@
         : /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h) ? 'HomerSettings' : null);
     // #/weather is HOMER's own page (Jellyfin has none), so it always counts
     const isWeatherHash = (h) => /^#\/weather(\?|$)/.test(h);
+    const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
+    // On a phone the guide is a screen like the others (with a preview window a
+    // video can dock in); on a TV it opens on top of whatever's there.
+    const phoneGuide = () => !!(window.HomerLayout && window.HomerLayout.usePhone('guide'));
     const isHomerHash = (h) => isHomeHash(h)
         || /^#\/(movies|tv|details)(\.html)?\?/.test(h)
         || isWeatherHash(h)
+        || (isGuideHash(h) && phoneGuide())
         || (!!screenFor(h) && !!window[screenFor(h)]);
-    const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
     // Jellyfin pages HOMER leaves alone: the admin dashboard, sign-in and setup,
     // and the player itself
     const isStockOk = (h) => /^#\/(dashboard|configurationpage|metadata|edititemmetadata|login|selectserver|addserver|forgotpassword|startup|wizard|quickconnect|video)/i.test(h);
@@ -139,10 +145,10 @@
     let lastRect = '';
 
     const dockTarget = () => {
-        for (const sel of ['#hm-root .hm-preview', '#hl-root .hl-preview', '.homer-screen [data-homer-preview]']) {
+        for (const sel of ['#hm-root .hm-preview', '#hl-root .hl-preview', '.homer-screen [data-homer-preview]', '#cg-root [data-homer-preview]']) {
             const t = document.querySelector(sel);
             if (!t) continue;
-            const root = t.closest('#hm-root, #hl-root, .homer-screen');
+            const root = t.closest('#hm-root, #hl-root, .homer-screen, #cg-root');
             if (root && getComputedStyle(root).visibility === 'hidden') continue;
             const r = t.getBoundingClientRect();
             if (r.width > 0 && r.height > 0) return t;
@@ -314,9 +320,9 @@
     // from Jellyfin's full-screen player into a HOMER screen, video in its preview
     const dock = (screens) => {
         if (!getServer() || !playerBox() || !isVideoRoute()) return false;
-        closeGuide();
-        docked = true;
         stack = screens.length ? screens : [HOME];
+        if (!isGuideHash(stack[stack.length - 1])) closeGuide(); // (the phone guide is a screen)
+        docked = true;
         landing = null;
         sawPlayer = true;
         pendingFullscreen = false;
@@ -389,7 +395,7 @@
         pendingFullscreen = false;
         unpin(false);
         if (wasDocked && !sawPlayer) cancelTuning(playItemId);
-        else stopPlayback();
+        else dropMark(stopPlayback); // Jellyfin then leaves its player page by itself
         if (isHomerHash(top)) land(top);
         emit();
     };
@@ -405,12 +411,17 @@
         nowPlaying = null;
         unpin(false);
         landing = null;
-        location.hash = hash;
+        dropMark(() => { location.hash = hash; });
         emit();
     };
 
-    // Move to a HOMER screen: virtually while docked, for real otherwise
+    // Move to a HOMER screen: virtually while docked, for real otherwise (and
+    // from the full-screen player, into that screen with the video docked)
     const go = (hash) => {
+        if (!docked && isVideoRoute() && playerBox() && isHomerHash(hash) && !isHomeHash(hash)) {
+            dock([HOME, hash]);
+            return;
+        }
         if (!docked) { location.hash = hash; return; }
         if (!isHomerHash(hash)) { leave(hash); return; }
         if (stack[stack.length - 1] === hash) return;
@@ -439,6 +450,76 @@
         if (isHomeHash(location.hash)) {
             if (window.HomerHome && window.HomerHome.open) window.HomerHome.open();
         } else location.hash = HOME;
+    };
+
+    // ---------- The browser's Back while docked ----------
+    // While a video is docked the address stays on Jellyfin's player page, so
+    // the browser's own Back (a phone's back button or swipe, Cmd+[) would leave
+    // that page and stop the video. So HOMER keeps one history entry of its own
+    // on top of the player page, at the same address. Back takes it away, and
+    // HOMER goes back a screen instead (from Home, where there's nowhere to go
+    // back to, it stops the video), then puts its entry back. Jellyfin's router
+    // sees the address it already had and does nothing. From full screen, Back
+    // docks the video into the screen it came from, like Esc.
+    //
+    // Jellyfin leaving the player page by itself (when a video ends) goes back
+    // through HOMER's entry first; with nothing playing any more, HOMER passes
+    // that Back on. HOMER's own Stop and leave() take the entry away first.
+
+    const MARK = 'homerDock';
+    let marked = false; // HOMER's entry is the current one
+    let dropping = null; // taking the entry away ourselves: what to do then
+    let dropTimer = 0;
+    const isMark = (st) => !!(st && st[MARK]);
+    const pushMark = () => {
+        if (marked || dropping || !isVideoRoute()) return;
+        try {
+            history.pushState(Object.assign({}, history.state, { [MARK]: true }), '', location.href);
+            marked = true;
+        } catch { /* no history API here: Back just stops the video, as before */ }
+    };
+    const dropMark = (then) => {
+        if (!marked || !isMark(history.state)) {
+            marked = false;
+            then();
+            return;
+        }
+        dropping = then;
+        history.back();
+        // in case the popstate never comes
+        clearTimeout(dropTimer);
+        dropTimer = setTimeout(() => {
+            if (dropping !== then) return;
+            dropping = null;
+            then();
+        }, 800);
+    };
+    const playing = () => {
+        const v = document.querySelector('.videoPlayerContainer video');
+        return !!(v && (v.currentSrc || v.getAttribute('src')) && !v.ended);
+    };
+    const canGoBack = () => stack.length > 1 || !isHomeHash(stack[0]);
+    const onPopState = () => {
+        const was = marked;
+        marked = isMark(history.state);
+        if (dropping) {
+            const then = dropping;
+            dropping = null;
+            clearTimeout(dropTimer);
+            then();
+            return;
+        }
+        if (!was || marked || !isVideoRoute()) return; // not our entry
+        if (!playing()) {
+            history.back(); // Jellyfin's own way out of the player page: pass it on
+            return;
+        }
+        if (docked) {
+            if (canGoBack()) back();
+            else stop();
+        } else if (playerBox() && !overlayOpen()) {
+            dock(backStack());
+        }
     };
 
     // ---------- Watching the address and the player ----------
@@ -486,6 +567,7 @@
             else if (!sawPlayer && Date.now() - dockedSince > 45000) { cancelTuning(playItemId); endDock(); } // never started
             else {
                 if (playerBox()) pin();
+                if (sawPlayer && video) pushMark(); // Back goes back a screen, not out of the player
                 const p = nowPlaying && nowPlaying.program;
                 if (p && p.EndDate && Date.parse(p.EndDate) < Date.now() && Date.now() - lastResolve > 20000) resolveNowPlaying();
             }
@@ -587,6 +669,7 @@
     document.addEventListener('wheel', onWheelBubble, { passive: true });
     document.addEventListener('click', onClickCapture, true);
     document.addEventListener('pointerdown', onPointerCapture, true);
+    window.addEventListener('popstate', onPopState);
 
     // ---------- A Home button in the player's control bar ----------
 
@@ -663,6 +746,8 @@
             document.removeEventListener('wheel', onWheelBubble, { passive: true });
             document.removeEventListener('click', onClickCapture, true);
             document.removeEventListener('pointerdown', onPointerCapture, true);
+            window.removeEventListener('popstate', onPopState);
+            clearTimeout(dropTimer);
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             clearPin(playerBox());
             style.remove();

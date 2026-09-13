@@ -9,6 +9,26 @@
   An upcoming program is only highlighted, as before. A finger drags the
   channels up and down, and dragging sideways moves through time; a drag
   never counts as a tap. Mouse and keyboard work exactly as before.
+- Phones get HOMER's phone chrome: when the screen's shortest side is under
+  600px (either way up), every HOMER screen has a top bar (HOMER and the
+  screen's name, the weather, Search) and a tab bar (Home, Guide, Movies,
+  Shows, Recordings), sized for a finger and clear of the notch and the home
+  indicator. Screens that don't have a phone layout yet show their TV layout,
+  shrunk to fit between the bars. Tablets keep the TV layout. (shared/layout.js
+  decides, from CSS media queries; a rotation or resize switches over.)
+- The browser's own Back (a phone's back button or swipe, Cmd+[) no longer
+  stops a video playing in a preview window: it goes back a screen, and the
+  video keeps playing. From Home it stops the video. In full screen, it
+  shrinks a video that was in a preview window back into it.
+- Settings no longer changes how Search looks after you've opened both (the
+  two screens' stylesheets used the same class names; Settings' are its own
+  now).
+- Under the hood: the stage, top bar, legend, toast, chips, buttons and
+  loading state that Movies/TV Shows, Search, Recordings, Settings and
+  Weather each had a copy of are in one place (shared/shell.css), and the
+  guide's channels, listings and recordings are in guide/guide-model.js, apart
+  from the grid that draws them. The TV screens look and work exactly as
+  before.
 
 ## v0.3.10
 

@@ -183,6 +183,14 @@
             t.href = BASE + '../shared/tokens.css' + QUERY;
             document.head.appendChild(t);
         }
+        // and the screen shell every TV screen shares, ahead of this screen's own
+        if (!document.getElementById('homer-shell')) {
+            const s = document.createElement('link');
+            s.id = 'homer-shell';
+            s.rel = 'stylesheet';
+            s.href = BASE + '../shared/shell.css' + QUERY;
+            document.head.appendChild(s);
+        }
         if (cssReady && document.getElementById('hs-css')) return cssReady;
         const css = document.createElement('link');
         css.id = 'hs-css';
@@ -448,9 +456,11 @@
         // always 1080 tall and as wide as the window allows (min 1600), like the
         // other HOMER screens, so it fills the window instead of letterboxing
         const fit = () => {
-            let s = window.innerHeight / 1080;
-            let w = window.innerWidth / s;
-            if (w < 1600) { s = window.innerWidth / 1600; w = 1600; }
+            // the window, or on a phone the room between HOMER's bars (shared/layout.js)
+            const box = window.HomerLayout ? window.HomerLayout.stageBox() : { width: window.innerWidth, height: window.innerHeight };
+            let s = box.height / 1080;
+            let w = box.width / s;
+            if (w < 1600) { s = box.width / 1600; w = 1600; }
             stage.style.width = w + 'px';
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
         };

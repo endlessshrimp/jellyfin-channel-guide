@@ -2,7 +2,8 @@
 
 A TiVo-style TV-appliance interface for Jellyfin Web: a HOMER Home screen, the
 Channel Guide, Movies and TV Shows screens, and a global skin so every remaining
-Jellyfin page matches.
+Jellyfin page matches. It works on phones too (see
+[On a phone](#on-a-phone)).
 
 ## Home
 
@@ -32,9 +33,12 @@ sits in it, still playing, as you go from screen to screen.
 - While a video plays behind HOMER, the arrow keys, space and the trackpad
   control HOMER, not the player. The trackpad never changes the volume, even
   in the full-screen player.
-- Jellyfin's own pages (Search results, Recordings, Settings) still stop the
-  video when you open them, because Jellyfin stops video whenever you leave
-  its player. The browser's own Back (trackpad swipe, Cmd+[) does too.
+- The browser's own Back (a phone's back button or swipe, the trackpad swipe,
+  Cmd+[) goes back a screen and the video keeps playing. From Home, where
+  there's nowhere to go back to, it stops the video. In full screen, if the
+  video was in a preview window before, it shrinks it back there, like **Esc**.
+- Jellyfin's own pages (the dashboard, sign-in) still stop the video when you
+  open them, because Jellyfin stops video whenever you leave its player.
 
 ## Movies and TV Shows
 
@@ -92,6 +96,17 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 - Scales a fixed 1920×1080 layout to fit any window, the way a TV UI does.
 - Uses your existing Jellyfin sign-in. There's nothing to configure and no
   separate account or API key.
+
+## On a phone
+
+Jellyfin's Android and iOS apps (and a phone's browser) load HOMER too. When
+the screen's shortest side is under 600px, in either orientation, every HOMER
+screen gets a **top bar** (HOMER and the screen's name, the weather,
+**Search**) and a **tab bar** (Home, Guide, Movies, Shows, Recordings). The
+weather opens the Weather screen; Settings is on Home. The screens show their
+TV layout, shrunk to fit between the bars, until they get phone layouts of
+their own. A tablet keeps the TV layout, with touch (see
+[Controls](#controls)).
 
 ## Install
 
@@ -178,6 +193,9 @@ const s = document.createElement('script');
 s.src = 'http://<your-machine>:8765/guide/guide.js?t=' + Date.now();
 document.head.appendChild(s);
 ```
+
+Loaded on its own like this, the guide fetches its model
+(`guide/guide-model.js`) itself; `homer.js` loads everything.
 
 `theme.css` is an older, separate stylesheet that restyles Jellyfin's built-in
 guide page through Dashboard → General → Custom CSS. The guide doesn't need it.

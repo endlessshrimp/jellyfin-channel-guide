@@ -1,0 +1,214 @@
+/*
+ * HOMER phone chrome (shared/layout.js): the top bar and tab bar every HOMER
+ * screen gets in the phone layout, and the room they leave. Sized for a
+ * finger (44px targets at least) and kept clear of the status bar, the notch
+ * and the home indicator with the safe-area insets.
+ *
+ * html.homer-phone: the phone layout. html.homer-chrome: the bars are up.
+ * Screens with a phone layout place themselves between the bars with
+ * --homer-phone-top and --homer-phone-tabs; a TV-layout screen's root is
+ * simply shrunk to that room (its fit() scales the stage to it).
+ */
+
+:root {
+    --homer-phone-top-h: 52px;
+    --homer-phone-tabs-h: 56px;
+    --homer-phone-top: calc(var(--homer-phone-top-h) + env(safe-area-inset-top, 0px));
+    --homer-phone-tabs: calc(var(--homer-phone-tabs-h) + env(safe-area-inset-bottom, 0px));
+    --homer-phone-left: env(safe-area-inset-left, 0px);
+    --homer-phone-right: env(safe-area-inset-right, 0px);
+}
+
+/* landscape: every pixel of height counts */
+@media (orientation: landscape) {
+    :root {
+        --homer-phone-top-h: 44px;
+        --homer-phone-tabs-h: 46px;
+    }
+}
+
+#homer-phone-top,
+#homer-phone-tabs {
+    display: none;
+}
+
+html.homer-chrome #homer-phone-top,
+html.homer-chrome #homer-phone-tabs {
+    display: flex;
+}
+
+/* ---------- Top bar ---------- */
+
+#homer-phone-top {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 99996; /* over the screens (99990) and a docked video (99995) */
+    height: var(--homer-phone-top);
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) calc(12px + var(--homer-phone-right)) 0 calc(16px + var(--homer-phone-left));
+    align-items: center;
+    gap: 8px;
+    background:
+        radial-gradient(420px 160px at 0% 0%, rgba(47, 140, 255, 0.22), transparent 70%),
+        linear-gradient(180deg, var(--homer-bg1), #061126);
+    color: var(--homer-text);
+    font-family: var(--homer-font);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#homer-phone-top .hp-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+#homer-phone-top .hp-mark {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(145deg, var(--homer-accent-2), var(--homer-accent) 60%, #1450c8);
+    box-shadow: 0 4px 14px rgba(47, 140, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+#homer-phone-top .hp-mark::before {
+    content: "";
+    width: 12px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-radius: 3px;
+}
+
+#homer-phone-top .hp-sub {
+    color: var(--homer-dim);
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    font-size: 11px;
+    padding-left: 10px;
+    border-left: 1.5px solid var(--homer-line-strong);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+#homer-phone-top .hp-spacer { flex: 1; }
+
+#homer-phone-top .hp-icon {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--homer-line);
+    color: var(--homer-text);
+    cursor: pointer;
+}
+
+#homer-phone-top .hp-icon .material-icons { font-size: 24px; }
+
+/* the weather bug, phone-sized: the icon, then the temperature (no high/low,
+   and no clock: the phone shows the time) */
+#homer-phone-top .homer-wx-group { gap: 0; }
+#homer-phone-top .hp-clock,
+#homer-phone-top .homer-wx-rule,
+#homer-phone-top .homer-wx-hilo { display: none !important; }
+
+#homer-phone-top .homer-wx-ready .homer-wx {
+    flex-direction: row;
+    gap: 2px;
+    min-height: 44px;
+    padding: 0 6px 0 2px;
+}
+
+#homer-phone-top .homer-wx-icon {
+    width: 38px;
+    height: 38px;
+    margin: -6px -4px;
+}
+
+#homer-phone-top .homer-wx-temp {
+    font-size: 18px;
+    letter-spacing: 0;
+}
+
+/* ---------- Tab bar ---------- */
+
+#homer-phone-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99996;
+    height: var(--homer-phone-tabs);
+    box-sizing: border-box;
+    padding: 0 calc(6px + var(--homer-phone-right)) env(safe-area-inset-bottom, 0px) calc(6px + var(--homer-phone-left));
+    justify-content: space-around;
+    background: linear-gradient(180deg, rgba(4, 10, 20, 0.9), rgba(2, 5, 10, 0.98) 40%);
+    border-top: 1px solid var(--homer-line);
+    -webkit-tap-highlight-color: transparent;
+}
+
+#homer-phone-tabs .hp-tab {
+    flex: 1;
+    max-width: 96px;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 0 0;
+    border: 0;
+    background: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 3px;
+    color: var(--homer-faint);
+    font-family: var(--homer-font-cond);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+#homer-phone-tabs .hp-tab .material-icons { font-size: 26px; }
+#homer-phone-tabs .hp-tab.on { color: #fff; }
+#homer-phone-tabs .hp-tab.on .material-icons { color: var(--homer-accent-2); }
+
+@media (orientation: landscape) {
+    #homer-phone-tabs .hp-tab {
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        max-width: 160px;
+    }
+
+    #homer-phone-tabs .hp-tab .material-icons { font-size: 22px; }
+}
+
+/* ---------- Screens that don't have a phone layout yet ----------
+   Their TV stage keeps its layout, scaled to fit between the bars. */
+
+html.homer-chrome #hm-root,
+html.homer-chrome #hl-root,
+html.homer-chrome .homer-screen,
+html.homer-chrome #cg-root:not(.cg-phone) {
+    top: var(--homer-phone-top) !important; /* over each root's own inset: 0 */
+    bottom: var(--homer-phone-tabs) !important;
+}
