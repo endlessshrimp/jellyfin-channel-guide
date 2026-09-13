@@ -1,0 +1,38 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap");
+
+/*
+ * HOMER design tokens: shared by the guide, home, library screens and the
+ * global skin so every screen reads as one product. Match guide/guide.css.
+ */
+:root {
+    --homer-bg0: #02050a;
+    --homer-bg1: #07142a;
+    --homer-panel: rgba(9, 20, 38, 0.72);
+    --homer-line: rgba(160, 190, 230, 0.12);
+    --homer-line-strong: rgba(160, 190, 230, 0.24);
+    --homer-cell: rgba(20, 36, 60, 0.78);
+    --homer-cell-hi: rgba(32, 62, 102, 0.9);
+    --homer-text: #f4f7fb;
+    --homer-dim: #8ea3bd;
+    --homer-faint: #5a6f89;
+    --homer-accent: #2f8cff;
+    --homer-accent-rgb: 47, 140, 255;
+    --homer-accent-2: #6fd3ff;
+    --homer-needle: #ffb020;
+    --homer-live: #ff3b3b;
+    --homer-sports: #33d17a;
+    --homer-news: #ff5a5a;
+    --homer-movie: #b58cff;
+    --homer-kids: #ffd23f;
+    --homer-radius: 14px;
+    --homer-radius-sm: 10px;
+    --homer-font: "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --homer-font-cond: "Barlow Semi Condensed", "Barlow", sans-serif;
+    --homer-backdrop:
+        radial-gradient(1200px 700px at 12% -10%, rgba(47, 140, 255, 0.22), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(111, 211, 255, 0.10), transparent 55%),
+        linear-gradient(180deg, #07142a 0%, #02050a 70%);
+    --homer-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    --homer-focus-ring: 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55);
+    --homer-focus-fill: linear-gradient(180deg, #3a95ff, #1c64d8);
+}
