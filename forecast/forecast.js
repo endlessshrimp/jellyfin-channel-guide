@@ -12,7 +12,8 @@
  *   Now           temperature and conditions; feels like, humidity, wind, and
  *                 the next sunrise or sunset; below them the next 14 hours,
  *                 two at a time: conditions, temperature, chance of rain
- *   Radar         the National Weather Service's loop for the nearest radar
+ *   Radar         the last hour of the National Weather Service's radar, on a
+ *                 HOMER map centered on the place
  *   Next 3 days   one panel a day: conditions, high and low, chance of rain
  *                 and how much, wind, sunrise and sunset
  *
@@ -47,7 +48,7 @@
     const REFRESH_MS = 10 * 60 * 1000; // same as the clock's weather
     const SLOTS = 8; // Now, then the next 14 hours two at a time
     const STEP = 2;
-    const RADAR_MS = 5 * 60 * 1000; // the NWS redraws its loops every few minutes
+    const RADAR_MS = 5 * 60 * 1000; // a fresh radar loop
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
 
     // ---------- Jellyfin session (only to know someone is signed in) ----------
@@ -179,103 +180,127 @@
     };
 
     // ---------- Radar ----------
-    // The National Weather Service's own loop for the radar that covers the
-    // place (public domain): api.weather.gov says which radar that is, and
-    // radar.weather.gov keeps an animated GIF of its last hour or so, redrawn
-    // every few minutes. The NWS only covers the US; anywhere else the panel
-    // says there's no radar.
+    // The National Weather Service's radar mosaic (MRMS base reflectivity,
+    // public domain), from the NWS's own map server: a picture of just the rain,
+    // in the NWS colors, for any area and any time in the last two hours. HOMER
+    // takes the last hour of them, about 6 minutes apart, and plays them over
+    // its own navy map. The pictures are shown as they come, with no filter or
+    // fade, so every rain color is exactly the NWS's; the only things drawn over
+    // them are thin map lines and town names.
     //
-    // The GIF is 600×550: a 24px title bar, the 600×502 map, and a 24px color
-    // key with the frame's time on the right. The panel shows the map (the bars
-    // are cropped off) and that time, and the filter below turns the white map
-    // navy.
+    // The map is the Census Bureau's (TIGERweb, public domain): land, county and
+    // state lines, interstates (a dim grey, so they can't pass for rain), and
+    // the bigger towns. It's centered on the place. The NWS radar covers the US
+    // and its territories; anywhere else the panel says there's no radar.
 
-    const RADAR_KEY = 'homer-weather-radar'; // localStorage: "lat,lon" -> { id, name, at }
-    const radarLoop = (id) => `https://radar.weather.gov/ridge/standard/${encodeURIComponent(id)}_loop.gif`;
+    const OPENGEO = 'https://opengeo.ncep.noaa.gov/geoserver/';
+    const TIGER = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/';
+    const MAP_W = 640; // the map, in stage pixels: the panel at its widest...
+    const MAP_H = 432; // ...and its height
+    const MAP_KM = 420; // across
+    const FRAMES = 10; // pictures in the loop,
+    const FRAME_GAP = 5 * 60000; // at least this far apart (the mosaic is redrawn every 2 minutes)
+    // a panel as narrow as it gets (a 1600 stage) shows the middle 516 of the 640
+    const SAFE_X = [(MAP_W - 516) / 2 + 12, (MAP_W + 516) / 2 - 12];
 
-    const readStations = () => {
-        try { return JSON.parse(localStorage.getItem(RADAR_KEY) || '{}') || {}; } catch { return {}; }
+    // which NWS mosaic covers a place
+    const radarRegion = (lat, lon) => {
+        if (lat > 50 && lon < -129) return 'alaska';
+        if (lat < 24 && lon < -150) return 'hawaii';
+        if (lat < 21 && lon > -68.5 && lon < -63) return 'carib';
+        if (lon > 140) return 'guam';
+        return 'conus';
     };
-    const saveStation = (key, v) => {
-        try {
-            const all = readStations();
-            all[key] = { id: v ? v.id : null, name: v ? v.name : '', at: Date.now() };
-            // a handful of places is plenty
-            const keep = Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(0, 8);
-            localStorage.setItem(RADAR_KEY, JSON.stringify(Object.fromEntries(keep.map((k) => [k, all[k]]))));
-        } catch { /* storage blocked */ }
+
+    // near enough to the US to try the radar when the map can't say for sure
+    const roughlyUS = (lat, lon) => (lat > 24 && lat < 50 && lon > -125 && lon < -66.5)
+        || (lat > 51 && lat < 72 && lon > -170 && lon < -129)
+        || (lat > 18.5 && lat < 22.5 && lon > -161 && lon < -154)
+        || (lat > 17.5 && lat < 18.7 && lon > -67.5 && lon < -64.5)
+        || (lat > 13 && lat < 14 && lon > 144 && lon < 146);
+
+    // Web Mercator (EPSG:3857), which both servers draw in
+    const EARTH = 6378137;
+    const merc = (lat, lon) => [EARTH * lon * Math.PI / 180, EARTH * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
+    // the map's area: MAP_KM across, centered on the place; and stage pixels in it
+    const mapArea = (lat, lon) => {
+        const [x, y] = merc(lat, lon);
+        const half = MAP_KM * 500 / Math.cos(lat * Math.PI / 180); // Mercator stretches away from the equator
+        const box = [x - half, y - half * MAP_H / MAP_W, x + half, y + half * MAP_H / MAP_W];
+        const px = (mx, my) => [(mx - box[0]) / (box[2] - box[0]) * MAP_W, (box[3] - my) / (box[3] - box[1]) * MAP_H];
+        return { box, center: [x, y], px };
     };
 
-    // resolves to { id, name } for the radar covering a place, or null where
-    // the NWS has none; rejects if api.weather.gov can't be reached
-    const stations = new Map(); // "lat,lon" (to 2 places, about a kilometer) -> Promise
-    const radarStation = (lat, lon) => {
-        const key = lat.toFixed(2) + ',' + lon.toFixed(2);
-        if (stations.has(key)) return stations.get(key);
-        // a radar doesn't move: look again after a month (a day, for "none")
-        const saved = readStations()[key];
-        if (saved && Date.now() - saved.at < (saved.id ? 30 : 1) * 86400000) {
-            const v = saved.id ? { id: saved.id, name: saved.name || '' } : null;
-            stations.set(key, Promise.resolve(v));
-            return stations.get(key);
+    // when each picture in the mosaic was taken, oldest first
+    const radarTimes = (ws) => fetch(`${OPENGEO}${ws}/${ws}_bref_qcd/ows?service=WMS&version=1.3.0&request=GetCapabilities`)
+        .then((r) => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((xml) => {
+            const m = /<Dimension name="time"[^>]*>([^<]+)</.exec(xml);
+            if (!m) throw new Error('no radar times');
+            return m[1].split(',').map((t) => Date.parse(t.trim())).filter(isFinite).sort((a, b) => a - b);
+        });
+    // the newest picture, and the ones at least FRAME_GAP apart before it
+    const pickFrames = (times) => {
+        const out = [];
+        for (let i = times.length - 1; i >= 0 && out.length < FRAMES; i--) {
+            if (!out.length || out[0] - times[i] >= FRAME_GAP) out.unshift(times[i]);
         }
-        const p = fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`)
-            .then((r) => {
-                if (r.status === 404) return null; // somewhere the NWS doesn't cover
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json().then((j) => (j.properties && j.properties.radarStation) || null);
-            })
-            .then((id) => (!id ? null
-                // its name ("Dallas/Ft Worth") is a nicety; the ID will do without it
-                : fetch(`https://api.weather.gov/radar/stations/${encodeURIComponent(id)}`)
-                    .then((r) => (r.ok ? r.json() : null))
-                    .then((j) => ({ id, name: (j && j.properties && j.properties.name) || '' }))
-                    .catch(() => ({ id, name: '' }))))
-            .then((v) => { saveStation(key, v); return v; })
-            .catch((err) => {
-                stations.delete(key); // try again next time
-                throw err;
-            });
-        stations.set(key, p);
+        return out;
+    };
+    // one picture: the rain over the map's area, transparent everywhere else
+    const frameUrl = (ws, box, scale, at) => `${OPENGEO}${ws}/${ws}_bref_qcd/ows?` + new URLSearchParams({
+        service: 'WMS', version: '1.3.0', request: 'GetMap', layers: `${ws}_bref_qcd`, styles: '',
+        format: 'image/png', transparent: 'true', crs: 'EPSG:3857', bbox: box.join(','),
+        width: MAP_W * scale, height: MAP_H * scale, time: new Date(at).toISOString(),
+    });
+
+    // the interstates, drawn by the Census server in HOMER's dim grey; always
+    // at twice the map's size (its main roads only draw at that scale or closer)
+    const roadsUrl = (box) => TIGER + 'Transportation/MapServer/export?' + new URLSearchParams({
+        bbox: box.join(','), bboxSR: 3857, imageSR: 3857, size: `${MAP_W * 2},${MAP_H * 2}`,
+        format: 'png32', transparent: 'true', f: 'image',
+        dynamicLayers: JSON.stringify([{
+            id: 101, minScale: 0, maxScale: 0, source: { type: 'mapLayer', mapLayerId: 1 }, // primary roads
+            drawingInfo: { renderer: { type: 'simple', symbol: { type: 'esriSLS', style: 'esriSLSSolid', color: [150, 158, 170, 255], width: 2.2 } } },
+        }]),
+    });
+
+    const tiger = (layer, params) => fetch(TIGER + layer + '/query?' + new URLSearchParams({ f: 'json', ...params }))
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((j) => (j.error ? Promise.reject(new Error(j.error.message || 'TIGERweb')) : j.features || []));
+    // counties, states and towns around a place, once per place
+    const maps = new Map(); // "lat,lon" -> Promise<{ counties, states, towns }>
+    const mapShapes = (lat, lon, box) => {
+        const key = lat.toFixed(2) + ',' + lon.toFixed(2);
+        if (maps.has(key)) return maps.get(key);
+        const area = { geometry: box.join(','), geometryType: 'esriGeometryEnvelope', inSR: 3857, spatialRel: 'esriSpatialRelIntersects' };
+        // simplified to about a pixel
+        const shapes = { ...area, outFields: 'NAME', returnGeometry: 'true', outSR: 3857, maxAllowableOffset: 400, geometryPrecision: 0 };
+        const p = Promise.all([
+            tiger('State_County/MapServer/9', shapes),
+            tiger('State_County/MapServer/8', shapes),
+            // the biggest towns (2020 census); names are a nicety
+            tiger('tigerWMS_Census2020/MapServer/26', {
+                ...area, outFields: 'BASENAME,CENTLAT,CENTLON', returnGeometry: 'false',
+                orderByFields: 'POP100 DESC', resultRecordCount: 30,
+            }).catch(() => []),
+        ]).then(([counties, states, towns]) => ({ counties, states, towns }));
+        p.catch(() => maps.delete(key)); // try again next time
+        maps.set(key, p);
         return p;
     };
-
-    // The NWS map is white land, pale blue water, grey county lines and black
-    // borders and names. This SVG filter swaps just those for HOMER navy (water
-    // darker, lines a shade lighter) and light grey, and leaves every radar
-    // color exactly as the NWS drew it. It works from each pixel's lowest and
-    // highest channel (m, M) and the lower of its green and blue (the pinks at
-    // the top of the scale have one of those low; the map's pale colors don't):
-    //   land   pale in green and blue alike (water and county lines too)
-    //   haze   the light greys of the weakest returns: light, and nearly grey
-    //   ink    anything near black
-    const RADAR_FILTER = `
-        <svg class="hf-defs" width="0" height="0" aria-hidden="true" focusable="false">
-            <filter id="hf-radar-navy" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-                <feColorMatrix in="SourceGraphic" type="matrix" values="0 1 0 0 0  0 0 1 0 0  1 0 0 0 0  0 0 0 1 0" result="r1"/>
-                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 1 0 0  1 0 0 0 0  0 1 0 0 0  0 0 0 1 0" result="r2"/>
-                <feBlend in="SourceGraphic" in2="r1" mode="darken" result="d1"/>
-                <feBlend in="d1" in2="r2" mode="darken" result="lo"/>
-                <feBlend in="SourceGraphic" in2="r1" mode="lighten" result="l1"/>
-                <feBlend in="l1" in2="r2" mode="lighten" result="hi"/>
-                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 1 0 0 0  0 0 0 1 0" result="g"/>
-                <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
-                <feBlend in="g" in2="b" mode="darken" result="gb"/>
-                <feColorMatrix in="lo" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="m"/>
-                <feColorMatrix in="hi" type="matrix" values="0 0 0 0 0  1 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="M"/>
-                <feBlend in="m" in2="M" mode="lighten" result="mM"/>
-                <feBlend in="mM" in2="gb" mode="lighten" result="x"/>
-                <feColorMatrix in="x" type="matrix" values="0.5 -0.9 0 0 0.475  0.4 -0.8 0 0 0.515  0.1 -0.5 0 0 0.58  0 0 20 0 -16" result="land"/>
-                <feColorMatrix in="x" type="matrix" values="0.5 -0.9 0 0 0.475  0.4 -0.8 0 0 0.515  0.1 -0.5 0 0 0.58  35 -25 0 0 -3.5" result="haze"/>
-                <feColorMatrix in="x" type="matrix" values="0 0 0 0 0.78  0 0 0 0 0.83  0 0 0 0 0.9  0 -8.33 0 0 2.33" result="ink"/>
-                <feMerge>
-                    <feMergeNode in="SourceGraphic"/>
-                    <feMergeNode in="land"/>
-                    <feMergeNode in="haze"/>
-                    <feMergeNode in="ink"/>
-                </feMerge>
-            </filter>
-        </svg>`;
+    // is a point inside any of these polygons (rings in the same units)?
+    const inside = (x, y, features) => features.some((f) => {
+        let hit = false;
+        (f.geometry && f.geometry.rings || []).forEach((ring) => {
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                const [xi, yi] = ring[i];
+                const [xj, yj] = ring[j];
+                if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit;
+            }
+        });
+        return hit;
+    });
 
     // ---------- Skies (behind Now and each day) ----------
     // An illustrated sky for each kind of weather, in the flat, soft-gradient
@@ -532,9 +557,14 @@
                     </div>
                 </section>
                 <section class="hf-panel hf-radar">
-                    <div class="hf-radar-map"><img alt="" draggable="false"></div>
-                    <h2 class="hf-head">Radar<span class="hf-radar-name"></span></h2>
-                    <div class="hf-radar-time"><img alt="" draggable="false"></div>
+                    <div class="hf-radar-map">
+                        <svg class="hf-radar-land" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+                        <div class="hf-radar-frames"></div>
+                        <img class="hf-radar-roads" alt="" draggable="false">
+                        <svg class="hf-radar-lines" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+                    </div>
+                    <h2 class="hf-head">Radar<span class="hf-radar-name">Past hour</span></h2>
+                    <div class="hf-radar-time"><span class="hf-radar-clock"></span><span class="hf-radar-ticks"></span></div>
                     <div class="hf-radar-off"><b></b><span></span></div>
                 </section>
                 <div class="hf-days">
@@ -542,8 +572,7 @@
                 </div>
             </div>
             <div class="hf-state"></div>
-            <div class="hf-legend"></div>
-            ${RADAR_FILTER}`;
+            <div class="hf-legend"></div>`;
         document.body.appendChild(root);
         const $ = (s) => stage.querySelector(s);
 
@@ -757,67 +786,171 @@
         // ----- radar -----
         const radarBox = $('.hf-radar');
         let radarFor = ''; // the place ("lat,lon") the panel is for
-        let radarId = null; // and its radar, once known
-        let radarLoader = null;
+        let radar = null; // { ws, area, scale, map } for the place, once it has one
+        let frames = []; // [{ at, img }], oldest first
+        let frameAt = 0; // which one is showing
+        let frameTimer = null;
+        let radarToken = 0;
         const radarState = (s, title = '', text = '') => {
             radarBox.dataset.state = s; // loading | ready | off
             $('.hf-radar-off b').textContent = title;
             $('.hf-radar-off span').textContent = text;
         };
-        const radarFailed = (what) => radarState('off', 'The radar didn\'t load',
-            `The National Weather Service didn't ${what}. HOMER tries again every few minutes.`);
-        // fetch the loop again (a new address, so no cache hands back the old
-        // one), and swap it in once it's all here
-        const loadLoop = () => {
-            const url = radarLoop(radarId) + '?t=' + Math.floor(Date.now() / 60000);
-            const img = new Image();
-            radarLoader = img;
-            img.onload = () => {
-                if (!alive || radarLoader !== img) return;
-                radarLoader = null;
-                // the map and the time are the same GIF, so they play in step
-                radarBox.querySelectorAll('img').forEach((el) => { el.src = url; });
-                radarState('ready');
-            };
-            img.onerror = () => {
-                if (!alive || radarLoader !== img) return;
-                radarLoader = null;
-                // keep the last good loop; the next round may work
-                if (radarBox.dataset.state !== 'ready') radarFailed('send it');
-            };
-            img.src = url;
+        const radarFailed = (who) => radarState('off', 'The radar didn\'t load',
+            `${who} didn't answer. HOMER tries again every few minutes.`);
+
+        // Play the loop: each picture for 300 ms, the newest for 1.5 s. Only
+        // the one showing is visible; the rest wait, already decoded.
+        const showFrame = (k) => {
+            frames.forEach((f, i) => f.img.classList.toggle('on', i === k));
+            $('.hf-radar-clock').textContent = frames[k] ? fmt.time(frames[k].at) : '';
+            $('.hf-radar-ticks').querySelectorAll('i').forEach((t, i) => t.classList.toggle('on', i <= k));
         };
+        const play = () => {
+            clearTimeout(frameTimer);
+            if (!alive || !frames.length) return;
+            frameAt = Math.min(frameAt, frames.length - 1);
+            showFrame(frameAt);
+            const last = frameAt === frames.length - 1;
+            frameTimer = setTimeout(() => {
+                frameAt = last ? 0 : frameAt + 1;
+                play();
+            }, last ? 1500 : 300);
+        };
+
+        // the last hour of pictures; ones already here are kept, new ones are
+        // swapped in once they've all loaded and decoded
+        const loadFrames = async () => {
+            if (!radar) return;
+            const token = ++radarToken;
+            const { ws, area, scale } = radar;
+            try {
+                const times = pickFrames(await radarTimes(ws));
+                if (!times.length) throw new Error('no radar pictures');
+                const have = new Map(frames.map((f) => [f.at, f]));
+                const next = (await Promise.all(times.map((at) => have.get(at) || new Promise((resolve) => {
+                    const img = new Image();
+                    img.alt = '';
+                    img.draggable = false;
+                    img.onload = () => Promise.resolve(img.decode && img.decode()).catch(() => {}).then(() => resolve({ at, img }));
+                    img.onerror = () => resolve(null);
+                    img.src = frameUrl(ws, area.box, scale, at);
+                })))).filter(Boolean);
+                if (!alive || token !== radarToken) return;
+                if (!next.length) throw new Error('no radar pictures loaded');
+                const box = $('.hf-radar-frames');
+                frames.filter((f) => !next.includes(f)).forEach((f) => f.img.remove());
+                next.forEach((f) => { if (!f.img.isConnected) box.appendChild(f.img); });
+                const fresh = !frames.length || frames[frames.length - 1].at !== next[next.length - 1].at;
+                frames = next;
+                $('.hf-radar-ticks').innerHTML = '<i></i>'.repeat(frames.length);
+                if (fresh) frameAt = 0; // a new loop starts from the beginning
+                radarState('ready');
+                play();
+            } catch (err) {
+                if (!alive || token !== radarToken) return;
+                console.warn('[HOMER Weather] radar', err);
+                // keep the last good loop; the next round may work
+                if (!frames.length) radarFailed('The National Weather Service');
+            }
+        };
+
+        // the map: land, then (over the rain) county and state lines, the
+        // interstates, the bigger towns, and the place itself
+        const drawMap = (shapes, place) => {
+            const { px } = radar.area;
+            const path = (features) => features.map((f) => (f.geometry && f.geometry.rings || [])
+                .map((ring) => 'M' + ring.map(([x, y]) => px(x, y).map((v) => v.toFixed(1)).join(' ')).join('L') + 'Z').join('')).join('');
+            $('.hf-radar-land').innerHTML = `<path d="${path(shapes.states)}"/>`;
+            // the place, and as many towns as fit around it without crowding
+            const [cx, cy] = px(...radar.area.center);
+            const name = place.mode === 'device' ? 'Here' : String(place.name || '').split(',')[0];
+            const taken = [[cx - 8, cy - 14, cx + 16 + name.length * 10, cy + 14]];
+            const clear = (b) => taken.every((t) => b[2] < t[0] - 6 || b[0] > t[2] + 6 || b[3] < t[1] - 4 || b[1] > t[3] + 4);
+            const towns = [];
+            shapes.towns.forEach((t) => {
+                const a = t.attributes || {};
+                if (towns.length >= 8 || !a.BASENAME || a.BASENAME === name) return;
+                const [x, y] = px(...merc(parseFloat(a.CENTLAT), parseFloat(a.CENTLON)));
+                const w = a.BASENAME.length * 8.4;
+                // the name to the right of the dot, or else to the left; clear
+                // of the panel's edges, its title, the time and other names
+                const fits = (b) => b[0] >= SAFE_X[0] && b[2] <= SAFE_X[1] && b[1] >= 70 && b[3] <= MAP_H - 56 && clear(b);
+                const right = [x - 5, y - 11, x + 10 + w, y + 11];
+                const left = [x - 10 - w, y - 11, x + 5, y + 11];
+                const b = fits(right) ? right : fits(left) ? left : null;
+                if (!b) return;
+                taken.push(b);
+                const tx = b === right ? `x="${(x + 9).toFixed(1)}"` : `x="${(x - 9).toFixed(1)}" text-anchor="end"`;
+                towns.push(`<circle class="town" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3"/><text ${tx} y="${(y + 5.5).toFixed(1)}">${esc(a.BASENAME)}</text>`);
+            });
+            $('.hf-radar-lines').innerHTML = `
+                <path class="county" d="${path(shapes.counties)}"/>
+                <path class="state" d="${path(shapes.states)}"/>
+                ${towns.join('')}
+                <circle class="here" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6"/>
+                <text class="here" x="${(cx + 13).toFixed(1)}" y="${(cy + 6.5).toFixed(1)}">${esc(name)}</text>`;
+        };
+
         const drawRadar = () => {
             const p = fc.place;
             if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') { radarState('off', 'Radar unavailable here'); return; }
             const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
             if (key === radarFor) return;
             radarFor = key;
-            radarId = null;
-            radarLoader = null;
-            $('.hf-radar-name').textContent = '';
+            radarToken++;
+            radar = null;
+            clearTimeout(frameTimer);
+            frames.forEach((f) => f.img.remove());
+            frames = [];
+            $('.hf-radar-land').innerHTML = '';
+            $('.hf-radar-lines').innerHTML = '';
+            $('.hf-radar-roads').removeAttribute('src');
             radarState('loading');
-            radarStation(p.lat, p.lon).then((st) => {
-                if (!alive || radarFor !== key) return;
-                if (!st) {
-                    radarState('off', 'Radar unavailable here', 'The National Weather Service\'s radar covers the US and its territories.');
-                    return;
-                }
-                radarId = st.id;
-                $('.hf-radar-name').textContent = st.name ? `${st.name} · ${st.id}` : st.id;
-                loadLoop();
-            }, (err) => {
-                if (!alive || radarFor !== key) return;
-                console.warn('[HOMER Weather] radar', err);
-                radarFor = ''; // look again next round
-                radarFailed('answer');
-            });
+            // twice the detail on a screen with pixels to spare (a 4K TV)
+            const scale = stage.getBoundingClientRect().height / 1080 * (window.devicePixelRatio || 1) > 1.25 ? 2 : 1;
+            const area = mapArea(p.lat, p.lon);
+            radar = { ws: radarRegion(p.lat, p.lon), area, scale, map: false };
+            loadMap(p, key).then((ok) => { if (ok) loadFrames(); });
         };
+        // The map, which also says whether the place is in the US. Without it
+        // (the Census server didn't answer) a place that's roughly in the US
+        // still gets the rain, with just the place marked, and the map is
+        // tried again with the next loop.
+        const loadMap = (p, key) => mapShapes(p.lat, p.lon, radar.area.box).then((shapes) => {
+            if (!alive || radarFor !== key) return false;
+            // the NWS only covers the US: somewhere no county holds isn't
+            if (!inside(radar.area.center[0], radar.area.center[1], shapes.counties)) {
+                radar = null;
+                clearTimeout(frameTimer);
+                radarState('off', 'Radar unavailable here', 'The National Weather Service\'s radar covers the US and its territories.');
+                return false;
+            }
+            radar.map = true;
+            drawMap(shapes, p);
+            $('.hf-radar-roads').src = roadsUrl(radar.area.box);
+            return true;
+        }, (err) => {
+            if (!alive || radarFor !== key) return false;
+            console.warn('[HOMER Weather] radar map', err);
+            if (!roughlyUS(p.lat, p.lon)) {
+                radarFor = ''; // look again next round
+                radar = null;
+                radarFailed('The Census Bureau\'s map server');
+                return false;
+            }
+            drawMap({ counties: [], states: [], towns: [] }, p);
+            return true;
+        });
         // a fresh loop every 5 minutes while the screen is up
         const radarTimer = setInterval(() => {
             if (!fc) return;
-            if (radarId) loadLoop();
-            else if (!radarFor) drawRadar();
+            if (!radar) {
+                if (!radarFor) drawRadar();
+                return;
+            }
+            if (!radar.map) loadMap(fc.place, radarFor);
+            loadFrames();
         }, RADAR_MS);
 
         // ----- legend -----
@@ -967,7 +1100,8 @@
                 clearInterval(refreshTimer);
                 clearInterval(hourTimer);
                 clearInterval(radarTimer);
-                radarLoader = null;
+                clearTimeout(frameTimer);
+                radarToken++;
                 wxDetach();
                 root.remove();
             }

@@ -508,27 +508,79 @@
     height: 432px;
     padding: 0;
     overflow: hidden;
-    background: #0b1627; /* the map's own navy, while it loads */
+    background: #081120; /* water */
+    z-index: 21; /* above the stage's scanline texture: the rain's pixels are the NWS's own */
 }
 
+/* The map is 640×432 (forecast.js MAP_W, MAP_H); a narrower panel shows its
+   middle. The pictures, the roads and the drawn layers all crop the same way. */
 .hf-radar-map {
     position: absolute;
     inset: 0;
     overflow: hidden;
 }
 
-/* The loop covers the panel by its map alone: at least as wide as the panel,
-   and as wide as a 502px map needs to be to fill 432px of height. The title
-   bar and color key above and below the map fall outside. */
-.hf-radar-map img {
+.hf-radar-map > *,
+.hf-radar-frames img {
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: max(100%, calc(432px * 600 / 502));
-    height: auto;
-    transform: translate(-50%, -50%);
-    filter: url(#hf-radar-navy);
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     pointer-events: none;
+}
+
+.hf-radar-land path { fill: #0f1c30; }
+
+/* the rain, exactly as the NWS draws it: no filter, no opacity */
+.hf-radar-frames img { visibility: hidden; }
+.hf-radar-frames img.on { visibility: visible; }
+
+/* interstates: a dim grey line, even over the rain */
+.hf-radar-roads { opacity: 0.5; }
+
+.hf-radar-lines path {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+}
+
+.hf-radar-lines .county {
+    stroke: rgba(160, 190, 230, 0.16);
+    stroke-width: 0.8;
+}
+
+.hf-radar-lines .state {
+    stroke: rgba(170, 200, 240, 0.42);
+    stroke-width: 1.4;
+}
+
+.hf-radar-lines text {
+    font-family: var(--cond);
+    font-size: 16px;
+    font-weight: 600;
+    fill: rgba(222, 231, 244, 0.82);
+    paint-order: stroke;
+    stroke: rgba(5, 12, 26, 0.85);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+}
+
+.hf-radar-lines .town { fill: rgba(222, 231, 244, 0.7); }
+
+/* the place */
+.hf-radar-lines circle.here {
+    fill: var(--accent-2);
+    stroke: #04101f;
+    stroke-width: 2.5px;
+}
+
+.hf-radar-lines text.here {
+    font-family: var(--font);
+    font-size: 19px;
+    font-weight: 800;
+    fill: #fff;
+    stroke-width: 3.5px;
 }
 
 .hf-radar .hf-head {
@@ -550,32 +602,44 @@
     color: var(--soft);
     padding-left: 18px;
     border-left: 2px solid var(--line-strong);
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-.hf-radar-name:empty { display: none; }
-
-/* the time of the frame on screen, cut from the GIF's own key bar */
+/* the time of the picture on screen, and how far through the hour it is */
 .hf-radar-time {
     position: absolute;
     right: 14px;
     bottom: 14px;
-    width: 262px;
-    height: 24px;
-    overflow: hidden;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 9px;
+    background: rgba(5, 12, 26, 0.82);
     box-shadow: 0 0 0 1px var(--line-strong);
 }
 
-.hf-radar-time img {
-    position: absolute;
-    left: -338px;
-    top: -526px;
-    width: 600px;
-    height: 550px;
-    pointer-events: none;
+.hf-radar-clock {
+    min-width: 78px;
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
 }
+
+.hf-radar-ticks {
+    display: flex;
+    gap: 3px;
+}
+
+.hf-radar-ticks i {
+    width: 7px;
+    height: 12px;
+    border-radius: 2px;
+    background: rgba(160, 190, 230, 0.22);
+}
+
+.hf-radar-ticks i.on { background: var(--accent-2); }
 
 .hf-radar:not([data-state="ready"]) .hf-radar-map,
 .hf-radar:not([data-state="ready"]) .hf-radar-time { display: none; }
@@ -811,11 +875,3 @@
 }
 
 .hf-legend [data-action]:hover { color: var(--text); }
-
-/* the radar filter's definition takes no room */
-.hf-defs {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-}

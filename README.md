@@ -57,9 +57,11 @@ Settings → Weather location):
 - **Now**: the temperature and conditions, feels like, humidity, wind, and the
   next sunrise or sunset. Below them, the next 14 hours two at a time:
   conditions, temperature and chance of rain.
-- **Radar**: the National Weather Service's animated loop for the nearest
-  radar, on a navy map, with the time of each frame. US only; elsewhere the
-  panel says there's no radar.
+- **Radar**: the last hour of the National Weather Service's radar, played as
+  a loop over a navy map centered on the place (county and state lines, dim
+  interstates, the bigger towns), with the time of each picture. The rain is
+  exactly as the NWS draws it. US only; elsewhere the panel says there's no
+  radar.
 - **Next 3 days**: a panel a day with conditions, high and low, chance of rain
   and how much, wind, sunrise and sunset.
 
@@ -191,5 +193,7 @@ brand.
 
 Weather icons in `shared/wx/` are [Meteocons](https://github.com/basmilius/meteocons)
 by Bas Milius, MIT licensed (see `shared/wx/LICENSE`). Weather data comes from
-[Open-Meteo](https://open-meteo.com/); the radar loops are the National Weather
-Service's ([radar.weather.gov](https://radar.weather.gov/), public domain).
+[Open-Meteo](https://open-meteo.com/); the radar is the National Weather
+Service's MRMS mosaic (from its map server, opengeo.ncep.noaa.gov, public
+domain), and the radar's map is the Census Bureau's
+([TIGERweb](https://tigerweb.geo.census.gov/), public domain).

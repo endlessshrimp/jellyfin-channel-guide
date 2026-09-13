@@ -8,13 +8,16 @@
   a panel each, and with the room they now show wind, sunrise and sunset along
   with the high, low, conditions, and chance and amount of rain. No more ◀ ▶
   paging.
-- Weather: a Radar panel in the top right, the National Weather Service's
-  animated loop for the radar nearest the place (looked up once through
-  api.weather.gov and remembered on that device). The white NWS map is turned
-  HOMER navy and the radar colors are left exactly as the NWS draws them; the
-  time of each frame shows in the corner. The loop is fetched again every 5
-  minutes while the screen is up. Outside the US, or when the NWS doesn't
-  answer, the panel says so.
+- Weather: a Radar panel in the top right: the last hour of the National
+  Weather Service's radar mosaic (a picture about every 6 minutes, from the
+  NWS's own map server), played as a loop over a HOMER navy map centered on
+  the place, with county and state lines, interstates in a dim grey (so no
+  road can pass for heavy rain), the bigger towns, and the place marked. The
+  rain is shown exactly as the NWS draws it, nothing tinted or faded; the
+  time of each picture and how far through the hour it is show in the corner.
+  The loop is fetched again every 5 minutes while the screen is up. Outside
+  the US, or when the NWS doesn't answer, the panel says so; if only the map
+  server is out, the rain still shows with just the place marked.
 - Weather: Now and each day sit on an illustrated sky that matches the
   weather: clear, a few clouds, partly cloudy, overcast, fog, rain, sleet, snow
   or storms. Now's sky also follows the time of day (day, dawn, dusk, night).
