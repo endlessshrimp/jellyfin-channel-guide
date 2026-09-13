@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.11';
+    const VERSION = '0.1.12';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -195,6 +195,14 @@
         await request('POST', `/Sessions/${mine.Id}/Playing?playCommand=PlayNow&itemIds=${ch.Id}`);
     };
 
+    // Home: HOMER Home knows how (it keeps a playing video going); without it,
+    // close and go to Jellyfin's home route
+    const goHome = () => {
+        if (window.HomerHome && window.HomerHome.goHome) { window.HomerHome.goHome(); return; }
+        close({ returnToLiveTv: false });
+        location.hash = '#/home';
+    };
+
     // ---------- Guide ----------
 
     let guide = null; // the open guide instance, or null
@@ -241,7 +249,7 @@
 
         stage.innerHTML = `
             <div class="cg-topbar">
-                <div class="cg-brand"><span class="cg-brand-mark"></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
+                <div class="cg-brand homer-home" role="button" title="Home (H)"><span class="cg-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
                 <label class="cg-search">
                     <span class="material-icons cg-search-icon" aria-hidden="true">search</span>
                     <input class="cg-search-input" type="text" placeholder="Filter channels or shows" autocomplete="off" spellcheck="false" aria-label="Filter channels or shows">
@@ -281,6 +289,7 @@
                 <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
                 <span data-action="country-next"><span class="cg-key">C</span>Country</span>
                 <span class="spacer"></span>
+                <span data-action="home"><span class="cg-key">H</span>Home</span>
                 <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
             </div>`;
 
@@ -781,6 +790,7 @@
             else if (action === 'cat-next') cycleCategory(1);
             else if (action === 'country-next') cycleCountry();
             else if (action === 'close') close();
+            else if (action === 'home') goHome();
         };
 
         document.addEventListener('keydown', onKey, true);
@@ -797,6 +807,7 @@
         };
         window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
         $('.cg-legend').addEventListener('click', onLegendClick);
+        $('.cg-brand').addEventListener('click', () => goHome());
 
         // ---------- Live preview ----------
         // While something is playing (full screen underneath, or in the browser's

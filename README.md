@@ -16,6 +16,8 @@ Watching, Up Next, On Now and Recently Added.
 - **Full screen**, **F**, or a click on the preview hands it to Jellyfin's
   full-screen player. The **Home** button in the player's controls (or **H**)
   brings it back to the preview.
+- **H**, or the HOMER logo at the top left of any HOMER screen, comes back to
+  Home from anywhere.
 - Opening Movies, TV Shows or any other page stops the channel. Jellyfin stops
   video whenever you leave its player. The guide is the exception: it opens on
   top, and the channel keeps playing in its preview.
@@ -67,13 +69,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.2/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.3/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.2.2`), so an update never changes
+The URL is pinned to a release tag (`@v0.2.3`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 
@@ -90,6 +92,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **[ ] / 1–8** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment |
 | **C** | Switch country: All, USA, UK, France (combines with the category) |
 | **Page Up / Page Down** | Jump a screen of channels |
+| **H** | Go to Home (a playing channel keeps playing in Home's preview) |
 | **Esc / Backspace / G** | Close the guide |
 
 With a mouse or trackpad: scroll the grid freely, hover to select, click a

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.3
+
+- Home from anywhere: the HOMER logo at the top left of the guide, Movies,
+  TV Shows and show/movie pages is a Home button, and H goes Home from any
+  screen (not while typing). From the full-screen player, the video comes
+  along into Home's preview window. Every screen's key hints include H Home.
+
 ## v0.2.2
 
 - Home: Watch plays the channel in the On Now preview window, so you can keep

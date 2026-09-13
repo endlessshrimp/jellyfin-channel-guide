@@ -1069,3 +1069,25 @@
 }
 
 .hl-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
+
+/* ---------- The HOMER logo is the way Home (so is H) ---------- */
+.hl-brand.homer-home {
+    cursor: pointer;
+    margin: -8px -16px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    transition: background 120ms ease;
+}
+
+.hl-brand.homer-home:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.hl-brand-mark .material-icons {
+    display: none;
+    font-size: 28px;
+    color: #fff;
+}
+
+.hl-brand.homer-home:hover .hl-brand-mark::before { display: none; }
+.hl-brand.homer-home:hover .hl-brand-mark .material-icons { display: block; }

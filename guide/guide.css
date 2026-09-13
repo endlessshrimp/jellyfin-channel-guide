@@ -937,3 +937,25 @@
 }
 
 .cg-country.on .cg-cat-count { color: #3a5575; }
+
+/* ---------- The HOMER logo is the way Home (so is H) ---------- */
+.cg-brand.homer-home {
+    cursor: pointer;
+    margin: -8px -16px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    transition: background 120ms ease;
+}
+
+.cg-brand.homer-home:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.cg-brand-mark .material-icons {
+    display: none;
+    font-size: 28px;
+    color: #fff;
+}
+
+.cg-brand.homer-home:hover .cg-brand-mark::before { display: none; }
+.cg-brand.homer-home:hover .cg-brand-mark .material-icons { display: block; }

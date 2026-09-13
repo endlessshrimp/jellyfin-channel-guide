@@ -14,7 +14,7 @@
  * window.HomerLibrary = { open(route), close, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     // Loading twice (hot reload, or the loader plus a manual copy) replaces the
     // previous instance.
@@ -216,6 +216,12 @@
         }, 400);
     };
 
+    // Home: HOMER Home handles it when it's loaded, otherwise Jellyfin's home route
+    const goHome = () => {
+        if (window.HomerHome && window.HomerHome.goHome) window.HomerHome.goHome();
+        else location.hash = '#/home';
+    };
+
     // ---------- Pixel scrolling (lists and the season tabs) ----------
     // The trackpad moves a list freely; keyboard selection nudges it just enough
     // to keep the highlight in view. Wheel never moves the selection.
@@ -304,7 +310,7 @@
         stage.innerHTML = `
             <div class="hl-ambient"></div>
             <div class="hl-topbar">
-                <div class="hl-brand"><span class="hl-brand-mark"></span>HOMER<span class="hl-brand-sub">${esc(brand)}</span></div>
+                <div class="hl-brand homer-home" role="button" title="Home (H)"><span class="hl-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="hl-brand-sub">${esc(brand)}</span></div>
                 ${search ? `<label class="hl-search">
                     <span class="material-icons hl-search-icon" aria-hidden="true">search</span>
                     <input class="hl-search-input" type="text" placeholder="${esc(search)}" autocomplete="off" spellcheck="false" aria-label="${esc(search)}">
@@ -347,8 +353,14 @@
             toastTimer = setTimeout(() => { toastEl.className = 'hl-toast'; }, 3200);
         };
 
-        // legend: [{ key, label, action }] with 'spacer' for the gap
-        const setLegend = (items) => {
+        // legend: [{ key, label, action }] with 'spacer' for the gap. Every screen
+        // gets H Home, just before Back.
+        const HOME_ITEM = { key: 'H', label: 'Home', action: 'home' };
+        const setLegend = (list) => {
+            const items = list.slice();
+            const at = items.indexOf('spacer');
+            if (at >= 0) items.splice(at + 1, 0, HOME_ITEM);
+            else items.push('spacer', HOME_ITEM);
             $('.hl-legend').innerHTML = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hl-key">${i.key}</span>${esc(i.label)}</span>`)).join('');
@@ -423,6 +435,10 @@
         };
         document.addEventListener('keydown', keyHandler, true);
         window.addEventListener('resize', fit);
+        $('.hl-brand').addEventListener('click', goHome);
+        $('.hl-legend').addEventListener('click', (ev) => {
+            if (ev.target.closest('[data-action="home"]')) goHome();
+        });
         root.addEventListener('wheel', wheelHandler, { passive: false });
 
         // don't leave a Jellyfin control underneath focused (Space/Enter would hit it)

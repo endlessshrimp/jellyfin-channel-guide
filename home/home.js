@@ -10,11 +10,12 @@
  * Watch plays the channel inside the On Now preview window so you can keep
  * browsing; Full screen (or F, or a click on the preview) hands it to Jellyfin's
  * player, and the player's Home button (or H) brings it back to the preview.
+ * H, or the HOMER logo on every other HOMER screen, comes back to Home.
  *
  * window.HomerHome = { open, close, fullscreen, destroy, version }
  */
 (() => {
-    const VERSION = '0.2.1';
+    const VERSION = '0.2.2';
 
     if (window.HomerHome && typeof window.HomerHome.destroy === 'function') {
         window.HomerHome.destroy();
@@ -902,15 +903,33 @@
         const before = bar.querySelector('.cgOsdGuideButton, .btnPip, .btnVideoOsdSettings, .btnFullscreen');
         bar.insertBefore(btn, before || null);
     };
-    // H from the full-screen player does the same
-    const onPlayerKey = (ev) => {
-        if (home || ev.ctrlKey || ev.metaKey || ev.altKey || (ev.key !== 'h' && ev.key !== 'H')) return;
-        if (!isVideoRoute() || document.getElementById('cg-root')) return;
-        const t = ev.target;
-        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    // ---------- Home from anywhere: the HOMER logo, or H ----------
+    // From the full-screen player the video comes along into the preview window;
+    // over the guide, the guide closes; anywhere else, Jellyfin goes to #/home.
+    const goHome = () => {
+        if (!getServer()) return;
+        if (isVideoRoute() && playerBox()) { previewFromPlayer(); return; }
+        if (document.getElementById('cg-root') && window.ChannelGuide && window.ChannelGuide.close) {
+            window.ChannelGuide.close({ returnToLiveTv: false });
+        }
+        if (isHomeRoute()) open();
+        else location.hash = '#/home';
+    };
+    const isTyping = (t) => {
+        if (!t || !t.tagName) return false;
+        if (t.isContentEditable) return true;
+        if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+        if (t.tagName !== 'INPUT') return false;
+        return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'image', 'color', 'file'].includes((t.type || '').toLowerCase());
+    };
+    const onHomeKey = (ev) => {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat || (ev.key !== 'h' && ev.key !== 'H')) return;
+        if (isTyping(ev.target) || isTyping(document.activeElement)) return;
+        if (home && !document.getElementById('cg-root')) return; // already home
+        if (!getServer()) return;
         ev.preventDefault();
         ev.stopPropagation();
-        previewFromPlayer();
+        goHome();
     };
     let queued = false;
     const queue = () => {
@@ -922,7 +941,7 @@
 
     window.addEventListener('hashchange', onRoute);
     window.addEventListener('popstate', onRoute);
-    document.addEventListener('keydown', onPlayerKey, true);
+    document.addEventListener('keydown', onHomeKey, true);
     let observer = null;
     const start = () => {
         observer = new MutationObserver(queue);
@@ -937,12 +956,13 @@
         open,
         close,
         fullscreen: goFullscreen,
+        goHome,
         destroy() {
             close();
             observer && observer.disconnect();
             window.removeEventListener('hashchange', onRoute);
             window.removeEventListener('popstate', onRoute);
-            document.removeEventListener('keydown', onPlayerKey, true);
+            document.removeEventListener('keydown', onHomeKey, true);
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             document.getElementById('hm-css')?.remove();
             cssReady = null;
