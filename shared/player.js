@@ -75,11 +75,13 @@
     const isVideoRoute = () => /^#\/video/.test(location.hash);
     const isHomeHash = (h) => /^#\/(home(\.html)?)?(\?.*)?$/.test(h) || h === '' || h === '#/';
     // the pages HOMER draws itself
+    // Search, Recordings and Settings count once their screen has loaded
+    const screenFor = (h) => (/^#\/search(\.html)?(\?|$)/.test(h) ? 'HomerSearch'
+        : /^#\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h) ? 'HomerRecordings'
+        : /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h) ? 'HomerSettings' : null);
     const isHomerHash = (h) => isHomeHash(h)
         || /^#\/(movies|tv|details)(\.html)?\?/.test(h)
-        || /^#\/search(\.html)?(\?|$)/.test(h) // Search
-        || /^#\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h) // Recordings
-        || /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h); // Settings
+        || (!!screenFor(h) && !!window[screenFor(h)]);
     const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
     // Jellyfin pages HOMER leaves alone: the admin dashboard, sign-in and setup,
     // and the player itself
@@ -446,7 +448,7 @@
     // stock page never flashes up.
     const guard = () => {
         const h = location.hash || HOME;
-        const ok = !getServer() || isStockOk(h);
+        const ok = !getServer() || isStockOk(h) || (!!screenFor(h) && !window[screenFor(h)]); // not built yet: Jellyfin's
         document.documentElement.classList.toggle('homer-stock-ok', ok);
         if (ok || docked || landing) return;
         if (isHomerHash(h) || isGuideHash(h)) return;

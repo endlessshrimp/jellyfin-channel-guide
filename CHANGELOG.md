@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.1
+
+- Guide recording: hovering a program shows a ● button on that program;
+  click it to record. On a program that's set to record it's "Cancel" (or
+  "Stop" while recording), with a click-again confirm. R toggles the same way
+  ("Press R again"). The legend's Record hint is no longer clickable, since
+  reaching it used to record whatever the mouse crossed on the way.
+- Guide cells are the width they were meant to be (they overlapped the next
+  program by a few pixels).
+- French channels land in the right guide categories (BFM, LCI, franceinfo,
+  France 24 in News; Canal+ Sport, beIN, Eurosport, L'Equipe in Sports; …).
+- Settings: a HOMER Settings screen replaces Jellyfin's preferences menu
+  (audio language, subtitles, subtitle language, streaming quality, sign out).
+- No stock Jellyfin pages: anything HOMER doesn't draw goes to Home, and
+  Jellyfin's own pages stay hidden underneath HOMER. The admin dashboard,
+  sign-in and the player are left alone. Search results and Recordings stay
+  Jellyfin's until their HOMER screens ship. Closing the guide always goes Home.
+
 ## v0.3.0
 
 - Watching while you browse: a playing video stays up across every HOMER

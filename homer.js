@@ -31,4 +31,5 @@
     js('guide/guide.js');
     js('home/home.js');
     js('library/library.js');
+    js('settings/settings.js');
 })();
