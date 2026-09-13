@@ -515,8 +515,8 @@
         };
     };
 
-    // Channel logo on a light chip, in the logo's own colors; the channel's name
-    // when there's no logo.
+    // Channel logo on a dark or light chip (shared/logos.js picks), in the
+    // logo's own colors; the channel's name when there's no logo.
     const logoHtml = (chId, chName, chTag, lazy) => {
         if (chId) return `<div class="hr-logo" data-name="${esc(chName)}"><img ${lazy ? 'data-src' : 'src'}="${esc(logoUrl(chId, chTag))}" alt=""></div>`;
         if (chName) return `<div class="hr-logo text"><span>${esc(chName)}</span></div>`;
@@ -524,6 +524,7 @@
     };
     const wireLogos = (root) => {
         for (const im of root.querySelectorAll('.hr-logo img')) {
+            if (window.HomerLogos) window.HomerLogos.watch(im);
             im.onerror = () => {
                 const chip = im.parentNode;
                 chip.classList.add('text');

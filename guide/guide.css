@@ -161,8 +161,9 @@
     min-width: 96px;
     padding: 6px 12px;
     border-radius: 12px;
-    background: rgba(235, 242, 250, 0.94);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    /* dark or light per logo (shared/logos.js); dark without HOMER's tokens */
+    background: var(--homer-logo-bg, #1c2940);
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line, rgba(160, 190, 230, 0.18)), 0 4px 16px rgba(0, 0, 0, 0.35);
     display: grid;
     place-items: center;
 }
@@ -478,7 +479,7 @@
     font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
     font-weight: 700;
     font-size: 18px;
-    color: #0b1a2e;
+    color: var(--homer-logo-ink, #f4f7fb);
     text-align: center;
     line-height: 1.05;
 }

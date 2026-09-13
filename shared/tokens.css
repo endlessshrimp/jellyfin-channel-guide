@@ -35,4 +35,24 @@
     --homer-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
     --homer-focus-ring: 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55);
     --homer-focus-fill: linear-gradient(180deg, #3a95ff, #1c64d8);
+
+    /* Channel logo chips: dark, since most channel logos are white; light for
+       a logo that's dark itself (shared/logos.js decides, and keeps a copy of
+       these two colors). Chips use --homer-logo-bg, -line and -ink. */
+    --homer-logo-chip: #1c2940;
+    --homer-logo-chip-light: rgba(235, 242, 250, 0.94);
+    --homer-logo-bg: var(--homer-logo-chip);
+    --homer-logo-line: rgba(160, 190, 230, 0.18);
+    --homer-logo-ink: var(--homer-text);
+}
+
+.homer-logo-light {
+    --homer-logo-bg: var(--homer-logo-chip-light);
+    --homer-logo-line: transparent;
+    --homer-logo-ink: #0b1a2e;
+}
+
+/* a chip that changes after its logo is first measured fades, not flashes */
+.homer-logo-fade {
+    transition: background-color 180ms ease, box-shadow 180ms ease;
 }

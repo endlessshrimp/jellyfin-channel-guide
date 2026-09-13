@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.9
 
 - Guide: move through time like a cable box. **◀ ▶** past the edge of the
   screen pages the guide later or earlier (at least half a screen, far enough
@@ -34,6 +34,13 @@
   end up below the visible grid).
 - Guide: on windows narrower than 16:9 the legend tightens up so every hint
   fits.
+- Channel logos: most channel logos are white, and they washed out on the
+  light chip behind them. Logo chips are now dark, and a logo that's dark
+  itself (E!, Vice, Paramount, Sky History, NBC 5, …) gets a light chip
+  instead, so every logo reads in its own colors. HOMER measures each logo
+  once and remembers the answer on that device. Same chips everywhere: the
+  guide (channel list, info panel, preview), Home's On Now, Recordings and
+  Search.
 
 ## v0.3.8
 

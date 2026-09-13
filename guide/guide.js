@@ -182,6 +182,7 @@
             img.alt = '';
             img.onerror = () => { chip.innerHTML = `<div class="cg-chan-fallback">${esc(ch.Name)}</div>`; };
             chip.appendChild(img);
+            if (window.HomerLogos) window.HomerLogos.watch(img, chip); // a dark or light chip for this logo
         } else {
             chip.innerHTML = `<div class="cg-chan-fallback">${esc(ch.Name)}</div>`;
         }

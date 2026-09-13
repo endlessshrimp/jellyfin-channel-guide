@@ -540,6 +540,7 @@
                 i.onerror = () => { chip.innerHTML = fallback; };
                 i.src = url;
                 chip.appendChild(i);
+                if (window.HomerLogos) window.HomerLogos.watch(i, chip); // a dark or light chip for this logo
             }
             return chip;
         };
@@ -793,6 +794,7 @@
                     img.parentNode.classList.add('has-img');
                 };
                 img.onerror = () => img.remove();
+                if (img.parentNode.classList.contains('logo') && window.HomerLogos) window.HomerLogos.watch(img);
             }
             return e;
         };
