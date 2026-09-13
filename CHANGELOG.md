@@ -19,9 +19,10 @@
   striped "Loading…" cells, and you can keep moving meanwhile. A chunk that
   fails is tried again.
 - Guide: a program that hasn't started shows its day and time ("Tomorrow ·
-  6:00 PM – 7:00 PM") in the info panel. OK (or a click) on it records it, the
-  same as R, instead of tuning the channel; the legend's OK hint says what OK
-  will do (Watch, Record, Cancel recording).
+  6:00 PM – 7:00 PM") in the info panel. OK on it records it, the same as R,
+  instead of tuning the channel; a click only selects it. The legend's OK hint
+  says what OK will do (Watch, Record, Cancel recording), and R's hint shows
+  only when it does something different, with the right verb.
 - Guide recording: Jellyfin can take 20 seconds or more to set up a recording,
   so the guide now says "Scheduling …" right away, and "Still scheduling …" to
   a second press instead of ignoring it. Just before sending, it re-reads

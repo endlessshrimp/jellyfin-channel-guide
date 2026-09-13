@@ -322,7 +322,7 @@
                 <span><span class="cg-key">◀▶</span>Time</span>
                 <span data-action="now" class="cg-legend-now" hidden><span class="cg-key">N</span>Back to now</span>
                 <span data-action="ok" class="cg-legend-ok"><span class="cg-key">OK</span><span class="cg-legend-ok-label">Watch</span></span>
-                <span><span class="cg-key rec">R</span>Record</span>
+                <span class="cg-legend-rec"><span class="cg-key rec">R</span><span class="cg-legend-rec-label">Record</span></span>
                 <span data-action="search"><span class="cg-key">/</span>Filter</span>
                 <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
                 <span data-action="country-next"><span class="cg-key">C</span>Country</span>
@@ -693,10 +693,13 @@
                 touched = true;
                 select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
             });
+            // A click on an airing program watches it. An upcoming one is only
+            // selected (its ● button records), so a stray click never sets a
+            // recording.
             cell.addEventListener('click', () => {
                 touched = true;
                 select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
-                ok();
+                if (!upcoming(cellData)) watch();
             });
             // The hovered program's own record button: it records the program
             // it sits on, not whatever the mouse crossed on the way to it.
@@ -890,11 +893,15 @@
             else watch();
         };
 
-        // The legend says what OK does for the highlighted program, and offers
-        // N (back to now) while now is off the screen.
+        // The legend says what OK and R do for the highlighted program, and
+        // offers N (back to now) while now is off the screen. R only shows when
+        // it does something OK doesn't: on an upcoming program they're the same.
         const okLabel = $('.cg-legend-ok-label');
         const okItem = $('.cg-legend-ok');
+        const recLabel = $('.cg-legend-rec-label');
+        const recItem = $('.cg-legend-rec');
         const nowItem = $('.cg-legend-now');
+        const recVerb = (c) => (!isSet(c) ? 'Record' : recordingNow(c) ? 'Stop recording' : 'Cancel recording');
         const updateLegend = () => {
             nowItem.hidden = nowInView();
             const cur = current();
@@ -902,10 +909,14 @@
             if (!c || !upcoming(c)) {
                 okLabel.textContent = 'Watch';
                 okItem.classList.remove('off');
+                recItem.hidden = false;
+                recLabel.textContent = c ? recVerb(c) : 'Record';
+                recItem.classList.toggle('off', !c || !recordable(c));
                 return;
             }
-            okLabel.textContent = !isSet(c) ? 'Record' : recordingNow(c) ? 'Stop recording' : 'Cancel recording';
+            okLabel.textContent = recVerb(c);
             okItem.classList.toggle('off', !recordable(c));
+            recItem.hidden = true;
         };
 
         // ---------- Recording ----------

@@ -663,7 +663,8 @@
 .cg-legend-now .cg-key { background: var(--needle); border-color: transparent; color: #1a1100; }
 
 /* OK has nothing to do here (an upcoming stretch with no listing) */
-.cg-legend-ok.off { opacity: 0.4; }
+.cg-legend-ok.off,
+.cg-legend-rec.off { opacity: 0.4; }
 
 /* ---------- Recordings ---------- */
 

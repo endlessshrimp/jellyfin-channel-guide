@@ -73,7 +73,8 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 - Opens from a **Guide** button in Jellyfin's header, or the **G** key.
 - **OK / Enter** (or a click) starts the channel in the same browser tab. On a
   program that hasn't started yet there's nothing to watch, so OK records it
-  instead, like **R**. The legend says which one OK will do.
+  instead, like **R** (a click only selects it). The legend says what OK will
+  do, and shows **R** only when it does something different.
 - **◀ ▶** past the edge of the screen pages the guide later (or earlier, back
   to now), as far ahead as your listings go. The chip at the top left of the
   grid says which day you're looking at, and a new day's first slot is marked
@@ -135,8 +136,8 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **Esc / Backspace / G** | Close the guide |
 
 With a mouse or trackpad: scroll the grid freely (sideways moves through
-time), hover to select, click a program to watch it (or, if it hasn't started
-yet, to record it). A hovered program shows a **●** button at its right edge
+time), hover to select, click a program to watch it (one that hasn't started yet
+is only selected). A hovered program shows a **●** button at its right edge
 that records it (**■** on a program that's set to record: click it twice to
 cancel). Type in the filter box at the top to narrow the grid. The **N**,
 **OK**, **/**, **[ ]**, **C**, **H** and **ESC** hints along the bottom are
