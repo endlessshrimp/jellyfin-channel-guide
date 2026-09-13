@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.10
+
+- Channel logos: every logo sits on the dark chip now; there are no light
+  chips. A logo that's dark itself is shown in grayscale, inverted (dark parts
+  turn white), so it reads on the dark chip and keeps any detail inside it.
+
 ## v0.3.9
 
 - Guide: move through time like a cable box. **◀ ▶** past the edge of the
