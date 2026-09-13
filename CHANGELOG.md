@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Channel logos: most channel logos are white, and they washed out on the
+  light chip behind them. Logo chips are now dark, and a logo that's dark
+  itself (E!, Vice, Paramount, Sky History, NBC 5, …) gets a light chip
+  instead, so every logo reads in its own colors. HOMER measures each logo
+  once and remembers the answer on that device. Same chips everywhere: the
+  guide (channel list, info panel, preview), Home's On Now, Recordings and
+  Search.
+
 ## v0.3.8
 
 - Weather: a HOMER Weather screen, from a new Weather item in Home's menu

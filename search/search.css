@@ -397,14 +397,15 @@
 
 .hs-thumb img.in { opacity: 1; }
 
-/* channel logos sit on a light chip in their own colors, as in the guide */
+/* channel logos sit on a dark or light chip in their own colors, as in the guide */
 .hs-thumb.logo {
     width: 120px;
     height: 64px;
     padding: 6px 10px;
     box-sizing: border-box;
     border-radius: 10px;
-    background: rgba(235, 242, 250, 0.94);
+    background: var(--homer-logo-bg);
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line);
 }
 
 .hs-thumb.logo img {
@@ -425,7 +426,7 @@
     font-weight: 700;
     font-size: 15px;
     line-height: 1.05;
-    color: #0b1a2e;
+    color: var(--homer-logo-ink);
     text-align: center;
     overflow: hidden;
     display: -webkit-box;
@@ -587,7 +588,7 @@
 .hs-zone-list .hs-row.sel .hs-count-dot::before { background: #fff; }
 .hs-zone-list .hs-row.sel .hs-left { color: #ffe1a3; }
 .hs-zone-list .hs-row.sel .hs-row-progress > i { background: #fff; }
-.hs-zone-list .hs-row.sel .hs-thumb.logo { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+.hs-zone-list .hs-row.sel .hs-thumb.logo { box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 0 0 2px rgba(255, 255, 255, 0.5); }
 
 /* ---------- Detail panel (right): 16:9 preview window, then the result's info ---------- */
 
@@ -658,8 +659,8 @@
     padding: 12px 22px;
     box-sizing: border-box;
     border-radius: 22px;
-    background: rgba(235, 242, 250, 0.94);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    background: var(--homer-logo-bg);
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 16px 40px rgba(0, 0, 0, 0.45);
     display: grid;
     place-items: center;
 }

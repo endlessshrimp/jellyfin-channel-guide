@@ -11,11 +11,16 @@
     window.__homerLoaded = BASE + QUERY;
 
     const css = (path, id) => {
-        if (document.getElementById(id)) return;
+        const href = BASE + path + QUERY;
+        const had = document.getElementById(id);
+        if (had) {
+            if (had.href !== href) had.href = href; // loaded again from elsewhere: swap it too
+            return;
+        }
         const l = document.createElement('link');
         l.id = id;
         l.rel = 'stylesheet';
-        l.href = BASE + path + QUERY;
+        l.href = href;
         document.head.appendChild(l);
     };
     const js = (path) => {
@@ -30,6 +35,7 @@
     css('shared/weather.css', 'homer-weather');
     js('shared/player.js'); // first: every screen plays through it
     js('shared/weather.js');
+    js('shared/logos.js'); // before the screens: they hand it their channel logos
     js('guide/guide.js');
     js('home/home.js');
     js('library/library.js');
