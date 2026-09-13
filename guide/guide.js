@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.6';
+    const VERSION = '0.1.7';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -611,7 +611,17 @@
 
         document.addEventListener('keydown', onKey, true);
         window.addEventListener('resize', fit);
-        root.addEventListener('wheel', onWheel, { passive: false });
+        // Catch wheel/trackpad events at the window, before anything else sees them:
+        // Jellyfin's player turns scroll gestures into volume changes, and the
+        // guide sits on top of the player. While the guide is open, scrolling is
+        // the guide's alone.
+        const onWheelCapture = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
+            if (root.contains(ev.target)) onWheel(ev);
+        };
+        window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
         $('.cg-legend').addEventListener('click', onLegendClick);
 
         // ---------- Live preview ----------
@@ -651,6 +661,7 @@
                 clearInterval(mirrorTimer);
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('resize', fit);
+                window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
                 clearInterval(needleTimer);
                 clearTimeout(toastTimer);

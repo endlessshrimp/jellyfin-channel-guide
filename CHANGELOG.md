@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.7
+
+- Scrolling in the guide no longer changes the player's volume underneath: the
+  guide captures wheel/trackpad events while it's open.
+
 ## v0.1.6
 
 - The preview no longer mirrors video that's in the floating picture-in-picture
