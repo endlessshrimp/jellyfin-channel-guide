@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.7';
+    const VERSION = '0.1.9';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -29,9 +29,12 @@
     const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
 
     const WINDOW_MIN = 180;
-    const STAGE_W = 1920;
-    const GRID_W = STAGE_W - 72 * 2 - 300;
-    const PX_PER_MIN = GRID_W / WINDOW_MIN;
+    // The stage is always 1080 tall and as wide as the window's shape allows
+    // (never narrower than MIN_STAGE_W), so it fills a desktop window edge to edge
+    // instead of letterboxing a fixed 16:9 frame.
+    const MIN_STAGE_W = 1600;
+    const SIDE = 72;
+    const CHAN_COL = 300;
     const ROW_H = 76;
     const VISIBLE_ROWS = 5;
     const PLACEHOLDER = /\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/;
@@ -90,6 +93,42 @@
     const fmtShort = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?(AM|PM)$/i, '');
     const genreOf = (p) => (p.IsSports ? 'sports' : p.IsNews ? 'news' : p.IsMovie ? 'movie' : p.IsKids ? 'kids' : null);
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
+
+    // ---------- Channel categories ----------
+    // Worked out from the channel name. A channel can be in more than one:
+    // Sky Sports (UK) is both Sports and International.
+    const CATEGORIES = [
+        { key: 'all', label: 'All' },
+        { key: 'fav', label: 'Favorites' },
+        { key: 'local', label: 'Local' },
+        { key: 'news', label: 'News' },
+        { key: 'sports', label: 'Sports' },
+        { key: 'movies', label: 'Movies' },
+        { key: 'kids', label: 'Kids' },
+        { key: 'ent', label: 'Entertainment' },
+        { key: 'intl', label: 'International' }
+    ];
+    const RULES = {
+        news: /^(CNN|CNN International|HLN|FOX News|FOX Business|CNBC|MSNBC|Bloomberg|BBC News|BBC World News|Sky News|ABC News|The Weather Channel|NewsNation|Newsmax)\b/i,
+        sports: /(ESPN|FOX Sports|FOX Soccer|FOX Deportes|\bFS[12]\b|NFL|NBA TV|MLB|NHL|Golf|Tennis|SEC Network|Big Ten|Pac 12|CBS Sports|Sky Sports|TNT Sports|beIN|Premier Sports?|La Liga|GOL TV|MASN|Altitude|SportsNet|Racing|Olympic)/i,
+        movies: /^(HBO|Cinemax|MoreMax|ActionMax|MovieMax|Showtime|Starz|MGM\+|TCM|AMC|IFC|Sundance|Hallmark Movies|Lifetime Movies|Film 4|Epix)/i,
+        kids: /^(Nick|TeenNick|Nicktoons|Disney|Cartoon Network|Boomerang|Universal Kids|PBS Kids)/i,
+        local: /(\([KW][A-Z]{2,3}\)|^(ABC|CBS NY|CBS|NBC \d+|FOX \d+|The CW|ION|MeTV|Cozi TV|Laff|Comet TV|Telemundo|Univision|TXA \d+|PBS)\b)/i
+    };
+    const categorize = (ch) => {
+        const name = String(ch.Name || '');
+        const base = name.replace(/\s*\((UK|IE|FR)\)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
+        const cats = new Set(['all']);
+        if (/\((UK|IE|FR)\)/i.test(name)) cats.add('intl');
+        if (RULES.news.test(base)) cats.add('news');
+        else if (RULES.sports.test(base)) cats.add('sports');
+        else if (RULES.movies.test(base)) cats.add('movies');
+        else if (RULES.kids.test(base)) cats.add('kids');
+        else if (RULES.local.test(base) && !cats.has('intl')) cats.add('local');
+        else cats.add('ent');
+        if (ch.UserData && ch.UserData.IsFavorite) cats.add('fav');
+        return cats;
+    };
 
     const logoChip = (ch) => {
         const chip = el('div', 'cg-logo-chip');
@@ -216,6 +255,7 @@
                     <div class="cg-progress"><i></i></div>
                 </div>
             </div>
+            <div class="cg-cats" role="tablist" aria-label="Channel categories"></div>
             <div class="cg-grid">
                 <div class="cg-timebar"><div class="cg-timebar-day"><b>TODAY</b></div></div>
                 <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div><div class="cg-empty"></div></div>
@@ -226,17 +266,30 @@
                 <span data-action="watch"><span class="cg-key">OK</span>Watch</span>
                 <span data-action="record"><span class="cg-key rec">●</span>Record</span>
                 <span data-action="search"><span class="cg-key">/</span>Filter</span>
+                <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
                 <span class="spacer"></span>
                 <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
             </div>`;
 
         const $ = (s) => stage.querySelector(s);
 
+        let stageW = 1920;
+        let gridW = stageW - SIDE * 2 - CHAN_COL;
+        let pxPerMin = gridW / WINDOW_MIN;
+        let relayout = () => {};
         const fit = () => {
-            const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            let s = window.innerHeight / 1080;
+            let w = window.innerWidth / s;
+            if (w < MIN_STAGE_W) { s = window.innerWidth / MIN_STAGE_W; w = MIN_STAGE_W; }
+            stage.style.width = w + 'px';
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+            if (Math.abs(w - stageW) > 0.5) {
+                stageW = w;
+                gridW = stageW - SIDE * 2 - CHAN_COL;
+                pxPerMin = gridW / WINDOW_MIN;
+                relayout();
+            }
         };
-        fit();
 
         const tick = () => {
             const d = new Date();
@@ -251,17 +304,28 @@
         const winStart = new Date(now);
         winStart.setMinutes(now.getMinutes() < 30 ? 0 : 30, 0, 0);
         const winEnd = new Date(winStart.getTime() + WINDOW_MIN * 60000);
-        const xFor = (d) => Math.max(0, Math.min(GRID_W, ((d - winStart) / 60000) * PX_PER_MIN));
+        const xFor = (d) => Math.max(0, Math.min(gridW, ((d - winStart) / 60000) * pxPerMin));
+        const posCell = (c) => {
+            const left = xFor(c.s);
+            c.el.style.left = left + 4 + 'px';
+            c.el.style.width = Math.max(24, xFor(c.e) - left - 8) + 'px';
+        };
 
         const timebar = $('.cg-timebar');
         for (let m = 0; m < WINDOW_MIN; m += 30) {
             const slot = el('div', 'cg-slot', fmtShort(new Date(winStart.getTime() + m * 60000)));
-            slot.style.left = m * PX_PER_MIN + 'px';
+            slot.dataset.m = m;
+            slot.style.left = m * pxPerMin + 'px';
             timebar.appendChild(slot);
         }
 
         const needle = $('.cg-needle');
-        const placeNeedle = () => { needle.style.left = 300 + xFor(new Date()) + 'px'; };
+        const placeNeedle = () => { needle.style.left = CHAN_COL + xFor(new Date()) + 'px'; };
+        relayout = () => {
+            timebar.querySelectorAll('.cg-slot').forEach((sl) => { sl.style.left = +sl.dataset.m * pxPerMin + 'px'; });
+            for (const r of rows) for (const c of r.cells) posCell(c);
+            placeNeedle();
+        };
         placeNeedle();
         const needleTimer = setInterval(placeNeedle, 30000);
 
@@ -280,6 +344,7 @@
         let order = []; // indices of the rows currently shown (all of them unless filtering)
         let sel = { row: 0, col: 0 };
         const vpos = (r) => order.indexOf(r);
+        fit(); // after `rows` exists: fit() relayouts the grid when the width changes
         const timersByProgram = new Map(); // programId -> timerId
 
         const current = () => {
@@ -316,16 +381,14 @@
                 row.appendChild(chan);
                 const lane = el('div', 'cg-lane');
                 const cells = [];
-                const rowData = { el: row, ch, cells };
+                const rowData = { el: row, ch, cells, cats: categorize(ch) };
                 const list = progs.length ? progs : [{ Name: '', StartDate: winStart.toISOString(), EndDate: winEnd.toISOString(), _empty: true }];
                 for (const p of list) {
                     const s = new Date(p.StartDate);
                     const e = new Date(p.EndDate);
                     const unknown = !!p._empty || PLACEHOLDER.test(p.Name);
                     const cell = el('div', 'cg-prog' + (s <= now && e > now ? ' now' : '') + (unknown ? ' unknown' : ''));
-                    const left = xFor(s);
-                    cell.style.left = left + 4 + 'px';
-                    cell.style.width = Math.max(24, xFor(e) - left - 8) + 'px';
+                    posCell({ el: cell, s, e });
                     const g = genreOf(p);
                     if (g) cell.style.setProperty('--genre', `var(--${g})`);
                     const title = unknown ? `${ch.Name} · listings unavailable` : p.Name;
@@ -357,6 +420,7 @@
                 return;
             }
             order = rows.map((_, i) => i);
+            buildCats();
             markRecorded();
             // start on the first channel that has real listings, on what's airing now
             const first = Math.max(0, rows.findIndex((r) => r.cells.some((c) => !c.unknown)));
@@ -499,10 +563,16 @@
         const searchInput = $('.cg-search-input');
         let query = '';
         const lc = (x) => String(x ?? '').toLowerCase();
+        let category = 'all';
         const applyFilter = (text) => {
             query = lc(text).trim();
             order = [];
             rows.forEach((row, i) => {
+                if (!row.cats.has(category)) {
+                    row.el.style.display = 'none';
+                    for (const c of row.cells) c.el.classList.remove('match');
+                    return;
+                }
                 const chMatch = !query || lc(row.ch.Name).includes(query) || lc(row.ch.Number).startsWith(query);
                 let progMatch = false;
                 for (const c of row.cells) {
@@ -518,8 +588,12 @@
             root.classList.toggle('filtering', !!query);
             $('.cg-search-count').textContent = query ? `${order.length} channel${order.length === 1 ? '' : 's'}` : '';
             const empty = $('.cg-empty');
-            empty.textContent = query && !order.length ? `Nothing matches “${text.trim()}”` : '';
-            empty.classList.toggle('show', !!query && !order.length);
+            const catLabel = (CATEGORIES.find((c) => c.key === category) || {}).label;
+            empty.textContent = order.length ? ''
+                : query ? `Nothing in ${catLabel} matches “${text.trim()}”`
+                    : category === 'fav' ? 'No favorite channels yet. Heart a channel in Jellyfin to add it here.'
+                        : `No ${catLabel} channels`;
+            empty.classList.toggle('show', !order.length);
             setScroll(0, false);
             if (!order.length) return;
             // land on the first match: a matching show airing now or next, else what's on now
@@ -529,6 +603,39 @@
             select(r, c);
         };
         searchInput.addEventListener('input', () => applyFilter(searchInput.value));
+
+        const catBar = $('.cg-cats');
+        const buildCats = () => {
+            catBar.innerHTML = '';
+            CATEGORIES.forEach((c, i) => {
+                const n = rows.filter((r) => r.cats.has(c.key)).length;
+                const chip = el('button', 'cg-cat' + (c.key === category ? ' on' : ''),
+                    `<span class="cg-cat-num">${i + 1}</span>${esc(c.label)}<span class="cg-cat-count">${n}</span>`);
+                chip.type = 'button';
+                chip.dataset.cat = c.key;
+                chip.setAttribute('role', 'tab');
+                chip.setAttribute('aria-selected', String(c.key === category));
+                catBar.appendChild(chip);
+            });
+        };
+        const setCategory = (key) => {
+            if (!CATEGORIES.some((c) => c.key === key)) return;
+            category = key;
+            catBar.querySelectorAll('.cg-cat').forEach((b) => {
+                const on = b.dataset.cat === key;
+                b.classList.toggle('on', on);
+                b.setAttribute('aria-selected', String(on));
+            });
+            applyFilter(searchInput.value);
+        };
+        const cycleCategory = (d) => {
+            const i = CATEGORIES.findIndex((c) => c.key === category);
+            setCategory(CATEGORIES[(i + d + CATEGORIES.length) % CATEGORIES.length].key);
+        };
+        catBar.addEventListener('click', (ev) => {
+            const b = ev.target.closest('.cg-cat');
+            if (b) setCategory(b.dataset.cat);
+        });
         const clearFilter = () => {
             searchInput.value = '';
             applyFilter('');
@@ -556,6 +663,18 @@
                 } else {
                     ev.stopPropagation();
                 }
+                return;
+            }
+            if (k === '[' || k === ']') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                cycleCategory(k === ']' ? 1 : -1);
+                return;
+            }
+            if (/^[1-9]$/.test(k) && CATEGORIES[+k - 1]) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                setCategory(CATEGORIES[+k - 1].key);
                 return;
             }
             if (k === '/') {
@@ -606,6 +725,7 @@
             if (action === 'watch') watch();
             else if (action === 'record') record();
             else if (action === 'search') focusSearch();
+            else if (action === 'cat-next') cycleCategory(1);
             else if (action === 'close') close();
         };
 
@@ -671,7 +791,7 @@
 
         (async () => {
             const [ch, progs] = await Promise.all([
-                api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1`),
+                api(`/LiveTv/Channels?userId=${server.UserId}&limit=1000&EnableImages=true&ImageTypeLimit=1&EnableUserData=true`),
                 api(`/LiveTv/Programs?userId=${server.UserId}&MinEndDate=${winStart.toISOString()}&MaxStartDate=${winEnd.toISOString()}&limit=5000&fields=Overview&EnableImages=true&ImageTypeLimit=1`),
                 loadTimers().catch((err) => console.warn('[Channel Guide] Could not read timers:', err))
             ]);

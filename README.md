@@ -34,7 +34,7 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "Channel Guide", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.7/guide/guide.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.9/guide/guide.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
@@ -54,6 +54,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **OK / Enter** | Watch the selected channel |
 | **R** | Record the selected program |
 | **/** | Filter by channel name/number or show title (Esc clears) |
+| **[ ] / 1–9** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment, International |
 | **Page Up / Page Down** | Jump a screen of channels |
 | **Esc / Backspace / G** | Close the guide |
 

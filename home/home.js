@@ -173,8 +173,13 @@
 
         const $ = (s) => stage.querySelector(s);
 
+        // always 1080 tall and as wide as the window allows (min 1600), so Home
+        // fills a desktop window edge to edge instead of letterboxing
         const fit = () => {
-            const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            let s = window.innerHeight / 1080;
+            let w = window.innerWidth / s;
+            if (w < 1600) { s = window.innerWidth / 1600; w = 1600; }
+            stage.style.width = w + 'px';
             stage.style.transform = `translate(-50%, -50%) scale(${s})`;
         };
         fit();

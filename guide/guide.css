@@ -135,8 +135,8 @@
     position: absolute;
     left: 72px;
     right: 72px;
-    top: 132px;
-    height: 352px;
+    top: 124px;
+    height: 340px;
     display: grid;
     grid-template-columns: 1fr 560px;
     gap: 48px;
@@ -266,7 +266,7 @@
         radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.35), transparent 55%),
         linear-gradient(135deg, #113767, #061326);
     box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--line-strong), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    height: 315px;
+    height: 300px;
     align-self: end;
 }
 
@@ -340,7 +340,7 @@
     position: absolute;
     left: 72px;
     right: 72px;
-    top: 520px;
+    top: 548px;
     bottom: 96px;
     border-radius: 16px;
     background: var(--panel);
@@ -833,3 +833,66 @@
 #cg-root.cg-live-on .cg-progress {
     display: none;
 }
+
+/* ---------- Channel categories ---------- */
+
+.cg-cats {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 484px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.cg-cat {
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px 0 8px;
+    border-radius: 21px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d6e0ec;
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.cg-cat:hover { background: rgba(255, 255, 255, 0.12); }
+
+.cg-cat-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--dim);
+    font-size: 15px;
+}
+
+.cg-cat-count {
+    color: var(--dim);
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.cg-cat.on {
+    background: linear-gradient(180deg, #3a95ff, #1c64d8);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 8px 24px rgba(47, 140, 255, 0.45);
+}
+
+.cg-cat.on .cg-cat-num { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.cg-cat.on .cg-cat-count { color: rgba(255, 255, 255, 0.85); }

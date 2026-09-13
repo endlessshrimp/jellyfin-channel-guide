@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.9
+
+- Channel categories: a chip row above the grid (All, Favorites, Local, News,
+  Sports, Movies, Kids, Entertainment, International) with counts. [ ] cycle,
+  1–9 jump, or click. Categories come from channel names; a channel can be in
+  two (e.g. Sky Sports (UK) is Sports and International). Favorites are
+  Jellyfin's own favorites. Works together with the filter box.
+- The guide fills the window edge to edge: 1080 tall and as wide as the window
+  (min 1600), with the time grid widening to match. No more black bars.
+
 ## v0.1.7
 
 - Scrolling in the guide no longer changes the player's volume underneath: the
