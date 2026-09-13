@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.6
+
+- Weather: the icon sits to the right of the temperature.
+
 ## v0.3.5
 
 - Weather: the temperature and high/low are right-aligned, like the clock.

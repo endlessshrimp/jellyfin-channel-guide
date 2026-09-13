@@ -13,6 +13,7 @@
 
 .homer-wx-ready .homer-wx {
     display: flex;
+    flex-direction: row-reverse; /* icon to the right of the temperature */
     align-items: center;
     gap: 6px;
     line-height: 1;
@@ -32,7 +33,7 @@
 .homer-wx-icon {
     width: 92px;
     height: 92px;
-    margin: -20px -8px -20px -14px; /* the art has built-in padding */
+    margin: -20px -14px -20px -8px; /* the art has built-in padding */
     user-select: none;
     pointer-events: none;
 }
