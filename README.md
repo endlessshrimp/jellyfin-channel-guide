@@ -1,4 +1,9 @@
-# Channel Guide
+# HOMER for Jellyfin
+
+A TiVo-style TV-appliance interface for Jellyfin Web: a HOMER Home screen, the
+Channel Guide, and a global skin so every remaining Jellyfin page matches.
+
+## Channel Guide
 
 A full-screen, set-top-box style TV guide for Jellyfin Live TV. It runs inside
 Jellyfin Web and works like the guide on a cable box: a program info panel up
@@ -31,10 +36,10 @@ plugin to load it into Jellyfin Web.
    [plugin's install instructions](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector#%EF%B8%8F-installation).
    Then install it from the catalog and restart Jellyfin.
 2. Open the plugin's settings (Dashboard → Plugins → JavaScript Injector), click
-   **Add Script**, name it "Channel Guide", and paste this into the code box:
+   **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.10/guide/guide.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.0/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the

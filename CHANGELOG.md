@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.0
+
+- HOMER: one loader (`homer.js`) for every screen, replacing the direct
+  `guide/guide.js` snippet.
+- HOMER Home replaces Jellyfin's home page: TiVo-style main menu (Live TV
+  Guide, Movies, TV Shows, Recordings, Search, Settings), an On Now panel with
+  live preview, and rows for Continue Watching, Up Next, On Now and Recently
+  Added. Remote-style navigation; fills the window edge to edge.
+- Global skin (`skin/skin.css`): every remaining stock page (settings,
+  dashboard, drawer, dialogs, search, forms) in the HOMER look.
+- Shared design tokens (`shared/tokens.css`).
+
 ## v0.1.10
 
 - Country switch (All / USA / UK / France) replaces the International
