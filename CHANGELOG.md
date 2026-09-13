@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.4
+
+- Weather: every HOMER screen with a clock shows the current temperature in
+  Kaufman, TX to its left, with today's high and low and an animated icon for
+  the conditions (sun or moon, clouds, rain, storms, snow, fog), split from the
+  clock by a rule. Data from Open-Meteo, refreshed every 10 minutes; the bug
+  hides itself if the data can't load. Icons are Meteocons by Bas Milius (MIT).
+
 ## v0.3.3
 
 - Recordings: a HOMER Recordings screen replaces Jellyfin's. Recorded (shows

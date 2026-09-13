@@ -356,6 +356,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hl-clock')) : () => {};
 
         const toastEl = $('.hl-toast');
         let toastTimer = 0;
@@ -481,6 +482,7 @@
                 document.removeEventListener('keydown', keyHandler, true);
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
+                wxDetach();
                 clearTimeout(toastTimer);
                 root.remove();
             }

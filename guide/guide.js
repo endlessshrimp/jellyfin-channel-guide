@@ -322,6 +322,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.cg-clock')) : () => {};
 
         // ---------- Time window ----------
         const now = new Date();
@@ -970,6 +971,7 @@
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
+                wxDetach();
                 clearInterval(needleTimer);
                 clearTimeout(toastTimer);
                 if (armed) clearTimeout(armed.timer);

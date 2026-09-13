@@ -207,6 +207,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hm-clock')) : () => {};
 
         // ---------- Focus (spatial, like a remote) ----------
         // Every selectable thing carries a .hm-focusable class; arrows pick the
@@ -577,6 +578,7 @@
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
+                wxDetach();
                 clearInterval(mirrorTimer);
                 root.remove();
             }

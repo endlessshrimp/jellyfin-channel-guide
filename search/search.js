@@ -463,6 +463,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hs-clock')) : () => {};
 
         const toastEl = $('.hs-toast');
         let toastTimer = 0;
@@ -1242,6 +1243,7 @@
                 clearTimeout(debounceTimer);
                 clearTimeout(toastTimer);
                 clearInterval(clockTimer);
+                wxDetach();
                 if (controller) controller.abort();
                 document.removeEventListener('keydown', onKey, true);
                 document.removeEventListener('keyup', onKeyUp, true);

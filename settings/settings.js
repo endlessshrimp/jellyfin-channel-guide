@@ -385,6 +385,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hs-clock')) : () => {};
 
         const toastEl = $('.hs-toast');
         let toastTimer = 0;
@@ -813,6 +814,7 @@
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
+                wxDetach();
                 clearTimeout(toastTimer);
                 clearTimeout(armTimer);
                 root.remove();

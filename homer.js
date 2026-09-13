@@ -27,7 +27,9 @@
 
     css('shared/tokens.css', 'homer-tokens');
     css('skin/skin.css', 'homer-skin');
+    css('shared/weather.css', 'homer-weather');
     js('shared/player.js'); // first: every screen plays through it
+    js('shared/weather.js');
     js('guide/guide.js');
     js('home/home.js');
     js('library/library.js');

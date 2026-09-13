@@ -1,0 +1,68 @@
+/* HOMER weather bug: sits left of every screen's clock, split by a rule. */
+
+.homer-wx-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.homer-wx,
+.homer-wx-rule {
+    display: none;
+}
+
+.homer-wx-ready .homer-wx {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+    color: var(--homer-text);
+    font-family: var(--homer-font);
+    animation: homer-wx-in 0.4s ease-out;
+}
+
+.homer-wx-ready .homer-wx-rule {
+    display: block;
+    width: 2px;
+    height: 50px;
+    background: var(--homer-line-strong);
+    border-radius: 1px;
+}
+
+.homer-wx-icon {
+    width: 92px;
+    height: 92px;
+    margin: -20px -8px -20px -14px; /* the art has built-in padding */
+    user-select: none;
+    pointer-events: none;
+}
+
+.homer-wx-temp {
+    font-size: 40px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.homer-wx-hilo {
+    margin-top: 6px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--homer-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.homer-wx-k {
+    margin-right: 4px;
+}
+
+.homer-wx-hi {
+    margin-right: 10px;
+}
+
+@keyframes homer-wx-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
