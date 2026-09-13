@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.6
+
+- The preview no longer mirrors video that's in the floating picture-in-picture
+  window (it was showing the same video twice); it shows the highlighted
+  channel instead. Live mirroring is only for the guide over a full-screen video.
+
 ## v0.1.5
 
 - The guide opens over the player without leaving it, so playback continues:

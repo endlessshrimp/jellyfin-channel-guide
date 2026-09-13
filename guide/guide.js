@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.5';
+    const VERSION = '0.1.6';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -619,8 +619,11 @@
         // floating picture-in-picture window), the preview shows that live picture.
         const liveCanvas = $('.cg-preview-live');
         const live2d = liveCanvas.getContext('2d');
+        // Not when the video is in the floating picture-in-picture window: it's
+        // already on screen there, so the preview shows the highlighted channel.
         const playingVideo = () => [...document.querySelectorAll('video')]
-            .find((v) => !root.contains(v) && !v.paused && v.readyState >= 2 && v.videoWidth > 0);
+            .find((v) => !root.contains(v) && v !== document.pictureInPictureElement
+                && !v.paused && v.readyState >= 2 && v.videoWidth > 0);
         const mirror = () => {
             const v = playingVideo();
             root.classList.toggle('cg-live-on', !!v);
