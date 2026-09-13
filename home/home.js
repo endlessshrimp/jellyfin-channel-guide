@@ -7,10 +7,14 @@
  * Up Next, On Now and Recently Added. Remote-style arrow navigation, OK to
  * select; mouse hover highlights, click selects, the trackpad scrolls.
  *
- * window.HomerHome = { open, close, destroy, version }
+ * Watch plays the channel inside the On Now preview window so you can keep
+ * browsing; Full screen (or F, or a click on the preview) hands it to Jellyfin's
+ * player, and the player's Home button (or H) brings it back to the preview.
+ *
+ * window.HomerHome = { open, close, fullscreen, destroy, version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.2.1';
 
     if (window.HomerHome && typeof window.HomerHome.destroy === 'function') {
         window.HomerHome.destroy();
@@ -61,6 +65,12 @@
             const Data = { PlayCommand: 'PlayNow', ItemIds: [itemId] };
             if (startTicks) Data.StartPositionTicks = startTicks;
             ac.handleMessageReceived({ MessageType: 'Play', Data });
+        }
+    };
+    const stopPlayback = () => {
+        const ac = window.ApiClient;
+        if (ac && typeof ac.handleMessageReceived === 'function') {
+            ac.handleMessageReceived({ MessageType: 'Playstate', Data: { Command: 'Stop' } });
         }
     };
 
@@ -124,6 +134,193 @@
         return cssReady;
     };
 
+    // ---------- Watching in the preview window ----------
+    // Jellyfin stops a video the moment you leave its player page, so the video
+    // stays on that page (#/video) and Home sits on top of it, with Jellyfin's
+    // real video element pinned over Home's preview window. Full frame rate,
+    // nothing re-encoded, and handing it back to full screen is instant.
+
+    let previewMode = false; // the playing video sits in Home's preview window
+    let nowPlaying = null; // { program } for live TV, { item } for anything else
+    let sawPlayer = false; // Jellyfin's player page has opened since the preview began
+    let previewSince = 0;
+    let pendingFullscreen = false; // Full screen pressed while the channel was still tuning
+    let holdOpenUntil = 0; // after Stop, keep Home up while Jellyfin leaves its player page
+    let previewItemId = null; // what Watch asked Jellyfin to play
+
+    const isVideoRoute = () => /^#\/video/.test(location.hash);
+    const playerBox = () => document.querySelector('.videoPlayerContainer');
+    const PINNED = ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'z-index', 'border-radius', 'overflow', 'pointer-events'];
+
+    const pinVideo = () => {
+        const box = playerBox();
+        const frame = document.querySelector('#hm-root .hm-preview');
+        if (!box || !frame) return;
+        const r = frame.getBoundingClientRect();
+        if (!r.width) return;
+        const set = (k, v) => box.style.setProperty(k, v, 'important');
+        box.classList.add('hm-pinned');
+        set('position', 'fixed');
+        set('left', r.left + 'px');
+        set('top', r.top + 'px');
+        set('width', r.width + 'px');
+        set('height', r.height + 'px');
+        set('right', 'auto');
+        set('bottom', 'auto');
+        set('z-index', '99995'); // above Home (99990), below the guide (99999)
+        set('border-radius', (16 * r.height / 315) + 'px');
+        set('overflow', 'hidden');
+        set('pointer-events', 'none'); // clicks land on the preview window underneath
+    };
+    const unpinVideo = () => {
+        const box = playerBox();
+        if (!box || !box.classList.contains('hm-pinned')) return;
+        box.classList.remove('hm-pinned');
+        PINNED.forEach((k) => box.style.removeProperty(k));
+    };
+
+    const startPreview = (program) => {
+        nowPlaying = { program };
+        previewMode = true;
+        pendingFullscreen = false;
+        sawPlayer = isVideoRoute();
+        previewSince = Date.now();
+        previewItemId = program.ChannelId;
+        play(program.ChannelId);
+        if (home) home.refresh();
+    };
+    const endPreview = () => {
+        previewMode = false;
+        pendingFullscreen = false;
+        nowPlaying = null;
+        unpinVideo();
+        if (home) home.refresh();
+    };
+    const goFullscreen = () => {
+        if (!previewMode) return;
+        if (!isVideoRoute()) { pendingFullscreen = true; return; } // still tuning
+        previewMode = false;
+        pendingFullscreen = false;
+        unpinVideo();
+        close();
+    };
+    const stopPreview = () => {
+        holdOpenUntil = Date.now() + 8000;
+        endPreview();
+        stopPlayback();
+    };
+
+    // Jellyfin ignores Stop while a video is still tuning, so a channel you left
+    // Home on before it started is hidden and muted when it arrives, checked
+    // against this browser's session (so nothing else you start gets caught),
+    // and stopped.
+    let cancelId = null;
+    let cancelUntil = 0;
+    let cancelTimer = 0;
+    let confirmed = false;
+    let checking = false;
+    let lastCheck = 0;
+    let stopSentAt = 0;
+    let backedOut = false;
+    const sessionNowPlayingId = async () => {
+        const ac = window.ApiClient;
+        const deviceId = ac && ac.deviceId && ac.deviceId();
+        if (!deviceId) return null;
+        const sessions = await api(`/Sessions?DeviceId=${encodeURIComponent(deviceId)}`);
+        const sess = (sessions || []).find((x) => x.DeviceId === deviceId && x.NowPlayingItem);
+        return sess ? sess.NowPlayingItem.Id : null;
+    };
+    const finishCancel = () => {
+        cancelUntil = 0;
+        clearInterval(cancelTimer);
+        const v = document.querySelector('.videoPlayerContainer video');
+        if (v && !confirmed) v.muted = false; // it was something else; hand it back
+        setTimeout(() => document.documentElement.classList.remove('hm-cancelling'), 300);
+    };
+    const cancelTuning = (itemId) => {
+        cancelId = itemId;
+        cancelUntil = Date.now() + 60000;
+        confirmed = false;
+        stopSentAt = 0;
+        backedOut = false;
+        document.documentElement.classList.add('hm-cancelling');
+        clearInterval(cancelTimer);
+        cancelTimer = setInterval(checkCancel, 250);
+        checkCancel();
+    };
+    const checkCancel = () => {
+        if (!cancelUntil) return;
+        const now = Date.now();
+        const box = playerBox();
+        const v = box && box.querySelector('video');
+        if (now > cancelUntil || (confirmed && stopSentAt && !box && !isVideoRoute())) { finishCancel(); return; }
+        if (v) v.muted = true;
+        const started = isVideoRoute() || (v && !v.paused && v.currentTime > 0);
+        if (!started) return;
+        if (!confirmed) {
+            if (checking || now - lastCheck < 1000) return;
+            checking = true;
+            lastCheck = now;
+            sessionNowPlayingId()
+                .then((id) => {
+                    if (!cancelUntil || !id) return;
+                    if (id === cancelId) confirmed = true;
+                    else finishCancel();
+                })
+                .catch(() => {})
+                .finally(() => { checking = false; });
+            return;
+        }
+        // keep asking until Jellyfin has actually taken the player down
+        if (now - stopSentAt > 1000) { stopSentAt = now; stopPlayback(); }
+        if (isVideoRoute() && !backedOut && now - stopSentAt > 800) { backedOut = true; history.back(); }
+    };
+
+    // what this browser is playing, from its Jellyfin session
+    let resolving = false;
+    let lastResolve = 0;
+    const resolveNowPlaying = async () => {
+        const server = getServer();
+        const ac = window.ApiClient;
+        const deviceId = ac && ac.deviceId && ac.deviceId();
+        if (!server || !deviceId || resolving) return;
+        resolving = true;
+        lastResolve = Date.now();
+        try {
+            const sessions = await api(`/Sessions?DeviceId=${encodeURIComponent(deviceId)}`);
+            const s = (sessions || []).find((x) => x.DeviceId === deviceId && x.NowPlayingItem);
+            const it = s && s.NowPlayingItem;
+            if (!it || !previewMode) return;
+            if (it.Type === 'TvChannel') {
+                const r = await api(`/LiveTv/Programs?UserId=${server.UserId}&ChannelIds=${it.Id}&IsAiring=true&Limit=1&EnableImages=true&ImageTypeLimit=1&Fields=ChannelInfo,Overview`).catch(() => null);
+                const p = r && r.Items && r.Items.find((x) => !PLACEHOLDER.test(x.Name || ''));
+                nowPlaying = { program: p || { Name: it.Name, ChannelId: it.Id, ChannelName: it.Name, ChannelNumber: it.Number || it.ChannelNumber || '' } };
+            } else {
+                const full = await api(`/Users/${server.UserId}/Items/${it.Id}`).catch(() => null);
+                nowPlaying = { item: full || it };
+            }
+            if (previewMode && home) home.refresh();
+        } catch (err) {
+            console.warn('[HOMER Home]', err);
+        } finally {
+            resolving = false;
+        }
+    };
+
+    // from Jellyfin's full-screen player back to Home, the video in the preview
+    const previewFromPlayer = () => {
+        if (!getServer() || !playerBox() || !isVideoRoute()) return;
+        if (window.ChannelGuide && window.ChannelGuide.close) window.ChannelGuide.close({ returnToLiveTv: false });
+        previewMode = true;
+        pendingFullscreen = false;
+        sawPlayer = true;
+        previewSince = Date.now();
+        nowPlaying = null;
+        if (home) home.refresh();
+        else open();
+        resolveNowPlaying();
+    };
+
     // ---------- Home ----------
 
     let home = null;
@@ -169,6 +366,7 @@
                 <span><span class="hm-key">OK</span>Select</span>
                 <span data-action="guide"><span class="hm-key">G</span>Guide</span>
                 <span data-action="search"><span class="hm-key">/</span>Search</span>
+                <span data-action="fullscreen" class="hm-legend-fs" style="display:none"><span class="hm-key">F</span>Full screen</span>
             </div>`;
 
         const $ = (s) => stage.querySelector(s);
@@ -332,59 +530,89 @@
             if (q) route(`#/search?query=${encodeURIComponent(q)}`);
         };
 
-        // ---------- On Now hero ----------
-        let hero = null; // { program, channel }
+        // ---------- On Now hero (Now watching while the preview plays) ----------
+        let hero = null; // { program }
+        const setArt = (url, logoFor) => {
+            const art = $('.hm-preview-art');
+            const logo = $('.hm-preview-logo');
+            art.style.backgroundImage = url ? `url(${url})` : 'none';
+            logo.innerHTML = '';
+            if (!url && logoFor) logo.appendChild(logoChip(logoFor, true));
+        };
+        const showProgram = (p) => {
+            const s = new Date(p.StartDate);
+            const e = new Date(p.EndDate);
+            const chanLine = $('.hm-hero-channel');
+            chanLine.innerHTML = '';
+            chanLine.appendChild(logoChip(p));
+            chanLine.appendChild(el('span', '', `<b>${esc(p.ChannelNumber || '')}</b> ${esc(p.ChannelName || '')}`));
+            $('.hm-hero-title').textContent = p.Name || '';
+            const meta = $('.hm-hero-meta');
+            meta.innerHTML = '';
+            meta.appendChild(el('span', 'hm-chip live', 'Live'));
+            if (p.StartDate && p.EndDate) meta.appendChild(el('span', 'hm-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
+            if (p.EpisodeTitle) meta.appendChild(el('span', 'hm-chip', esc(p.EpisodeTitle)));
+            $('.hm-hero-desc').textContent = p.Overview || '';
+            setArt(p.ImageTags && p.ImageTags.Primary ? img(p.Id, 'Primary', p.ImageTags.Primary, 900) : null, p);
+            $('.hm-preview-badge').innerHTML = '<span class="hm-chip live">Live</span>';
+        };
+        const showItem = (it) => {
+            const isEp = it.Type === 'Episode';
+            const chanLine = $('.hm-hero-channel');
+            chanLine.innerHTML = '';
+            const line = isEp
+                ? [it.SeriesName, it.ParentIndexNumber != null && it.IndexNumber != null ? `S${it.ParentIndexNumber} E${it.IndexNumber}` : ''].filter(Boolean).join(' · ')
+                : it.Type === 'Movie' ? 'Movie' : '';
+            chanLine.appendChild(el('span', '', esc(line)));
+            $('.hm-hero-title').textContent = it.Name || '';
+            const meta = $('.hm-hero-meta');
+            meta.innerHTML = '';
+            [it.ProductionYear, it.OfficialRating, it.RunTimeTicks ? `${Math.round(it.RunTimeTicks / 6e8)} min` : '']
+                .filter(Boolean).forEach((m) => meta.appendChild(el('span', 'hm-chip', esc(m))));
+            $('.hm-hero-desc').textContent = it.Overview || '';
+            setArt(cardArt(it), null);
+            $('.hm-preview-badge').innerHTML = '';
+        };
         const showHero = () => {
             const box = $('.hm-hero');
             const actions = $('.hm-hero-actions');
             actions.innerHTML = '';
-            if (!hero) {
-                $('.hm-eyebrow').textContent = 'Live TV';
+            const btn = (icon, label, act) => {
+                const b = el('div', 'hm-btn hm-focusable', `<span class="material-icons" aria-hidden="true">${icon}</span>${label}`);
+                b._act = act;
+                actions.appendChild(b);
+            };
+            const watching = previewMode;
+            const p = watching ? nowPlaying && nowPlaying.program : hero && hero.program;
+            const item = watching && nowPlaying && nowPlaying.item;
+            $('.hm-eyebrow').textContent = watching ? 'Now watching' : p ? 'On now' : 'Live TV';
+            if (p) showProgram(p);
+            else if (item) showItem(item);
+            else {
                 $('.hm-hero-channel').innerHTML = '';
-                $('.hm-hero-title').textContent = 'Nothing listed right now';
                 $('.hm-hero-meta').innerHTML = '';
-                $('.hm-hero-desc').textContent = 'Open the guide to browse every channel.';
-            } else {
-                const { program: p } = hero;
-                const s = new Date(p.StartDate);
-                const e = new Date(p.EndDate);
-                $('.hm-eyebrow').textContent = 'On now';
-                const chanLine = $('.hm-hero-channel');
-                chanLine.innerHTML = '';
-                chanLine.appendChild(logoChip(p));
-                chanLine.appendChild(el('span', '', `<b>${esc(p.ChannelNumber || '')}</b> ${esc(p.ChannelName || '')}`));
-                $('.hm-hero-title').textContent = p.Name;
-                const meta = $('.hm-hero-meta');
-                meta.innerHTML = '';
-                meta.appendChild(el('span', 'hm-chip live', 'Live'));
-                meta.appendChild(el('span', 'hm-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
-                if (p.EpisodeTitle) meta.appendChild(el('span', 'hm-chip', esc(p.EpisodeTitle)));
-                $('.hm-hero-desc').textContent = p.Overview || '';
-                const art = $('.hm-preview-art');
-                const logo = $('.hm-preview-logo');
-                if (p.ImageTags && p.ImageTags.Primary) {
-                    art.style.backgroundImage = `url(${img(p.Id, 'Primary', p.ImageTags.Primary, 900)})`;
-                    logo.innerHTML = '';
-                } else {
-                    art.style.backgroundImage = 'none';
-                    logo.innerHTML = '';
-                    logo.appendChild(logoChip(p, true));
-                }
-                $('.hm-preview-badge').innerHTML = '<span class="hm-chip live">Live</span>';
-                const watch = el('div', 'hm-btn hm-focusable', '<span class="material-icons" aria-hidden="true">play_arrow</span>Watch');
-                watch._act = () => play(p.ChannelId);
-                actions.appendChild(watch);
+                $('.hm-hero-title').textContent = watching ? 'Tuning…' : 'Nothing listed right now';
+                $('.hm-hero-desc').textContent = watching ? '' : 'Open the guide to browse every channel.';
+                setArt(null, null);
+                $('.hm-preview-badge').innerHTML = '';
             }
-            const guideBtn = el('div', 'hm-btn hm-focusable', '<span class="material-icons" aria-hidden="true">grid_view</span>Guide');
-            guideBtn._act = openGuide;
-            actions.appendChild(guideBtn);
-            box.classList.toggle('empty', !hero);
+            if (watching) {
+                btn('fullscreen', 'Full screen', goFullscreen);
+                btn('grid_view', 'Guide', openGuide);
+                btn('stop', 'Stop', stopPreview);
+            } else {
+                if (p) btn('play_arrow', 'Watch', () => startPreview(p));
+                btn('grid_view', 'Guide', openGuide);
+            }
+            box.classList.toggle('empty', !p && !item && !watching);
+            $('.hm-legend-fs').style.display = watching ? '' : 'none';
         };
 
         // live mirror of whatever is playing (not when it's in the floating window)
         const canvas = $('.hm-preview canvas');
         const c2d = canvas.getContext('2d');
         const mirror = () => {
+            if (previewMode) { root.classList.remove('hm-live-on'); return; }
             const v = [...document.querySelectorAll('video')]
                 .find((x) => !root.contains(x) && x !== document.pictureInPictureElement && !x.paused && x.readyState >= 2 && x.videoWidth > 0);
             root.classList.toggle('hm-live-on', !!v);
@@ -398,6 +626,20 @@
             try { c2d.drawImage(v, sx, sy, sw, sh, 0, 0, cw, chh); } catch { root.classList.remove('hm-live-on'); }
         };
         const mirrorTimer = setInterval(mirror, 66);
+
+        // keep the pinned video on the preview window, and notice when it ends
+        const previewTick = () => {
+            root.classList.toggle('hm-previewing', previewMode);
+            if (!previewMode) return;
+            if (isVideoRoute()) sawPlayer = true;
+            if (pendingFullscreen && isVideoRoute()) { goFullscreen(); return; }
+            if (playerBox()) pinVideo();
+            if (sawPlayer && !isVideoRoute()) endPreview();
+            else if (!sawPlayer && Date.now() - previewSince > 45000) { cancelTuning(previewItemId); endPreview(); } // never started
+            else if (nowPlaying && nowPlaying.program && nowPlaying.program.EndDate
+                && Date.parse(nowPlaying.program.EndDate) < Date.now() && Date.now() - lastResolve > 20000) resolveNowPlaying();
+        };
+        const previewTimer = setInterval(previewTick, 250);
 
         // ---------- Rows ----------
         const rowsBox = rowsInner();
@@ -450,7 +692,7 @@
             const s = new Date(p.StartDate);
             const pct = Math.max(0, Math.min(100, ((Date.now() - s) / (e - s)) * 100));
             card.appendChild(el('div', 'hm-card-progress', `<i style="width:${Math.round(pct)}%"></i>`));
-            card._act = () => play(p.ChannelId);
+            card._act = () => startPreview(p);
             return card;
         };
 
@@ -480,15 +722,30 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 focusSearch();
+            } else if ((k === 'f' || k === 'F') && previewMode) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                goFullscreen();
+            } else if (isVideoRoute()) {
+                // Home is over Jellyfin's player page: keep its shortcuts (space
+                // pauses, Esc/Backspace leave the page and stop the video) from firing
+                ev.stopPropagation();
+                if (k === ' ' || k === 'Escape' || k === 'Backspace') ev.preventDefault();
             }
         };
+        const onKeyUp = (ev) => {
+            if (!isVideoRoute() || ev.target === searchInput || document.getElementById('cg-root')) return;
+            if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); }
+        };
         const onClick = (ev) => {
+            if (previewMode && ev.target.closest('.hm-preview')) { goFullscreen(); return; }
             const t = ev.target.closest('.hm-focusable');
             if (t && stage.contains(t)) { setFocus(t, { scroll: false }); activate(); return; }
             const leg = ev.target.closest('.hm-legend [data-action]');
             if (leg) {
                 if (leg.dataset.action === 'guide') openGuide();
                 else if (leg.dataset.action === 'search') focusSearch();
+                else if (leg.dataset.action === 'fullscreen') goFullscreen();
             }
         };
         const onOver = (ev) => {
@@ -510,6 +767,7 @@
         };
 
         document.addEventListener('keydown', onKey, true);
+        document.addEventListener('keyup', onKeyUp, true);
         window.addEventListener('resize', fit);
         window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
         stage.addEventListener('click', onClick);
@@ -517,15 +775,27 @@
 
         const self = {
             show() { root.style.visibility = ''; },
+            // redraw the On Now / Now watching panel, keeping focus sensible
+            refresh() {
+                const inHero = focused && !stage.contains(focused) || (focused && focused.closest('.hm-hero-actions'));
+                showHero();
+                previewTick();
+                if (inHero) setFocus($('.hm-hero-actions').firstChild, { scroll: false });
+            },
             teardown() {
                 document.removeEventListener('keydown', onKey, true);
+                document.removeEventListener('keyup', onKeyUp, true);
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
                 clearInterval(mirrorTimer);
+                clearInterval(previewTimer);
+                unpinVideo();
                 root.remove();
             }
         };
+
+        if (previewMode) showHero(); // Now watching shows straight away when Home opens over the player
 
         // ---------- Data ----------
         (async () => {
@@ -589,8 +859,58 @@
     // ---------- Take over Jellyfin's home route ----------
     const isHomeRoute = () => /^#\/(home(\.html)?)?(\?.*)?$/.test(location.hash) || location.hash === '' || location.hash === '#/';
     const sync = () => {
-        if (isHomeRoute() && getServer()) open();
-        else close();
+        syncOsdButton();
+        if (cancelUntil) { checkCancel(); if (isVideoRoute()) return; }
+        if (holdOpenUntil && !isVideoRoute()) {
+            // Stop sent Jellyfin back to wherever playback began; land on Home
+            holdOpenUntil = 0;
+            if (!isHomeRoute()) { location.hash = '#/home'; return; }
+        }
+        const overPlayer = isVideoRoute() && (previewMode || Date.now() < holdOpenUntil);
+        if ((isHomeRoute() || overPlayer) && getServer()) { open(); return; }
+        if (previewMode && !isVideoRoute()) {
+            // navigated away: Jellyfin stops a playing video itself, but one that's
+            // still tuning would otherwise pop up full screen once it starts
+            if (!sawPlayer && previewItemId) cancelTuning(previewItemId);
+            endPreview();
+        }
+        close();
+    };
+
+    // A Home button in the player's control bar: back to Home, video in the preview
+    const OSD_BTN_CLASS = 'hmOsdHomeButton';
+    const syncOsdButton = () => {
+        const bar = document.querySelector('.videoOsdBottom .buttons');
+        if (!bar || bar.querySelector('.' + OSD_BTN_CLASS) || !getServer()) return;
+        let btn;
+        try {
+            btn = document.createElement('button', { is: 'paper-icon-button-light' });
+        } catch {
+            btn = document.createElement('button');
+        }
+        btn.type = 'button';
+        btn.setAttribute('is', 'paper-icon-button-light');
+        btn.className = `autoSize paper-icon-button-light ${OSD_BTN_CLASS}`;
+        btn.title = 'Home (H)';
+        btn.setAttribute('aria-label', 'Home');
+        btn.innerHTML = '<span class="xlargePaperIconButton material-icons home" aria-hidden="true"></span>';
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            previewFromPlayer();
+        });
+        const before = bar.querySelector('.cgOsdGuideButton, .btnPip, .btnVideoOsdSettings, .btnFullscreen');
+        bar.insertBefore(btn, before || null);
+    };
+    // H from the full-screen player does the same
+    const onPlayerKey = (ev) => {
+        if (home || ev.ctrlKey || ev.metaKey || ev.altKey || (ev.key !== 'h' && ev.key !== 'H')) return;
+        if (!isVideoRoute() || document.getElementById('cg-root')) return;
+        const t = ev.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        previewFromPlayer();
     };
     let queued = false;
     const queue = () => {
@@ -602,10 +922,11 @@
 
     window.addEventListener('hashchange', onRoute);
     window.addEventListener('popstate', onRoute);
+    document.addEventListener('keydown', onPlayerKey, true);
     let observer = null;
     const start = () => {
         observer = new MutationObserver(queue);
-        observer.observe(document.body, { childList: true });
+        observer.observe(document.body, { childList: true, subtree: true }); // subtree: the player's control bar
         queue();
     };
     if (document.body) start();
@@ -615,11 +936,14 @@
         version: VERSION,
         open,
         close,
+        fullscreen: goFullscreen,
         destroy() {
             close();
             observer && observer.disconnect();
             window.removeEventListener('hashchange', onRoute);
             window.removeEventListener('popstate', onRoute);
+            document.removeEventListener('keydown', onPlayerKey, true);
+            document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             document.getElementById('hm-css')?.remove();
             cssReady = null;
         }

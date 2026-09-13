@@ -617,3 +617,27 @@
 
 .hm-legend .spacer { flex: 1; }
 .hm-legend [data-action] { cursor: pointer; }
+
+/* ---------- The playing video, pinned over the preview window ---------- */
+/* Position and size are set inline by home.js; this is the look. */
+.videoPlayerContainer.hm-pinned {
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--homer-line-strong);
+}
+
+.videoPlayerContainer.hm-pinned .htmlvideoplayer {
+    object-fit: cover !important;
+}
+
+.videoPlayerContainer.hm-pinned .videoSubtitles {
+    display: none !important;
+}
+
+#hm-root.hm-previewing .hm-preview {
+    cursor: pointer;
+}
+
+/* a channel that was still tuning when you left Home: hidden until it's stopped */
+.hm-cancelling .videoPlayerContainer,
+.hm-cancelling #videoOsdPage {
+    visibility: hidden !important;
+}

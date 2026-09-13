@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.2
+
+- Home: Watch plays the channel in the On Now preview window, so you can keep
+  browsing while it plays. The panel switches to Now Watching with Full
+  screen, Guide and Stop. Picking a channel in the On Now row does the same.
+- Full screen (or F, or a click on the preview) hands the channel to
+  Jellyfin's player. The player's new Home button (or H) brings it back to the
+  preview.
+- While the preview plays, the arrow keys, space and the trackpad control Home,
+  not the player.
+- Watching from the guide is always full screen.
+- Leaving Home while a channel is still tuning cancels it instead of letting it
+  pop up full screen later.
+
 ## v0.2.1
 
 - Movies and TV Shows in a TiVo "My Shows" layout: the list on the left, the

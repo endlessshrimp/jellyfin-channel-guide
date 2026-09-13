@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.10';
+    const VERSION = '0.1.11';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -512,6 +512,9 @@
             const cur = current();
             if (!cur) return;
             nowWatching = cur.row.ch;
+            // watching from the guide is always full screen, even if Home had the
+            // channel playing in its preview window
+            if (window.HomerHome && window.HomerHome.fullscreen) window.HomerHome.fullscreen();
             close({ returnToLiveTv: false });
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
