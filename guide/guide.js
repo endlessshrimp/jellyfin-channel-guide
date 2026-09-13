@@ -7,7 +7,7 @@
  * and uses that session's API access.
  *
  * Remote/keyboard: arrows move, OK/Enter watches the channel, R records the
- * selected program, Esc/Back closes.
+ * selected program (R twice cancels a recording), Esc/Back closes.
  *
  * window.ChannelGuide = { open, close, version }
  */
@@ -285,7 +285,7 @@
                 <span><span class="cg-key">▲▼</span>Channels</span>
                 <span><span class="cg-key">◀▶</span>Time</span>
                 <span data-action="watch"><span class="cg-key">OK</span>Watch</span>
-                <span data-action="record"><span class="cg-key rec">●</span>Record</span>
+                <span><span class="cg-key rec">R</span>Record</span>
                 <span data-action="search"><span class="cg-key">/</span>Filter</span>
                 <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
                 <span data-action="country-next"><span class="cg-key">C</span>Country</span>
@@ -330,8 +330,10 @@
         const xFor = (d) => Math.max(0, Math.min(gridW, ((d - winStart) / 60000) * pxPerMin));
         const posCell = (c) => {
             const left = xFor(c.s);
+            const w = Math.max(24, xFor(c.e) - left - 8);
             c.el.style.left = left + 4 + 'px';
-            c.el.style.width = Math.max(24, xFor(c.e) - left - 8) + 'px';
+            c.el.style.width = w + 'px';
+            c.el.classList.toggle('cg-narrow', w < 90); // too small for the record button
         };
 
         const timebar = $('.cg-timebar');
@@ -355,12 +357,13 @@
         // ---------- Toast ----------
         const toastEl = $('.cg-toast');
         let toastTimer = 0;
-        const toast = (msg, kind = '') => {
-            toastEl.innerHTML = `<span class="cg-toast-text">${esc(msg)}</span>`;
+        const showToast = (html, kind = '', ms = 3200) => {
+            toastEl.innerHTML = html;
             toastEl.className = 'cg-toast show' + (kind ? ' ' + kind : '');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => { toastEl.className = 'cg-toast'; }, 3200);
+            toastTimer = setTimeout(() => { toastEl.className = 'cg-toast'; }, ms);
         };
+        const toast = (msg, kind = '', ms) => showToast(`<span class="cg-toast-text">${esc(msg)}</span>`, kind, ms);
 
         // ---------- Data + render ----------
         let rows = [];
@@ -368,26 +371,53 @@
         let sel = { row: 0, col: 0 };
         const vpos = (r) => order.indexOf(r);
         fit(); // after `rows` exists: fit() relayouts the grid when the width changes
-        const timersByProgram = new Map(); // programId -> timerId
+        // programId -> Jellyfin timer, or null when we just created one and
+        // couldn't read it back yet
+        const timersByProgram = new Map();
+        let armed = null; // { cell, timer } while a cancel waits for its confirming press
 
         const current = () => {
             const row = rows[sel.row];
             return row ? { row, cell: row.cells[sel.col] } : null;
         };
 
+        const recordable = (c) => !c.unknown && !!c.p.Id;
+        const isSet = (c) => recordable(c) && timersByProgram.has(c.p.Id);
+        const airing = (c) => {
+            const t = new Date();
+            return c.s <= t && c.e > t;
+        };
+        // recording right now: Jellyfin says so, or the timer is on a program
+        // that's airing and Jellyfin hasn't caught up yet
+        const recordingNow = (c) => {
+            const t = timersByProgram.get(c.p.Id);
+            if (!t) return airing(c);
+            return t.Status === 'InProgress' || (t.Status === 'New' && airing(c));
+        };
+
+        const paintCell = (c) => {
+            const on = isSet(c);
+            const confirming = !!armed && armed.cell === c;
+            c.el.classList.toggle('rec', on);
+            c.el.classList.toggle('confirming', confirming);
+            if (!c.btn) return;
+            const verb = !on ? 'Record' : recordingNow(c) ? 'Stop' : 'Cancel';
+            c.btn.querySelector('.cg-rec-label').textContent = confirming ? verb + '?' : verb;
+            c.btn.title = !on ? 'Record this program'
+                : confirming ? `Click again to ${verb.toLowerCase()} this recording`
+                    : `${verb} this recording`;
+            c.btn.setAttribute('aria-label', c.btn.title);
+        };
+
         const markRecorded = () => {
-            for (const row of rows) {
-                for (const c of row.cells) {
-                    c.el.classList.toggle('rec', !c.unknown && !!c.p.Id && timersByProgram.has(c.p.Id));
-                }
-            }
+            for (const row of rows) for (const c of row.cells) paintCell(c);
         };
 
         const loadTimers = async () => {
             const res = await api('/LiveTv/Timers');
             timersByProgram.clear();
             for (const t of (res && res.Items) || []) {
-                if (t.ProgramId && t.Status !== 'Cancelled') timersByProgram.set(t.ProgramId, t.Id);
+                if (t.ProgramId && t.Status !== 'Cancelled') timersByProgram.set(t.ProgramId, t);
             }
         };
 
@@ -422,13 +452,29 @@
                         bar.style.width = Math.round(((now - s) / (e - s)) * 100) + '%';
                         cell.appendChild(bar);
                     }
-                    const cellData = { el: cell, p, s, e, unknown };
+                    const cellData = { el: cell, p, s, e, unknown, btn: null };
                     // the mouse only highlights; it never scrolls the grid out from under the pointer
                     cell.addEventListener('mouseenter', () => select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false }));
                     cell.addEventListener('click', () => {
                         select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false });
                         watch();
                     });
+                    // The hovered program's own record button: it records the program
+                    // it sits on, not whatever the mouse crossed on the way to it.
+                    if (!unknown && p.Id && e > now) {
+                        cell.classList.add('can-rec');
+                        const btn = el('button', 'cg-rec-btn', '<i class="cg-rec-icon"></i><span class="cg-rec-label">Record</span>');
+                        btn.type = 'button';
+                        btn.tabIndex = -1;
+                        btn.addEventListener('mousedown', (ev) => ev.preventDefault()); // keep focus off it
+                        btn.addEventListener('click', (ev) => {
+                            ev.stopPropagation(); // the rest of the cell watches; this only records
+                            select(rows.indexOf(rowData), cells.indexOf(cellData), { scroll: false });
+                            toggleRecord(rowData, cellData, 'click');
+                        });
+                        cell.appendChild(btn);
+                        cellData.btn = btn;
+                    }
                     cells.push(cellData);
                     lane.appendChild(cell);
                 }
@@ -493,7 +539,14 @@
             const meta = $('.cg-info-meta');
             meta.innerHTML = '';
             if (live) meta.appendChild(el('span', 'cg-chip live', 'Live'));
-            if (!unknown && timersByProgram.has(p.Id)) meta.appendChild(el('span', 'cg-chip rec', 'Recording'));
+            if (isSet(cell)) {
+                const rn = recordingNow(cell);
+                const verb = rn ? 'stop' : 'cancel';
+                meta.appendChild(el('span', 'cg-chip rec' + (rn ? ' now' : ''), rn ? 'Recording' : 'Set to record'));
+                meta.appendChild(armed && armed.cell === cell
+                    ? el('span', 'cg-rec-hint confirming', `Press <span class="cg-key">R</span>again to ${verb}`)
+                    : el('span', 'cg-rec-hint', `<span class="cg-key">R</span>to ${verb}`));
+            }
             if (!unknown) meta.appendChild(el('span', 'cg-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
             const g = genreOf(p);
             if (g) {
@@ -529,44 +582,112 @@
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
 
-        let recording = false;
-        const record = async () => {
+        // ---------- Recording ----------
+        // R, or the record button on a hovered program, toggles that program's
+        // recording. Cancelling takes a second press within a few seconds, so a
+        // stray press never throws a recording away.
+        const CONFIRM_MS = 4000;
+        let recBusy = false;
+
+        const reshow = () => {
             const cur = current();
-            if (!cur || recording) return;
-            const { cell } = cur;
-            if (cell.unknown || !cell.p.Id) {
-                toast('No listing to record', 'err');
-                return;
-            }
-            if (timersByProgram.has(cell.p.Id)) {
-                toast(`Already set to record ${cell.p.Name}`, 'rec');
-                return;
-            }
-            if (cell.e <= new Date()) {
-                toast('That program has already ended', 'err');
-                return;
-            }
-            recording = true;
+            if (cur && cur.cell) showInfo(cur.row.ch, cur.cell);
+        };
+        const disarm = () => {
+            if (!armed) return;
+            const { cell, timer } = armed;
+            clearTimeout(timer);
+            armed = null;
+            paintCell(cell);
+            reshow();
+        };
+
+        const toggleRecord = (row, cell, via) => {
+            if (recBusy || !row || !cell) return;
+            const again = !!armed && armed.cell === cell;
+            disarm();
+            if (!recordable(cell)) toast('No listing to record', 'err');
+            else if (cell.e <= new Date()) toast('That program has already ended', 'err');
+            else if (!timersByProgram.has(cell.p.Id)) schedule(cell);
+            else if (again) cancelRecording(cell);
+            else armCancel(cell, via);
+        };
+
+        const armCancel = (cell, via) => {
+            armed = { cell, timer: setTimeout(disarm, CONFIRM_MS) };
+            paintCell(cell);
+            reshow();
+            const q = recordingNow(cell) ? 'Stop recording ' : 'Cancel recording of ';
+            const hint = via === 'click' ? 'Click again' : 'Press <span class="cg-key">R</span>again';
+            showToast(`<span class="cg-toast-q"><span>${q}</span><span class="cg-toast-name">${esc(cell.p.Name)}</span><span>?</span></span>`
+                + `<span class="cg-toast-hint">${hint}</span>`, 'confirm', CONFIRM_MS);
+        };
+
+        const schedule = async (cell) => {
+            recBusy = true;
             try {
                 const defaults = await api(`/LiveTv/Timers/Defaults?programId=${encodeURIComponent(cell.p.Id)}`);
                 await request('POST', '/LiveTv/Timers', defaults);
                 try {
                     await loadTimers();
-                } catch {
-                    // the timer was created; mark it even if the refresh failed
-                    timersByProgram.set(cell.p.Id, null);
-                }
+                } catch { /* the timer was created; it's marked below even if the refresh failed */ }
                 if (!timersByProgram.has(cell.p.Id)) timersByProgram.set(cell.p.Id, null);
                 if (guide !== self) return;
                 markRecorded();
-                showInfo(cur.row.ch, cell);
-                toast(`Recording ${cell.p.Name}`, 'rec');
+                reshow();
+                toast(`${recordingNow(cell) ? 'Recording' : 'Set to record'} ${cell.p.Name}`, 'rec');
             } catch (err) {
                 console.error('[Channel Guide] Recording failed:', err);
                 if (guide === self) toast('Couldn\'t schedule that recording', 'err');
             } finally {
-                recording = false;
+                recBusy = false;
             }
+        };
+
+        // Deleting the timer also stops a recording that's in progress.
+        const cancelRecording = async (cell) => {
+            recBusy = true;
+            const stopping = recordingNow(cell);
+            const gone = () => !timersByProgram.has(cell.p.Id);
+            try {
+                let t = timersByProgram.get(cell.p.Id);
+                if (!t || !t.Id) {
+                    // scheduled from here but not read back yet: look up its id
+                    await loadTimers();
+                    t = timersByProgram.get(cell.p.Id);
+                }
+                if (t && t.Id) {
+                    await request('DELETE', `/LiveTv/Timers/${encodeURIComponent(t.Id)}`);
+                    timersByProgram.delete(cell.p.Id);
+                    try {
+                        await loadTimers();
+                    } catch { /* keep the local delete */ }
+                }
+                if (guide !== self) return;
+                markRecorded();
+                reshow();
+                if (!t || !t.Id) toast(`${cell.p.Name} isn't set to record`);
+                else if (gone()) toast(`${stopping ? 'Recording stopped' : 'Recording cancelled'}: ${cell.p.Name}`);
+                else toast('Jellyfin still has that recording scheduled', 'err');
+            } catch (err) {
+                console.error('[Channel Guide] Cancelling the recording failed:', err);
+                if (guide !== self) return;
+                // it may be gone anyway (cancelled somewhere else): show what the server has
+                try {
+                    await loadTimers();
+                } catch { /* leave the dots as they were */ }
+                markRecorded();
+                reshow();
+                if (gone()) toast(`${cell.p.Name} isn't set to record`);
+                else toast('Couldn\'t cancel that recording', 'err');
+            } finally {
+                recBusy = false;
+            }
+        };
+
+        const record = () => {
+            const cur = current();
+            if (cur) toggleRecord(cur.row, cur.cell, 'key');
         };
 
         // ---------- Input ----------
@@ -786,7 +907,6 @@
             if (!item) return;
             const action = item.dataset.action;
             if (action === 'watch') watch();
-            else if (action === 'record') record();
             else if (action === 'search') focusSearch();
             else if (action === 'cat-next') cycleCategory(1);
             else if (action === 'country-next') cycleCountry();
@@ -851,6 +971,7 @@
                 clearInterval(clockTimer);
                 clearInterval(needleTimer);
                 clearTimeout(toastTimer);
+                if (armed) clearTimeout(armed.timer);
                 root.remove();
             }
         };
