@@ -1,1 +1,1669 @@
-/* HOMER global skin: filled in by the skin work. */
+/*
+ * HOMER global skin for Jellyfin Web 10.11.
+ *
+ * The safety net under the HOMER screens: every stock Jellyfin page that the
+ * guide / home / library stages don't cover (header, drawer, settings,
+ * dashboard, search, item pages, dialogs, player controls) gets the HOMER
+ * look from shared/tokens.css, which homer.js loads first.
+ *
+ * Ground rules:
+ *   - Colors, type, borders, radii and shadows only. No layout changes beyond
+ *     light padding, so Jellyfin keeps working exactly as before.
+ *   - Rules are prefixed with :root so they beat Jellyfin's theme.css by one
+ *     class without !important. !important appears only where Jellyfin itself
+ *     uses it; each one says so.
+ *   - Nothing here targets #cg-root, #homer-* or .cg- / .hm- / .hl- elements.
+ *     HOMER overlays keep to their own class names so this sheet can't reach
+ *     inside them.
+ */
+
+:root {
+    --sk-glass: linear-gradient(180deg, rgba(12, 28, 52, 0.92), rgba(6, 14, 28, 0.94));
+    --sk-glass-flat: rgba(9, 20, 38, 0.86);
+    --sk-panel: linear-gradient(180deg, rgba(20, 38, 66, 0.62), rgba(10, 22, 40, 0.62));
+    --sk-field: rgba(255, 255, 255, 0.06);
+    --sk-field-hover: rgba(255, 255, 255, 0.09);
+    --sk-hover: rgba(var(--homer-accent-rgb), 0.16);
+    --sk-hairline: 0 0 0 1px var(--homer-line);
+    --sk-ring-soft: 0 0 0 3px rgba(var(--homer-accent-rgb), 0.35);
+    --sk-font-stack: "Barlow", "Noto Sans", "Noto Sans HK", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", "Noto Sans TC", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --sk-cond-stack: "Barlow Semi Condensed", "Barlow", "Noto Sans", sans-serif;
+    /* the guide's brand mark: blue tile with a white screen outline */
+    --sk-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236fd3ff'/%3E%3Cstop offset='.6' stop-color='%232f8cff'/%3E%3Cstop offset='1' stop-color='%231450c8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='44' height='44' rx='12' fill='url%28%23g%29'/%3E%3Crect x='12.5' y='14.5' width='19' height='14' rx='4' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E");
+}
+
+/* =====================================================================
+   Page ground and type
+   ===================================================================== */
+
+:root {
+    background: #02050a var(--homer-backdrop) fixed;
+    color: var(--homer-text);
+    font-family: var(--sk-font-stack);
+}
+
+/* the fixed layer behind every page */
+:root .backgroundContainer {
+    background: var(--homer-backdrop);
+}
+
+/* the same scanline texture the guide stage has */
+:root .backgroundContainer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+}
+
+/* over an item backdrop image: navy wash instead of grey */
+:root .backgroundContainer.withBackdrop {
+    background:
+        linear-gradient(180deg, rgba(7, 20, 42, 0.78) 0%, rgba(2, 5, 10, 0.92) 70%);
+}
+
+:root .page h1,
+:root .page h2,
+:root .page h3,
+:root .dialog h1,
+:root .dialog h2,
+:root .dialog h3 {
+    font-family: var(--sk-font-stack);
+    color: var(--homer-text);
+}
+
+:root .page h1 {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+:root .page h2,
+:root .page h3 {
+    font-weight: 700;
+}
+
+/* section headings get the guide's label treatment: blue bar, caps, tracking */
+:root .sectionTitle:not(.sectionTitle-cards),
+:root .page .verticalSection > h2:first-child,
+:root .page .detailSectionHeader h2 {
+    font-weight: 800;
+    font-size: 1.15em;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--homer-text);
+    line-height: 1.15;
+}
+
+/* the bar is a pseudo-element so .padded-left and friends keep their padding */
+:root .sectionTitle:not(.sectionTitle-cards)::before,
+:root .page .verticalSection > h2:first-child::before,
+:root .page .detailSectionHeader h2::before,
+:root .content-primary .MuiTypography-h2::before {
+    content: "";
+    display: inline-block;
+    width: 4px;
+    height: 1.05em;
+    margin-right: 0.7em;
+    vertical-align: -0.15em;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--homer-accent-2), var(--homer-accent));
+    box-shadow: 0 0 10px rgba(var(--homer-accent-rgb), 0.6);
+}
+
+:root .sectionTitle-cards,
+:root .sectionTitleTextButton .sectionTitle {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--homer-text);
+}
+
+:root .sectionTitleTextButton > .material-icons {
+    color: var(--homer-accent-2);
+}
+
+/* secondary text: the guide's blue-grey, not Jellyfin's 50% white */
+:root .secondaryText,
+:root .cardText-secondary,
+:root .fieldDescription,
+:root .listItem .secondary,
+:root .nowPlayingBarSecondaryText,
+:root .programSecondaryTitle,
+:root .guide-programNameCaret,
+:root .listItemBodyText.secondary {
+    color: var(--homer-dim);
+}
+
+:root .fieldDescription {
+    font-size: 0.92em;
+    line-height: 1.4;
+}
+
+/* inline text links only: Jellyfin uses <a> for cards, list rows and menu items too */
+:root .fieldDescription a,
+:root .page p a,
+:root .button-link {
+    color: var(--homer-accent-2);
+}
+
+:root ::selection {
+    background: rgba(var(--homer-accent-rgb), 0.55);
+    color: #fff;
+}
+
+/* scrollbars: thin blue thumb on a clear track (skips HOMER overlays) */
+:root *:not(#cg-root, #cg-root *, [id^="homer-"], [id^="homer-"] *) {
+    scrollbar-color: rgba(var(--homer-accent-rgb), 0.55) transparent;
+}
+
+/* =====================================================================
+   Header bar
+   ===================================================================== */
+
+:root .skinHeader {
+    color: var(--homer-text);
+    font-family: var(--sk-font-stack);
+}
+
+:root .skinHeader-withBackground {
+    background: linear-gradient(180deg, rgba(10, 26, 50, 0.9), rgba(4, 11, 22, 0.86));
+    box-shadow: inset 0 -1px 0 var(--homer-line-strong), 0 10px 30px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+}
+
+/* over backdrops Jellyfin forces a flat 40% black with !important on the filter */
+:root .skinHeader.semiTransparent {
+    background: linear-gradient(180deg, rgba(2, 5, 10, 0.72), rgba(2, 5, 10, 0));
+    box-shadow: none;
+}
+
+:root .pageTitle {
+    font-family: var(--sk-font-stack);
+    font-weight: 800;
+    font-size: 1.3em;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-text);
+}
+
+/* the Jellyfin banner in the header becomes the HOMER mark + wordmark */
+:root .skinHeader .pageTitleWithDefaultLogo {
+    background-image: none;
+    width: auto;
+    gap: 0.6em;
+}
+
+:root .skinHeader .pageTitleWithDefaultLogo::before {
+    content: "";
+    width: 1.45em;
+    height: 1.45em;
+    flex: none;
+    background: var(--sk-mark) center / contain no-repeat;
+    filter: drop-shadow(0 4px 12px rgba(47, 140, 255, 0.45));
+}
+
+:root .skinHeader .pageTitleWithDefaultLogo::after {
+    content: "HOMER";
+    font-weight: 800;
+    letter-spacing: 0.24em;
+}
+
+:root .headerButton,
+:root .skinHeader .paper-icon-button-light {
+    color: #c9d6e6;
+    border-radius: 50%;
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+:root .skinHeader .paper-icon-button-light:hover:not(:disabled) {
+    background-color: rgba(var(--homer-accent-rgb), 0.22);
+    color: #fff;
+}
+
+:root .headerUserButtonRound div,
+:root .headerUserImage {
+    box-shadow: 0 0 0 2px var(--homer-line-strong);
+}
+
+/* header tabs (Movies / Shows / etc): condensed caps, the active one a blue pill */
+:root .emby-tab-button {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+    border-radius: 999px;
+    transition: color 120ms ease, background-color 120ms ease;
+}
+
+:root .emby-tab-button:hover {
+    color: #fff;
+}
+
+:root .emby-tab-button-active,
+:root .emby-tab-button-active:hover {
+    color: #fff;
+    background: var(--homer-focus-fill);
+    box-shadow: 0 6px 18px rgba(var(--homer-accent-rgb), 0.4);
+}
+
+/* TV focus: Jellyfin blanks the background with !important, so the ring goes on box-shadow */
+:root .emby-tab-button.show-focus:focus {
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+/* =====================================================================
+   Main drawer (slide-out menu)
+   ===================================================================== */
+
+:root .mainDrawer,
+:root .drawer-open {
+    background: linear-gradient(180deg, #0a1a33 0%, #050c18 100%);
+    color: var(--homer-text);
+    box-shadow: inset -1px 0 0 var(--homer-line-strong), 20px 0 60px rgba(0, 0, 0, 0.5);
+}
+
+/* the HOMER mark heads the menu, like the guide's top bar */
+:root .mainDrawer .mainDrawer-scrollContainer::before {
+    content: "HOMER";
+    display: block;
+    margin: 1.5em 1.5em 0.4em;
+    padding-left: 2.35em;
+    font-weight: 800;
+    font-size: 1.2em;
+    line-height: 1.7em;
+    letter-spacing: 0.24em;
+    color: var(--homer-text);
+    background: var(--sk-mark) 0 50% / 1.7em 1.7em no-repeat;
+}
+
+:root .mainDrawer .sidebarHeader {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-size: 0.82em;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--homer-faint);
+    margin-top: 1.6em;
+    padding-inline: 2.1em 0;
+}
+
+:root .mainDrawer .sidebarDivider,
+:root .mainDrawer hr {
+    border: 0;
+    height: 1px;
+    background: var(--homer-line-strong);
+}
+
+/* margin and border-radius: Jellyfin pins both to 0 on .navMenuOption with !important */
+:root .navMenuOption {
+    font-family: var(--sk-font-stack);
+    font-weight: 600;
+    color: #d5e0ee;
+    margin: 0.12em 0.75em !important;
+    border-radius: var(--homer-radius-sm) !important;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+:root .navMenuOption .navMenuOptionIcon {
+    color: var(--homer-dim);
+}
+
+:root .navMenuOption:hover {
+    background: var(--sk-hover);
+    color: #fff;
+}
+
+:root .navMenuOption:hover .navMenuOptionIcon {
+    color: var(--homer-accent-2);
+}
+
+/* selected: Jellyfin sets its cyan fill with !important */
+:root .navMenuOption-selected,
+:root .navMenuOption-selected:hover {
+    background: var(--homer-focus-fill) !important;
+    color: #fff;
+    box-shadow: 0 8px 22px rgba(var(--homer-accent-rgb), 0.4);
+}
+
+:root .navMenuOption-selected .navMenuOptionIcon {
+    color: #fff;
+}
+
+:root .navMenuOption:focus-visible,
+:root.layout-tv .navMenuOption:focus {
+    background: var(--homer-focus-fill) !important;
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .tmla-mask {
+    background-color: rgba(2, 5, 10, 0.6);
+}
+
+/* =====================================================================
+   Buttons
+   ===================================================================== */
+
+:root .emby-button {
+    font-family: var(--sk-font-stack);
+    border-radius: var(--homer-radius-sm);
+    transition: background 120ms ease, box-shadow 120ms ease, color 120ms ease;
+}
+
+:root .emby-button.raised,
+:root .fab {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--homer-text);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+:root .fab {
+    border-radius: 50%;
+}
+
+:root .emby-button.raised:hover,
+:root .fab:hover {
+    background: var(--homer-cell-hi);
+    box-shadow: inset 0 0 0 1px rgba(160, 200, 255, 0.35);
+}
+
+:root .emby-button.raised:focus-visible,
+:root .fab:focus-visible {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .emby-button.button-submit {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(var(--homer-accent-rgb), 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+:root .emby-button.button-submit:hover {
+    background: linear-gradient(180deg, #4ea2ff, #2a72e6);
+}
+
+:root .emby-button.button-submit:focus-visible {
+    background: var(--homer-focus-fill);
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .emby-button.button-delete {
+    background: linear-gradient(180deg, #ff5a5a, #d42a2a);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(255, 59, 59, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+:root .button-flat:hover,
+:root .button-accent-flat {
+    color: var(--homer-accent-2) !important; /* .button-accent-flat is !important in Jellyfin */
+}
+
+:root .button-flat:hover {
+    color: #fff !important;
+    background: var(--sk-hover);
+}
+
+/* remote/TV focus: fill + white ring instead of Jellyfin's cyan */
+:root .emby-button.show-focus:focus {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+/* icon buttons everywhere (hover is gated to real pointers, as in Jellyfin) */
+@media (hover: hover) and (pointer: fine) {
+    :root .paper-icon-button-light:hover:not(:disabled) {
+        background-color: rgba(var(--homer-accent-rgb), 0.22);
+        color: #fff;
+    }
+}
+
+:root .paper-icon-button-light:active:not(:disabled) {
+    background-color: rgba(var(--homer-accent-rgb), 0.35);
+    color: #fff;
+}
+
+:root .paper-icon-button-light.show-focus:focus {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .buttonActive {
+    color: var(--homer-accent-2) !important; /* Jellyfin's .buttonActive is !important */
+}
+
+/* =====================================================================
+   Form controls
+   ===================================================================== */
+
+:root .inputLabel,
+:root .inputLabelUnfocused,
+:root .selectLabel,
+:root .textareaLabel,
+:root .textareaLabelUnfocused,
+:root .checkboxListLabel,
+:root .paperListLabel {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-size: 0.9em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+:root .inputLabelFocused,
+:root .selectLabelFocused,
+:root .textareaLabelFocused {
+    color: var(--homer-accent-2);
+}
+
+:root .emby-input,
+:root .emby-textarea,
+:root .emby-select-withcolor {
+    background: var(--sk-field);
+    border: 1px solid var(--homer-line-strong);
+    border-radius: var(--homer-radius-sm);
+    color: var(--homer-text);
+    padding: 0.5em 0.7em;
+    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+:root .emby-select-withcolor {
+    padding-right: 2.2em;
+}
+
+:root .emby-input:hover,
+:root .emby-textarea:hover,
+:root .emby-select-withcolor:hover {
+    background: var(--sk-field-hover);
+}
+
+:root .emby-input:focus,
+:root .emby-textarea:focus {
+    background: rgba(var(--homer-accent-rgb), 0.12);
+    border-color: var(--homer-accent);
+    box-shadow: var(--sk-ring-soft);
+}
+
+/* Jellyfin sets the select focus border (and the TV fill) with !important */
+:root .emby-select-withcolor:focus {
+    background: rgba(var(--homer-accent-rgb), 0.12);
+    border-color: var(--homer-accent) !important;
+    box-shadow: var(--sk-ring-soft);
+}
+
+:root .emby-select-tv-withcolor:focus {
+    background: var(--homer-focus-fill) !important;
+    color: #fff !important;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .emby-select-withcolor > option {
+    background: #0b1a30;
+    color: var(--homer-text);
+}
+
+:root .selectArrowContainer {
+    color: var(--homer-accent-2);
+}
+
+:root .emby-input::placeholder,
+:root .emby-textarea::placeholder {
+    color: var(--homer-faint);
+}
+
+:root .emby-input[type="color"] {
+    padding: 0.2em;
+}
+
+/* checkboxes: rounded square, blue fill when on, white ring on keyboard focus */
+:root .checkboxOutline {
+    border: 2px solid var(--homer-line-strong);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--homer-dim);
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+:root .emby-checkbox-label:hover .checkboxOutline {
+    border-color: rgba(160, 200, 255, 0.5);
+}
+
+:root .emby-checkbox:checked + span + .checkboxOutline {
+    background: var(--homer-focus-fill);
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(var(--homer-accent-rgb), 0.45);
+}
+
+:root .emby-checkbox:focus-visible + span + .checkboxOutline,
+:root .emby-checkbox:focus:not(:checked) + span + .checkboxOutline {
+    border-color: var(--homer-accent);
+}
+
+:root .emby-checkbox:focus-visible + span + .checkboxOutline {
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .emby-checkbox:checked + span + .checkboxOutline > .checkboxIcon {
+    color: #fff;
+}
+
+:root .checkboxLabel {
+    color: var(--homer-text);
+}
+
+/* toggles (emby-toggle / mdl-switch) */
+:root .mdl-switch__track {
+    background: rgba(160, 190, 230, 0.22);
+}
+
+:root .mdl-switch__thumb {
+    background: #c9d6e6;
+}
+
+:root .mdl-switch__input:checked + .mdl-switch__label + .mdl-switch__trackContainer > .mdl-switch__track {
+    background: rgba(var(--homer-accent-rgb), 0.55);
+}
+
+:root .mdl-switch__input:checked + .mdl-switch__label + .mdl-switch__trackContainer > .mdl-switch__thumb {
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--homer-accent), 0 4px 12px rgba(var(--homer-accent-rgb), 0.5);
+}
+
+:root .mdl-switch__input:checked:focus + .mdl-switch__label + .mdl-switch__trackContainer .mdl-switch__focus-helper {
+    background-color: rgba(var(--homer-accent-rgb), 0.26);
+    box-shadow: 0 0 0 1.39em rgba(var(--homer-accent-rgb), 0.26);
+}
+
+/* radios */
+:root .mdl-radio__outer-circle {
+    color: var(--homer-dim);
+}
+
+:root .mdl-radio__button:checked + .mdl-radio__circles .mdl-radio__outer-circle,
+:root .mdl-radio__inner-circle,
+:root .mdl-radio.show-focus .mdl-radio__button:focus + .mdl-radio__circles .mdl-radio__inner-circle,
+:root .mdl-radio.show-focus .mdl-radio__button:focus + .mdl-radio__circles .mdl-radio__outer-circle {
+    color: var(--homer-accent);
+}
+
+:root .mdl-radio__focus-circle {
+    background: var(--homer-accent);
+}
+
+/* sliders: thicker track, blue-to-cyan fill with glow, white thumb */
+:root .mdl-slider-background-flex {
+    height: 0.32em;
+    margin-top: -0.16em;
+    border-radius: 999px;
+    background: rgba(160, 190, 230, 0.2);
+}
+
+:root .mdl-slider-background-upper {
+    background: rgba(160, 190, 230, 0.28);
+}
+
+:root .mdl-slider-background-lower {
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+    box-shadow: 0 0 10px rgba(111, 211, 255, 0.6);
+}
+
+:root .mdl-slider {
+    color: var(--homer-accent);
+}
+
+:root .mdl-slider::-webkit-slider-thumb {
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--homer-accent), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+:root .mdl-slider::-moz-range-thumb {
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--homer-accent), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+:root .sliderBubble {
+    background: var(--sk-glass-flat);
+    color: var(--homer-text);
+    border-radius: var(--homer-radius-sm);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.55);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+}
+
+/* collapsible sections (dashboard, metadata editor) */
+:root .emby-collapsible-button {
+    border-color: var(--homer-line-strong);
+    font-family: var(--sk-font-stack);
+    font-weight: 700;
+}
+
+:root .collapseContent,
+:root .paperList,
+:root .visualCardBox,
+:root .formDialogFooter:not(.formDialogFooter-clear),
+:root .formDialogHeader:not(.formDialogHeader-clear) {
+    background-color: transparent;
+}
+
+:root .collapseContent,
+:root .paperList {
+    background: var(--sk-panel);
+    border-radius: var(--homer-radius);
+    box-shadow: var(--sk-hairline);
+}
+
+/* =====================================================================
+   Lists (settings menu, dashboard lists, action rows)
+   ===================================================================== */
+
+/* Jellyfin draws list separators with !important */
+:root .listItem-border {
+    border-color: var(--homer-line) !important;
+}
+
+:root .listItem {
+    border-radius: var(--homer-radius-sm);
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+:root .listItem:hover {
+    background: var(--sk-hover);
+}
+
+:root .listItem:focus-visible,
+:root.layout-tv .listItem:focus {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .listItemBodyText {
+    font-weight: 600;
+}
+
+/* list icons become blue chips like the HOMER brand mark */
+:root .listItemIcon:not(.listItemIcon-transparent) {
+    background: linear-gradient(145deg, var(--homer-accent-2), var(--homer-accent) 60%, #1450c8);
+    border-radius: 0.45em;
+    box-shadow: 0 4px 14px rgba(var(--homer-accent-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    color: #fff;
+}
+
+:root .listItemIcon-transparent {
+    color: var(--homer-accent-2);
+}
+
+/* =====================================================================
+   Settings pages (user preferences + legacy dashboard forms)
+   ===================================================================== */
+
+/* each settings form sits on one glass panel; its section titles divide it */
+:root .userPreferencesPage .settingsContainer > form,
+:root .dashboardDocument .page .content-primary > form {
+    background: var(--sk-panel);
+    border-radius: var(--homer-radius);
+    box-shadow: var(--sk-hairline), 0 16px 40px rgba(0, 0, 0, 0.3);
+    padding: 0.5em 1.75em 1.5em;
+    margin-top: 1em;
+}
+
+:root.layout-mobile .userPreferencesPage .settingsContainer > form,
+:root.layout-mobile .dashboardDocument .page .content-primary > form {
+    padding: 0.25em 1em 1em;
+}
+
+:root .page fieldset {
+    border-color: var(--homer-line-strong);
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .page legend {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+:root .infoBanner {
+    background: rgba(var(--homer-accent-rgb), 0.12);
+    color: var(--homer-text);
+    border-radius: var(--homer-radius-sm);
+    box-shadow: inset 4px 0 0 var(--homer-accent), var(--sk-hairline);
+}
+
+:root .detailTableBodyRow-shaded:nth-child(2n) {
+    background: rgba(160, 190, 230, 0.05);
+}
+
+/* the user settings menu page: one glass panel per group */
+:root #myPreferencesMenuPage .verticalSection {
+    background: var(--sk-panel);
+    border-radius: var(--homer-radius);
+    box-shadow: var(--sk-hairline), 0 16px 40px rgba(0, 0, 0, 0.3);
+    padding: 0.75em 0.75em 0.5em;
+}
+
+:root #myPreferencesMenuPage .listItemIcon {
+    background: linear-gradient(145deg, var(--homer-accent-2), var(--homer-accent) 60%, #1450c8);
+    color: #fff;
+    border-radius: 0.3em;
+    padding: 0.22em;
+    font-size: 120%;
+    box-shadow: 0 4px 12px rgba(var(--homer-accent-rgb), 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+:root #myPreferencesMenuPage .listItemBodyText {
+    font-size: 1.05em;
+}
+
+:root #myPreferencesMenuPage .listItem-border {
+    border-color: transparent !important; /* separator is !important in Jellyfin; panels replace it */
+}
+
+/* =====================================================================
+   Cards and posters
+   ===================================================================== */
+
+:root .cardBox:not(.visualCardBox) .cardPadder {
+    background: linear-gradient(145deg, #132a4b, #0a1629);
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .cardPadder .cardImageIcon {
+    color: rgba(160, 190, 230, 0.35);
+}
+
+:root .cardScalable,
+:root .cardContent,
+:root .cardImageContainer {
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .cardScalable {
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(160, 190, 230, 0.1);
+    transition: box-shadow 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    :root .card:hover .cardScalable {
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(111, 211, 255, 0.55);
+    }
+}
+
+/* focus: white ring + blue glow. Jellyfin's cyan focus border is !important */
+:root .card:focus .cardBox.visualCardBox,
+:root .card:focus .cardBox:not(.visualCardBox) .cardScalable {
+    border-color: transparent !important;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .visualCardBox {
+    background: var(--sk-panel);
+    border-radius: var(--homer-radius);
+    box-shadow: var(--sk-hairline);
+}
+
+:root .cardText {
+    font-family: var(--sk-font-stack);
+}
+
+:root .cardText-first {
+    font-weight: 600;
+    color: var(--homer-text);
+}
+
+:root .cardText-secondary {
+    font-family: var(--sk-cond-stack);
+    font-weight: 500;
+}
+
+:root .defaultCardBackground1 { background-color: #0f2a52; }
+:root .defaultCardBackground2 { background-color: #1c4f93; }
+:root .defaultCardBackground3 { background-color: #173c6e; }
+:root .defaultCardBackground4 { background-color: #0b2140; }
+:root .defaultCardBackground5 { background-color: #22589e; }
+
+:root .defaultCardBackground {
+    background-image: radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.28), transparent 60%);
+}
+
+:root .countIndicator,
+:root .fullSyncIndicator,
+:root .mediaSourceIndicator,
+:root .playedIndicator {
+    background: var(--homer-focus-fill);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.85);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+}
+
+:root .itemProgressBar {
+    background: rgba(2, 5, 10, 0.7);
+}
+
+:root .itemProgressBarForeground {
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+}
+
+:root .itemProgressBarForeground-recording {
+    background: var(--homer-live);
+}
+
+:root .cardOverlayContainer {
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.85), rgba(7, 20, 42, 0.35));
+    border-radius: var(--homer-radius-sm);
+}
+
+/* =====================================================================
+   Item pages (people, collections, channels, anything not HOMER-staged)
+   ===================================================================== */
+
+:root .detailRibbon {
+    background: linear-gradient(180deg, rgba(9, 20, 38, 0.75), rgba(9, 20, 38, 0.9));
+    box-shadow: inset 0 1px 0 var(--homer-line-strong);
+}
+
+:root.noBackdropTransparency .detailPagePrimaryContainer,
+:root.noBackdropTransparency .detailPageSecondaryContainer,
+:root .noBackdropTransparency .detailPagePrimaryContainer,
+:root .noBackdropTransparency .detailPageSecondaryContainer {
+    background-color: transparent;
+}
+
+:root .itemName {
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    color: var(--homer-text);
+}
+
+:root .itemMiscInfo,
+:root .itemMiscInfo .mediaInfoItem {
+    font-family: var(--sk-cond-stack);
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+:root .mediaInfoText {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--homer-text);
+    border-radius: 7px;
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+:root .mainDetailButtons .detailButton {
+    border-radius: var(--homer-radius);
+}
+
+:root .emby-button.detailFloatingButton {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 10px 30px rgba(var(--homer-accent-rgb), 0.5), 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+:root .itemDetailImage {
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .overview-controls .emby-button,
+:root .detailsGroupItem .label {
+    color: var(--homer-dim);
+}
+
+:root .detailsGroupItem .label {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* alpha picker, selection mode */
+:root .alphaPickerButton {
+    color: var(--homer-dim);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+}
+
+:root .alphaPickerButton-selected {
+    color: #fff;
+    background: var(--homer-focus-fill);
+}
+
+:root .alphaPickerButton-tv:focus {
+    background: var(--homer-focus-fill);
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .itemSelectionPanel {
+    border-color: var(--homer-accent);
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .selectionCommandsPanel {
+    background: var(--homer-focus-fill);
+    box-shadow: 0 10px 30px rgba(var(--homer-accent-rgb), 0.4);
+}
+
+/* =====================================================================
+   Search
+   ===================================================================== */
+
+:root .searchFields .inputContainer .emby-input,
+:root .searchfields-txtSearch {
+    border-radius: 999px;
+    padding: 0.6em 1.1em;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+:root .searchfields-icon {
+    color: var(--homer-accent-2);
+}
+
+/* =====================================================================
+   Dialogs and action sheets
+   ===================================================================== */
+
+:root .dialogBackdrop {
+    background-color: #02050a;
+}
+
+:root .dialogBackdropOpened {
+    opacity: 0.72;
+}
+
+:root .dialog {
+    background: linear-gradient(180deg, #0d1f3b 0%, #060e1c 100%);
+    color: var(--homer-text);
+    border-radius: var(--homer-radius);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* full-screen and fixed-size dialogs stay square */
+:root .dialog-fixedSize,
+:root .dialog-fullscreen,
+:root .dialog-fullscreen-lowres {
+    border-radius: 0;
+}
+
+:root .formDialogHeader:not(.formDialogHeader-clear) {
+    background: linear-gradient(180deg, rgba(47, 140, 255, 0.14), transparent);
+    box-shadow: inset 0 -1px 0 var(--homer-line-strong);
+}
+
+:root .formDialogHeaderTitle {
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+:root .formDialogFooter:not(.formDialogFooter-clear) {
+    background: rgba(6, 14, 28, 0.9);
+    box-shadow: inset 0 1px 0 var(--homer-line-strong);
+}
+
+:root.layout-tv .formDialogFooter:not(.formDialogFooter-clear) {
+    background: transparent;
+    box-shadow: none;
+}
+
+/* action sheet (the ••• menus): Jellyfin pins the radius with !important */
+:root .actionSheet {
+    border-radius: var(--homer-radius) !important;
+}
+
+:root .actionsheet-fullscreen {
+    border-radius: 0 !important; /* same !important as Jellyfin's */
+}
+
+:root .actionSheetContent {
+    padding: 0.5em 0;
+}
+
+:root .actionSheetTitle {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-size: 1em;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+:root .actionSheetMenuItem {
+    margin: 0.1em 0.5em;
+    width: calc(100% - 1em);
+    border-radius: var(--homer-radius-sm);
+    font-weight: 600;
+}
+
+:root .actionSheetMenuItem:hover {
+    background: var(--sk-hover);
+}
+
+:root .actionSheetMenuItem:focus-visible,
+:root.layout-tv .actionSheetMenuItem:focus {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .actionSheetMenuItem .actionsheetMenuItemIcon {
+    color: var(--homer-accent-2);
+}
+
+:root .actionSheetMenuItem:focus-visible .actionsheetMenuItemIcon {
+    color: #fff;
+}
+
+:root .actionSheetItemAsideText {
+    font-family: var(--sk-cond-stack);
+    color: var(--homer-dim);
+    opacity: 1;
+}
+
+:root .actionsheetDivider {
+    background: var(--homer-line-strong);
+}
+
+/* =====================================================================
+   Toasts and loading
+   ===================================================================== */
+
+:root .toast {
+    background: rgba(9, 20, 38, 0.94);
+    color: var(--homer-text);
+    border-radius: 12px;
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 16px 40px rgba(0, 0, 0, 0.55);
+    font-family: var(--sk-cond-stack);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+:root .mdl-spinner__layer-1,
+:root .mdl-spinner__layer-3 {
+    border-color: var(--homer-accent);
+}
+
+:root .mdl-spinner__layer-2,
+:root .mdl-spinner__layer-4 {
+    border-color: var(--homer-accent-2);
+}
+
+:root .progressring-spiner {
+    border-color: var(--homer-accent);
+}
+
+/* =====================================================================
+   Now playing bar (music / background playback)
+   ===================================================================== */
+
+:root .appfooter {
+    background: transparent;
+    color: var(--homer-text);
+}
+
+:root .nowPlayingBar {
+    background: var(--sk-glass);
+    box-shadow: inset 0 1px 0 var(--homer-line-strong), 0 -12px 40px rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    color: var(--homer-text);
+}
+
+:root .nowPlayingBarText {
+    font-family: var(--sk-font-stack);
+}
+
+:root .nowPlayingBarText > :first-child {
+    font-weight: 700;
+}
+
+:root .nowPlayingBar .nowPlayingImage {
+    border-radius: 8px;
+}
+
+:root .nowPlayingBarCurrentTime {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--homer-dim);
+}
+
+:root .nowPlayingBar .playPauseButton {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(var(--homer-accent-rgb), 0.45);
+}
+
+:root .playlistSectionButton {
+    background: var(--sk-glass);
+    color: var(--homer-text);
+}
+
+:root .nowPlayingContextMenu,
+:root .nowPlayingPlaylist {
+    background-color: #07142a;
+}
+
+:root.layout-desktop .nowPlayingPlaylist,
+:root.layout-tv .nowPlayingPlaylist {
+    background: none;
+}
+
+/* =====================================================================
+   Video player OSD
+   ===================================================================== */
+
+:root .videoOsdBottom {
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.94) 0%, rgba(7, 20, 42, 0.62) 55%, rgba(7, 20, 42, 0) 100%);
+    font-family: var(--sk-font-stack);
+}
+
+:root .skinHeader.osdHeader {
+    background: linear-gradient(180deg, rgba(2, 5, 10, 0.85), rgba(7, 20, 42, 0));
+    box-shadow: none;
+}
+
+:root .osdTitle,
+:root .osdTitleSmall {
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    color: #fff;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+
+:root .osdSecondaryMediaInfo,
+:root .osdMediaInfo,
+:root .osdMediaStatus,
+:root .videoOsdBottom .endsAtText {
+    font-family: var(--sk-cond-stack);
+    font-weight: 600;
+    color: #c5d2e2;
+}
+
+:root .osdTimeText,
+:root .osdPositionText,
+:root .osdDurationText {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: #fff;
+}
+
+:root .videoOsdBottom .osdPositionSlider + .mdl-slider-background-flex-container .mdl-slider-background-flex,
+:root .videoOsdBottom .osdPositionSliderContainer .mdl-slider-background-flex {
+    height: 0.4em;
+    margin-top: -0.2em;
+}
+
+:root .videoOsdBottom .paper-icon-button-light {
+    color: #eef4fb;
+}
+
+:root .videoOsdBottom .btnPause {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+}
+
+:root .videoOsdBottom .btnPause:hover {
+    background: var(--homer-focus-fill);
+}
+
+:root .chapterThumbContainer {
+    border-radius: var(--homer-radius-sm);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 20px 50px rgba(0, 0, 0, 0.7);
+}
+
+:root .chapterThumbTextContainer {
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.85), transparent);
+}
+
+:root .chapterThumbText {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+}
+
+:root .upNextContainer {
+    background: var(--sk-glass);
+    border-radius: var(--homer-radius) 0 0 0;
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 20px 60px rgba(0, 0, 0, 0.6);
+    font-family: var(--sk-font-stack);
+}
+
+:root .upNextDialog-countdownText {
+    color: var(--homer-accent-2);
+}
+
+/* =====================================================================
+   Dashboard (10.11 React/MUI shell). MUI styles live in emotion classes
+   with one-class specificity, so :root + a class wins cleanly.
+   ===================================================================== */
+
+:root [class*="Mui"]:not(.MuiSvgIcon-root) {
+    font-family: var(--sk-font-stack);
+}
+
+:root .MuiAppBar-root {
+    background: linear-gradient(180deg, rgba(10, 26, 50, 0.9), rgba(4, 11, 22, 0.86));
+    box-shadow: inset 0 -1px 0 var(--homer-line-strong);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+}
+
+:root .MuiDrawer-paper {
+    background: linear-gradient(180deg, #0a1a33 0%, #050c18 100%);
+    color: var(--homer-text);
+    border-right: 0;
+    box-shadow: inset -1px 0 0 var(--homer-line-strong);
+}
+
+/* the Jellyfin logo at the top of the dashboard menu becomes the HOMER mark */
+:root .MuiDrawer-paper .MuiListItemIcon-root > img[src*="icon-transparent"] {
+    content: var(--sk-mark);
+    border-radius: 22%;
+    box-shadow: 0 4px 14px rgba(var(--homer-accent-rgb), 0.45);
+}
+
+/* activity / alerts / paths widgets are bare MUI lists painted "paper" grey */
+:root .dashboardDocument .content-primary .MuiList-root:not(.MuiMenu-list) {
+    background: var(--sk-panel);
+    border-radius: var(--homer-radius);
+    box-shadow: var(--sk-hairline), 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+
+:root .MuiPaper-root:where(:not(.MuiAppBar-root, .MuiDrawer-paper)) {
+    background-color: rgba(12, 26, 48, 0.78);
+    background-image: linear-gradient(180deg, rgba(20, 38, 66, 0.55), rgba(10, 22, 40, 0.3));
+    color: var(--homer-text);
+}
+
+:root .MuiPaper-rounded,
+:root .MuiCard-root {
+    border-radius: var(--homer-radius);
+}
+
+:root .MuiPaper-elevation:where(:not(.MuiAppBar-root, .MuiDrawer-paper)) {
+    box-shadow: var(--sk-hairline), 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* menus, popovers and dialogs float above everything: solid, not see-through */
+:root .MuiPopover-paper,
+:root .MuiMenu-paper,
+:root .MuiDialog-paper,
+:root .MuiAutocomplete-paper {
+    background: linear-gradient(180deg, #0d1f3b 0%, #060e1c 100%);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+:root .MuiBackdrop-root:not(.MuiBackdrop-invisible) {
+    background-color: rgba(2, 5, 10, 0.72);
+}
+
+:root .MuiTypography-h1,
+:root .MuiTypography-h2,
+:root .MuiTypography-h3,
+:root .MuiTypography-h4 {
+    font-weight: 800;
+    letter-spacing: -0.005em;
+}
+
+:root .MuiTypography-h5,
+:root .MuiTypography-h6 {
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+:root .MuiTypography-colorTextSecondary,
+:root .MuiListItemText-secondary,
+:root .MuiFormHelperText-root,
+:root .MuiTypography-caption {
+    color: var(--homer-dim);
+}
+
+:root .MuiListSubheader-root {
+    background: transparent;
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--homer-faint);
+}
+
+:root .MuiDivider-root {
+    border-color: var(--homer-line-strong);
+}
+
+:root .MuiListItemButton-root {
+    border-radius: var(--homer-radius-sm);
+    margin: 0.1em 0.6em;
+}
+
+:root .MuiDrawer-paper .MuiListItemButton-root {
+    font-weight: 600;
+}
+
+:root .MuiListItemButton-root:hover {
+    background-color: var(--sk-hover);
+}
+
+:root .MuiListItemButton-root.Mui-selected,
+:root .MuiListItemButton-root.Mui-selected:hover,
+:root .MuiMenuItem-root.Mui-selected {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 8px 22px rgba(var(--homer-accent-rgb), 0.35);
+}
+
+:root .MuiListItemButton-root.Mui-focusVisible,
+:root .MuiMenuItem-root.Mui-focusVisible {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .MuiListItemIcon-root {
+    color: var(--homer-dim);
+}
+
+:root .Mui-selected .MuiListItemIcon-root,
+:root .MuiListItemButton-root:hover .MuiListItemIcon-root {
+    color: #fff;
+}
+
+:root .MuiMenuItem-root {
+    border-radius: 8px;
+    margin: 0.1em 0.4em;
+}
+
+:root .MuiMenuItem-root:hover {
+    background-color: var(--sk-hover);
+}
+
+/* buttons */
+:root .MuiButton-root {
+    border-radius: var(--homer-radius-sm);
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+:root .MuiButton-containedPrimary,
+:root .MuiButton-containedInfo {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(var(--homer-accent-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+:root .MuiButton-containedPrimary:hover,
+:root .MuiButton-containedInfo:hover {
+    background: linear-gradient(180deg, #4ea2ff, #2a72e6);
+}
+
+:root .MuiButton-containedError {
+    background: linear-gradient(180deg, #ff5a5a, #d42a2a);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(255, 59, 59, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+:root .MuiButton-containedSecondary,
+:root .MuiButton-containedInherit {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--homer-text);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+}
+
+:root .MuiButton-outlined {
+    border-color: var(--homer-line-strong);
+}
+
+:root .MuiButton-textPrimary,
+:root .MuiButton-outlinedPrimary {
+    color: var(--homer-accent-2);
+}
+
+:root .MuiButtonBase-root.Mui-focusVisible:not(.MuiListItemButton-root):not(.MuiMenuItem-root) {
+    box-shadow: var(--homer-focus-ring);
+}
+
+:root .MuiIconButton-root:hover {
+    background-color: rgba(var(--homer-accent-rgb), 0.22);
+}
+
+/* inputs */
+:root .MuiInputBase-root {
+    color: var(--homer-text);
+}
+
+:root .MuiOutlinedInput-root {
+    border-radius: var(--homer-radius-sm);
+    background: var(--sk-field);
+}
+
+:root .MuiOutlinedInput-notchedOutline {
+    border-color: var(--homer-line-strong);
+}
+
+:root .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(160, 200, 255, 0.45);
+}
+
+:root .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+    border-color: var(--homer-accent);
+    box-shadow: var(--sk-ring-soft);
+}
+
+/* filled text fields (dashboard General etc.): a rounded well, ring instead of underline */
+:root .MuiFilledInput-root {
+    background-color: var(--sk-field);
+    border-radius: var(--homer-radius-sm);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+:root .MuiFilledInput-root:hover {
+    background-color: var(--sk-field-hover);
+}
+
+:root .MuiFilledInput-root.Mui-focused {
+    background-color: rgba(var(--homer-accent-rgb), 0.12);
+    box-shadow: inset 0 0 0 1px var(--homer-accent), var(--sk-ring-soft);
+}
+
+:root .MuiFilledInput-underline::before,
+:root .MuiFilledInput-underline::after,
+:root .MuiFilledInput-underline:hover:not(.Mui-disabled, .Mui-error)::before {
+    border-bottom-color: transparent;
+}
+
+:root .MuiSelect-icon,
+:root .MuiInputAdornment-root .MuiIconButton-root {
+    color: var(--homer-accent-2);
+}
+
+:root .MuiLink-root {
+    color: var(--homer-accent-2);
+    text-decoration-color: rgba(111, 211, 255, 0.4);
+}
+
+/* page and section headings in dashboard pages match the legacy .sectionTitle look */
+:root .content-primary .MuiTypography-h1 {
+    font-weight: 800;
+    font-size: 1.9rem;
+    letter-spacing: -0.005em;
+}
+
+:root .content-primary .MuiTypography-h2 {
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+:root .MuiInputLabel-root,
+:root .MuiFormLabel-root {
+    color: var(--homer-dim);
+}
+
+:root .MuiInputLabel-root.Mui-focused,
+:root .MuiFormLabel-root.Mui-focused {
+    color: var(--homer-accent-2);
+}
+
+:root .MuiCheckbox-root.Mui-checked,
+:root .MuiRadio-root.Mui-checked {
+    color: var(--homer-accent);
+}
+
+:root .MuiSwitch-switchBase.Mui-checked {
+    color: #fff;
+}
+
+:root .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
+    background-color: var(--homer-accent);
+    opacity: 0.8;
+}
+
+:root .MuiSlider-root {
+    color: var(--homer-accent);
+}
+
+:root .MuiSlider-thumb {
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--homer-accent);
+}
+
+/* tabs */
+:root .MuiTab-root {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--homer-dim);
+}
+
+:root .MuiTab-root.Mui-selected {
+    color: #fff;
+}
+
+:root .MuiTabs-indicator {
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+    height: 3px;
+    border-radius: 3px;
+    box-shadow: 0 0 10px rgba(111, 211, 255, 0.6);
+}
+
+/* tables (activity, devices, keys, logs) */
+:root .MuiTableCell-root {
+    border-color: var(--homer-line);
+    color: var(--homer-text);
+}
+
+:root .MuiTableCell-head {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+    background-color: transparent;
+}
+
+:root .MuiTableRow-root:hover > .MuiTableCell-body {
+    background-color: rgba(var(--homer-accent-rgb), 0.08);
+}
+
+:root .MuiTablePagination-root,
+:root .MuiToolbar-root {
+    color: var(--homer-text);
+}
+
+/* chips, alerts, avatars, progress */
+:root .MuiChip-root {
+    font-family: var(--sk-cond-stack);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--homer-text);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+}
+
+:root .MuiChip-colorPrimary {
+    background: var(--homer-focus-fill);
+    box-shadow: none;
+}
+
+:root .MuiAlert-root {
+    border-radius: var(--homer-radius-sm);
+}
+
+:root .MuiAlert-standardInfo,
+:root .MuiAlert-outlinedInfo {
+    background: rgba(var(--homer-accent-rgb), 0.14);
+    color: var(--homer-text);
+}
+
+:root .MuiAvatar-root {
+    background: linear-gradient(145deg, var(--homer-accent-2), var(--homer-accent) 60%, #1450c8);
+    color: #fff;
+}
+
+:root .MuiLinearProgress-root {
+    background-color: rgba(160, 190, 230, 0.16);
+    border-radius: 999px;
+}
+
+:root .MuiLinearProgress-bar {
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+    border-radius: 999px;
+}
+
+:root .MuiLinearProgress-barColorError,
+:root .MuiLinearProgress-barColorWarning {
+    background: linear-gradient(90deg, var(--homer-needle), var(--homer-live));
+}
+
+:root .MuiCircularProgress-root {
+    color: var(--homer-accent);
+}
+
+:root .MuiTooltip-tooltip {
+    background: rgba(9, 20, 38, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 10px 30px rgba(0, 0, 0, 0.5);
+    font-family: var(--sk-cond-stack);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* =====================================================================
+   Layout variants
+   ===================================================================== */
+
+/* phones: keep the panels, lose a little padding */
+:root.layout-mobile .navMenuOption {
+    margin: 0.1em 0.5em !important; /* see .navMenuOption above */
+}
+
+/* TV: bigger, rounder focus states; nothing moves */
+:root.layout-tv .card.show-focus:focus .cardScalable {
+    box-shadow: var(--homer-focus-ring);
+}
