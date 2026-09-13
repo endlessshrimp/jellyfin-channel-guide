@@ -467,6 +467,7 @@
 
 .cg-prog {
     position: absolute;
+    box-sizing: border-box; /* the width posCell sets is the whole cell, so the selected one doesn't spill onto the next */
     top: 7px;
     bottom: 7px;
     border-radius: 10px;
@@ -648,6 +649,93 @@
     height: 9px;
 }
 
+.cg-chip.rec.now::before { animation: cg-pulse 1.4s ease-in-out infinite; }
+
+.cg-rec-hint {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.cg-rec-hint .cg-key { color: var(--live); }
+.cg-rec-hint.confirming { color: var(--text); }
+.cg-rec-hint.confirming .cg-key { margin: 0 8px; background: var(--live); border-color: transparent; color: #fff; }
+
+/* The hovered program's record button: a red dot on a dark pill. On a program
+   that's set to record, the dot becomes a stop square. */
+.cg-rec-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    z-index: 2;
+    display: none;
+    align-items: center;
+    gap: 9px;
+    box-sizing: border-box;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 12px;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 19px;
+    background: rgba(3, 9, 18, 0.9);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1;
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cg-prog.can-rec:hover .cg-rec-btn,
+.cg-prog.confirming .cg-rec-btn { display: inline-flex; }
+.cg-prog.cg-narrow:not(.confirming) .cg-rec-btn { display: none; }
+/* make room for the button (on the text, not the cell: padding would widen it) */
+.cg-prog.can-rec:not(.cg-narrow):hover .cg-prog-title,
+.cg-prog.can-rec:not(.cg-narrow):hover .cg-prog-sub,
+.cg-prog.confirming:not(.cg-narrow) .cg-prog-title,
+.cg-prog.confirming:not(.cg-narrow) .cg-prog-sub { margin-right: 40px; }
+
+.cg-rec-icon {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.75);
+}
+
+.cg-prog.rec .cg-rec-icon { border-radius: 2px; width: 12px; height: 12px; }
+
+.cg-rec-label { display: none; }
+
+.cg-rec-btn:hover,
+.cg-prog.confirming .cg-rec-btn {
+    background: var(--live);
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 59, 59, 0.35), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.cg-rec-btn:hover .cg-rec-icon,
+.cg-prog.confirming .cg-rec-icon { background: #fff; box-shadow: none; }
+
+.cg-rec-btn:hover .cg-rec-label,
+.cg-prog.confirming .cg-rec-label { display: inline; }
+
+.cg-prog.confirming .cg-rec-btn { animation: cg-arm 1s ease-in-out infinite; }
+
+@keyframes cg-arm {
+    50% { box-shadow: 0 0 0 7px rgba(255, 59, 59, 0.2), 0 6px 18px rgba(0, 0, 0, 0.5); }
+}
+
 /* ---------- Toast ---------- */
 
 .cg-toast {
@@ -686,6 +774,44 @@
 }
 
 .cg-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
+
+/* "Cancel recording of …? Press R again" */
+.cg-toast.confirm { box-shadow: 0 0 0 2px var(--live), 0 16px 40px rgba(0, 0, 0, 0.55); }
+
+.cg-toast.confirm::before {
+    content: "";
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--live);
+}
+
+.cg-toast-q {
+    display: flex;
+    min-width: 0;
+}
+
+.cg-toast-q > span { flex: none; white-space: pre; }
+
+.cg-toast-q > .cg-toast-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.cg-toast-hint {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    color: var(--dim);
+}
+
+.cg-toast-hint .cg-key { margin: 0 8px; background: var(--live); border-color: transparent; }
 
 /* ---------- Filter ---------- */
 

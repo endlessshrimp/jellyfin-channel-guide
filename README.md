@@ -57,8 +57,11 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 
 - Opens from a **Guide** button in Jellyfin's header, or the **G** key.
 - **OK / Enter** (or a click) starts the channel in the same browser tab.
-- **R** schedules a one-time recording of the selected program. Programs that
-  are set to record get a red dot.
+- **R**, or the **●** button on a program you hover over, schedules a one-time
+  recording of that program. Programs that are set to record get a red dot.
+- On a program that's set to record, **R** (or its **■** button) cancels the
+  recording, or stops it if it's already recording. The guide asks first:
+  press **R** or click **■** again within a few seconds to confirm.
 - Opens on top of whatever's playing, so the video keeps going: press **G** or
   the Guide button in the player's controls. Shrinking the player into the
   browser's floating window brings the guide up behind it.
@@ -101,7 +104,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **▲ ▼** | Change channel (keeps the same time slot, like a real guide) |
 | **◀ ▶** | Move through time on the current channel |
 | **OK / Enter** | Watch the selected channel |
-| **R** | Record the selected program |
+| **R** | Record the selected program. On a program that's set to record, press **R** twice to cancel it (or stop it if it's recording) |
 | **/** | Filter by channel name/number or show title (Esc clears) |
 | **[ ] / 1–8** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment |
 | **C** | Switch country: All, USA, UK, France (combines with the category) |
@@ -110,7 +113,11 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **Esc / Backspace / G** | Close the guide |
 
 With a mouse or trackpad: scroll the grid freely, hover to select, click a
-program to watch it. Type in the filter box at the top to narrow the grid. The **OK**, **●** and **ESC** hints along the bottom are clickable too.
+program to watch it. A hovered program shows a **●** button at its right edge
+that records it (**■** on a program that's set to record: click it twice to
+cancel). Type in the filter box at the top to narrow the grid. The **OK**,
+**/**, **[ ]**, **C**, **H** and **ESC** hints along the bottom are clickable
+too.
 
 Scripts can also call `window.ChannelGuide.open()` and
 `window.ChannelGuide.close()`.
