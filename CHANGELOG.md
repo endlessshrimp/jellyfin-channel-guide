@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.10
+
+- Country switch (All / USA / UK / France) replaces the International
+  category and combines with it (e.g. Sports + UK). C cycles countries.
+  Irish channels sit under UK. Category counts follow the chosen country.
+
 ## v0.1.9
 
 - Channel categories: a chip row above the grid (All, Favorites, Local, News,

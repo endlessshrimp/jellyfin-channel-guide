@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.9';
+    const VERSION = '0.1.10';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -105,9 +105,22 @@
         { key: 'sports', label: 'Sports' },
         { key: 'movies', label: 'Movies' },
         { key: 'kids', label: 'Kids' },
-        { key: 'ent', label: 'Entertainment' },
-        { key: 'intl', label: 'International' }
+        { key: 'ent', label: 'Entertainment' }
     ];
+    // Country is a separate switch that combines with the category (Sports + UK).
+    // Irish channels (IE) sit under UK.
+    const COUNTRIES = [
+        { key: 'all', label: 'All' },
+        { key: 'us', label: 'USA' },
+        { key: 'uk', label: 'UK' },
+        { key: 'fr', label: 'France' }
+    ];
+    const countryOf = (ch) => {
+        const name = String(ch.Name || '');
+        if (/\((UK|IE)\)/i.test(name)) return 'uk';
+        if (/\(FR\)/i.test(name)) return 'fr';
+        return 'us';
+    };
     const RULES = {
         news: /^(CNN|CNN International|HLN|FOX News|FOX Business|CNBC|MSNBC|Bloomberg|BBC News|BBC World News|Sky News|ABC News|The Weather Channel|NewsNation|Newsmax)\b/i,
         sports: /(ESPN|FOX Sports|FOX Soccer|FOX Deportes|\bFS[12]\b|NFL|NBA TV|MLB|NHL|Golf|Tennis|SEC Network|Big Ten|Pac 12|CBS Sports|Sky Sports|TNT Sports|beIN|Premier Sports?|La Liga|GOL TV|MASN|Altitude|SportsNet|Racing|Olympic)/i,
@@ -119,12 +132,11 @@
         const name = String(ch.Name || '');
         const base = name.replace(/\s*\((UK|IE|FR)\)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
         const cats = new Set(['all']);
-        if (/\((UK|IE|FR)\)/i.test(name)) cats.add('intl');
         if (RULES.news.test(base)) cats.add('news');
         else if (RULES.sports.test(base)) cats.add('sports');
         else if (RULES.movies.test(base)) cats.add('movies');
         else if (RULES.kids.test(base)) cats.add('kids');
-        else if (RULES.local.test(base) && !cats.has('intl')) cats.add('local');
+        else if (RULES.local.test(base) && countryOf(ch) === 'us') cats.add('local');
         else cats.add('ent');
         if (ch.UserData && ch.UserData.IsFavorite) cats.add('fav');
         return cats;
@@ -267,6 +279,7 @@
                 <span data-action="record"><span class="cg-key rec">●</span>Record</span>
                 <span data-action="search"><span class="cg-key">/</span>Filter</span>
                 <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
+                <span data-action="country-next"><span class="cg-key">C</span>Country</span>
                 <span class="spacer"></span>
                 <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
             </div>`;
@@ -381,7 +394,7 @@
                 row.appendChild(chan);
                 const lane = el('div', 'cg-lane');
                 const cells = [];
-                const rowData = { el: row, ch, cells, cats: categorize(ch) };
+                const rowData = { el: row, ch, cells, cats: categorize(ch), country: countryOf(ch) };
                 const list = progs.length ? progs : [{ Name: '', StartDate: winStart.toISOString(), EndDate: winEnd.toISOString(), _empty: true }];
                 for (const p of list) {
                     const s = new Date(p.StartDate);
@@ -564,11 +577,13 @@
         let query = '';
         const lc = (x) => String(x ?? '').toLowerCase();
         let category = 'all';
+        let country = 'all';
+        const inScope = (row) => row.cats.has(category) && (country === 'all' || row.country === country);
         const applyFilter = (text) => {
             query = lc(text).trim();
             order = [];
             rows.forEach((row, i) => {
-                if (!row.cats.has(category)) {
+                if (!inScope(row)) {
                     row.el.style.display = 'none';
                     for (const c of row.cells) c.el.classList.remove('match');
                     return;
@@ -588,7 +603,10 @@
             root.classList.toggle('filtering', !!query);
             $('.cg-search-count').textContent = query ? `${order.length} channel${order.length === 1 ? '' : 's'}` : '';
             const empty = $('.cg-empty');
-            const catLabel = (CATEGORIES.find((c) => c.key === category) || {}).label;
+            const catLabel = [
+                category !== 'all' ? (CATEGORIES.find((c) => c.key === category) || {}).label : '',
+                country !== 'all' ? (COUNTRIES.find((c) => c.key === country) || {}).label : ''
+            ].filter(Boolean).join(' · ') || 'these';
             empty.textContent = order.length ? ''
                 : query ? `Nothing in ${catLabel} matches “${text.trim()}”`
                     : category === 'fav' ? 'No favorite channels yet. Heart a channel in Jellyfin to add it here.'
@@ -607,8 +625,9 @@
         const catBar = $('.cg-cats');
         const buildCats = () => {
             catBar.innerHTML = '';
+            const inCountry = (r) => country === 'all' || r.country === country;
             CATEGORIES.forEach((c, i) => {
-                const n = rows.filter((r) => r.cats.has(c.key)).length;
+                const n = rows.filter((r) => r.cats.has(c.key) && inCountry(r)).length;
                 const chip = el('button', 'cg-cat' + (c.key === category ? ' on' : ''),
                     `<span class="cg-cat-num">${i + 1}</span>${esc(c.label)}<span class="cg-cat-count">${n}</span>`);
                 chip.type = 'button';
@@ -617,6 +636,29 @@
                 chip.setAttribute('aria-selected', String(c.key === category));
                 catBar.appendChild(chip);
             });
+            catBar.appendChild(el('span', 'cg-cats-spacer'));
+            const seg = el('div', 'cg-countries');
+            seg.setAttribute('role', 'group');
+            seg.setAttribute('aria-label', 'Country');
+            COUNTRIES.forEach((c) => {
+                const n = c.key === 'all' ? rows.length : rows.filter((r) => r.country === c.key).length;
+                const b = el('button', 'cg-country' + (c.key === country ? ' on' : ''), `${esc(c.label)}<span class="cg-cat-count">${n}</span>`);
+                b.type = 'button';
+                b.dataset.country = c.key;
+                b.setAttribute('aria-pressed', String(c.key === country));
+                seg.appendChild(b);
+            });
+            catBar.appendChild(seg);
+        };
+        const setCountry = (key) => {
+            if (!COUNTRIES.some((c) => c.key === key)) return;
+            country = key;
+            buildCats(); // category counts follow the country
+            applyFilter(searchInput.value);
+        };
+        const cycleCountry = () => {
+            const i = COUNTRIES.findIndex((c) => c.key === country);
+            setCountry(COUNTRIES[(i + 1) % COUNTRIES.length].key);
         };
         const setCategory = (key) => {
             if (!CATEGORIES.some((c) => c.key === key)) return;
@@ -634,7 +676,9 @@
         };
         catBar.addEventListener('click', (ev) => {
             const b = ev.target.closest('.cg-cat');
-            if (b) setCategory(b.dataset.cat);
+            if (b) { setCategory(b.dataset.cat); return; }
+            const cb = ev.target.closest('.cg-country');
+            if (cb) setCountry(cb.dataset.country);
         });
         const clearFilter = () => {
             searchInput.value = '';
@@ -669,6 +713,12 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 cycleCategory(k === ']' ? 1 : -1);
+                return;
+            }
+            if (k === 'c' || k === 'C') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                cycleCountry();
                 return;
             }
             if (/^[1-9]$/.test(k) && CATEGORIES[+k - 1]) {
@@ -726,6 +776,7 @@
             else if (action === 'record') record();
             else if (action === 'search') focusSearch();
             else if (action === 'cat-next') cycleCategory(1);
+            else if (action === 'country-next') cycleCountry();
             else if (action === 'close') close();
         };
 

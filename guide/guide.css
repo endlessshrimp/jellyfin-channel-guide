@@ -896,3 +896,44 @@
 
 .cg-cat.on .cg-cat-num { background: rgba(255, 255, 255, 0.25); color: #fff; }
 .cg-cat.on .cg-cat-count { color: rgba(255, 255, 255, 0.85); }
+
+/* ---------- Country switch (combines with the category) ---------- */
+
+.cg-cats-spacer { flex: 1; }
+
+.cg-countries {
+    display: inline-flex;
+    height: 42px;
+    padding: 3px;
+    gap: 3px;
+    border-radius: 21px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--line-strong);
+}
+
+.cg-country {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    color: #d6e0ec;
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cg-country:hover { background: rgba(255, 255, 255, 0.1); }
+
+.cg-country.on {
+    background: #fff;
+    color: #0a1a30;
+}
+
+.cg-country.on .cg-cat-count { color: #3a5575; }
