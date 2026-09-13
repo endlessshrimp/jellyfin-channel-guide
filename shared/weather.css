@@ -37,6 +37,10 @@
     pointer-events: none;
 }
 
+.homer-wx-text {
+    text-align: right;
+}
+
 .homer-wx-temp {
     font-size: 40px;
     font-weight: 700;

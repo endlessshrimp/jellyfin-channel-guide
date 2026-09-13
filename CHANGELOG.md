@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.5
+
+- Weather: the temperature and high/low are right-aligned, like the clock.
+
 ## v0.3.4
 
 - Weather: every HOMER screen with a clock shows the current temperature in
