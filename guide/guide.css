@@ -788,6 +788,42 @@
     50% { box-shadow: 0 0 0 7px rgba(255, 59, 59, 0.2), 0 6px 18px rgba(0, 0, 0, 0.5); }
 }
 
+/* Touch screens (no hover): the highlighted program shows its button, a size
+   up for a finger, and the look a tap leaves behind (a "stuck" hover) doesn't
+   count. A finger drags the grid, so the browser mustn't pan it. */
+.cg-rows { touch-action: none; }
+
+.cg-touch .cg-prog.can-rec.sel .cg-rec-btn { display: inline-flex; }
+.cg-touch .cg-prog.can-rec:not(.sel):not(.confirming):hover .cg-rec-btn { display: none; }
+.cg-touch .cg-prog.cg-narrow:not(.confirming) .cg-rec-btn { display: none; }
+
+.cg-touch .cg-prog.can-rec:not(.cg-narrow):not(.sel):not(.confirming):hover .cg-prog-title,
+.cg-touch .cg-prog.can-rec:not(.cg-narrow):not(.sel):not(.confirming):hover .cg-prog-sub { margin-right: 0; }
+.cg-touch .cg-prog.can-rec.sel:not(.cg-narrow) .cg-prog-title,
+.cg-touch .cg-prog.can-rec.sel:not(.cg-narrow) .cg-prog-sub,
+.cg-touch .cg-prog.confirming:not(.cg-narrow) .cg-prog-title,
+.cg-touch .cg-prog.confirming:not(.cg-narrow) .cg-prog-sub { margin-right: 60px; }
+
+.cg-touch .cg-rec-btn {
+    right: 6px;
+    height: 50px;
+    min-width: 50px;
+    padding: 0 17px;
+    border-radius: 25px;
+}
+
+.cg-touch .cg-rec-icon { width: 16px; height: 16px; }
+.cg-touch .cg-prog.rec .cg-rec-icon { width: 15px; height: 15px; }
+
+.cg-touch .cg-prog:not(.confirming) .cg-rec-btn:hover {
+    background: rgba(3, 9, 18, 0.9);
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.cg-touch .cg-prog:not(.confirming) .cg-rec-btn:hover .cg-rec-icon { background: var(--live); box-shadow: 0 0 10px rgba(255, 59, 59, 0.75); }
+.cg-touch .cg-prog:not(.confirming) .cg-rec-btn:hover .cg-rec-label { display: none; }
+
 /* ---------- Toast ---------- */
 
 .cg-toast {

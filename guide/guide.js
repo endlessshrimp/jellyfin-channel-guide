@@ -237,6 +237,13 @@
         location.hash = '#/home';
     };
 
+    // Touch screens (no hover, like a tablet): the first tap on a program
+    // highlights it and shows its ● button, and a tap on the highlighted
+    // program does what OK does. A touch on a screen that can also hover (a
+    // touch laptop) counts too.
+    const touchMq = window.matchMedia ? window.matchMedia('(hover: none)') : null;
+    const touchScreen = () => !!(touchMq && touchMq.matches);
+
     // ---------- Guide ----------
 
     let guide = null; // the open guide instance, or null
@@ -688,18 +695,23 @@
             }
             // The mouse only highlights; it never scrolls the grid out from under
             // the pointer. A pointer that's just resting there doesn't take the
-            // highlight from the keys when the grid redraws under it.
+            // highlight from the keys when the grid redraws under it. (A tap
+            // sends a mouseenter too; on a touch screen only the tap counts.)
             cell.addEventListener('mouseenter', () => {
-                if (!pointerActive()) return;
+                if (!pointerActive() || touchInput()) return;
                 touched = true;
                 select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
             });
             // A click on an airing program watches it. An upcoming one is only
             // selected (its ● button records), so a stray click never sets a
-            // recording.
+            // recording. On a touch screen the first tap only highlights the
+            // program, which shows its ● button; a second tap watches.
             cell.addEventListener('click', () => {
                 touched = true;
-                select(rowData.i, rowData.cells.indexOf(cellData), { scroll: false });
+                const c = rowData.cells.indexOf(cellData);
+                const again = sel.row === rowData.i && sel.col === c;
+                select(rowData.i, c, { scroll: false });
+                if (touchInput() && !again) return;
                 if (!upcoming(cellData)) watch();
             });
             // The hovered program's own record button: it records the program
@@ -964,7 +976,7 @@
             paintCell(cell);
             reshow();
             const q = recordingNow(cell) ? 'Stop recording ' : 'Cancel recording of ';
-            const hint = via === 'click' ? 'Click again'
+            const hint = via === 'click' ? (touchInput() ? 'Tap again' : 'Click again')
                 : `Press <span class="cg-key">${via === 'ok' ? 'OK' : 'R'}</span>again`;
             showToast(`<span class="cg-toast-q"><span>${q}</span><span class="cg-toast-name">${esc(cell.p.Name)}</span><span>?</span></span>`
                 + `<span class="cg-toast-hint">${hint}</span>`, 'confirm', CONFIRM_MS);
@@ -1185,6 +1197,54 @@
         const onPointerMove = (ev) => {
             if (ev.movementX || ev.movementY) lastPointerAt = Date.now();
         };
+
+        // ---------- Touch ----------
+        // A finger drags the channels up and down, and sideways moves through
+        // time the way the trackpad does. A drag is never a tap.
+        let lastTouchAt = 0;
+        const touchInput = () => touchScreen() || Date.now() - lastTouchAt < 1000;
+        const syncTouch = () => root.classList.toggle('cg-touch', touchScreen());
+        syncTouch();
+        let drag = null;
+        let noClickUntil = 0;
+        const rowsBox = $('.cg-rows');
+        const onTouchDown = (ev) => {
+            if (ev.pointerType === 'mouse') return;
+            lastTouchAt = Date.now();
+            drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, axis: null };
+        };
+        const onTouchMove = (ev) => {
+            if (!drag || ev.pointerId !== drag.id) return;
+            const dx = ev.clientX - drag.x;
+            const dy = ev.clientY - drag.y;
+            if (!drag.axis) {
+                if (Math.hypot(dx, dy) < 10) return; // still a tap
+                drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+                try { rowsBox.setPointerCapture(ev.pointerId); } catch { /* it's gone */ }
+            }
+            drag.x = ev.clientX;
+            drag.y = ev.clientY;
+            if (!rows.length) return;
+            touched = true;
+            if (drag.axis === 'y') setScroll(scrollY - dy / stageScale, false);
+            else scrub(-dx); // the grid follows the finger: dragging left goes later
+        };
+        const onTouchEnd = (ev) => {
+            if (!drag || ev.pointerId !== drag.id) return;
+            if (drag.axis) noClickUntil = Date.now() + 400;
+            drag = null;
+        };
+        const onClickAfterDrag = (ev) => {
+            if (Date.now() >= noClickUntil) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+        };
+        rowsBox.addEventListener('pointerdown', onTouchDown);
+        rowsBox.addEventListener('pointermove', onTouchMove);
+        rowsBox.addEventListener('pointerup', onTouchEnd);
+        rowsBox.addEventListener('pointercancel', onTouchEnd);
+        rowsBox.addEventListener('click', onClickAfterDrag, true);
+        if (touchMq && touchMq.addEventListener) touchMq.addEventListener('change', syncTouch);
 
         // ---------- Filter ----------
         const searchInput = $('.cg-search-input');
@@ -1472,6 +1532,7 @@
                 clearTimeout(toastTimer);
                 clearTimeout(retryTimer);
                 clearTimeout(scrubTimer);
+                if (touchMq && touchMq.removeEventListener) touchMq.removeEventListener('change', syncTouch);
                 if (armed) clearTimeout(armed.timer);
                 root.remove();
             }

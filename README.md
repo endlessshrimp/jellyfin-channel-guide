@@ -143,6 +143,11 @@ cancel). Type in the filter box at the top to narrow the grid. The **N**,
 **OK**, **/**, **[ ]**, **C**, **H** and **ESC** hints along the bottom are
 clickable too.
 
+On a touch screen (a tablet), the first tap on a program highlights it and
+shows its **●** button; tap the button to record, or tap the highlighted
+program again to watch it. Drag the grid with a finger to scroll the channels,
+or sideways to move through time.
+
 Scripts can also call `window.ChannelGuide.open()` and
 `window.ChannelGuide.close()`.
 

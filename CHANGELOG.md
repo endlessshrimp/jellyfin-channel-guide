@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Guide on touch screens (tablets, and any screen that can't hover): the
+  first tap on a program highlights it and shows its **●** button, a size up
+  for a finger. A tap on the button records (tap it twice to cancel, as with
+  the mouse), and a tap on the highlighted program watches it if it's on now.
+  An upcoming program is only highlighted, as before. A finger drags the
+  channels up and down, and dragging sideways moves through time; a drag
+  never counts as a tap. Mouse and keyboard work exactly as before.
+
 ## v0.3.9
 
 - Guide: move through time like a cable box. **◀ ▶** past the edge of the
