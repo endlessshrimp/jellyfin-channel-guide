@@ -1,1 +1,622 @@
-/* HOMER home screen: filled in by the home work. */
+/*
+ * HOMER Home: a TiVo-style main menu that replaces Jellyfin Web's home page.
+ *
+ * Loaded on every Jellyfin Web page by homer.js. When Jellyfin shows its home
+ * route (#/home), this puts a full-screen HOMER stage over it: a main menu, an
+ * "On Now" feature panel with a live preview, and rows of Continue Watching,
+ * Up Next, On Now and Recently Added. Remote-style arrow navigation, OK to
+ * select; mouse hover highlights, click selects, the trackpad scrolls.
+ *
+ * window.HomerHome = { open, close, destroy, version }
+ */
+(() => {
+    const VERSION = '0.2.0';
+
+    if (window.HomerHome && typeof window.HomerHome.destroy === 'function') {
+        window.HomerHome.destroy();
+    }
+
+    const scriptEl = document.currentScript
+        || [...document.querySelectorAll('script[src*="home.js"]')].pop();
+    const scriptSrc = (scriptEl && scriptEl.src) || '';
+    const BASE = scriptSrc ? scriptSrc.replace(/home\.js(\?.*)?$/, '') : '';
+    const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
+    const PLACEHOLDER = /\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/;
+    const ROW_H = 222;
+
+    // ---------- Jellyfin session (same approach as the guide) ----------
+
+    const getServer = () => {
+        try {
+            const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+            const server = (creds.Servers || [])[0];
+            return server && server.AccessToken && server.UserId ? server : null;
+        } catch {
+            return null;
+        }
+    };
+    const authHeader = (server) => {
+        const ac = window.ApiClient;
+        const parts = [];
+        try {
+            if (ac && ac.appName && ac.deviceId) {
+                parts.push(`Client="${ac.appName()}"`, `Device="${ac.deviceName()}"`,
+                    `DeviceId="${ac.deviceId()}"`, `Version="${ac.appVersion()}"`);
+            }
+        } catch { /* token only */ }
+        parts.push(`Token="${server.AccessToken}"`);
+        return 'MediaBrowser ' + parts.join(', ');
+    };
+    const api = async (path) => {
+        const server = getServer();
+        if (!server) throw new Error('Not signed in');
+        const res = await fetch(path, { headers: { Authorization: authHeader(server) } });
+        if (!res.ok) throw new Error(`GET ${path.split('?')[0]} → ${res.status}`);
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    };
+    const play = (itemId, startTicks) => {
+        const ac = window.ApiClient;
+        if (ac && typeof ac.handleMessageReceived === 'function') {
+            const Data = { PlayCommand: 'PlayNow', ItemIds: [itemId] };
+            if (startTicks) Data.StartPositionTicks = startTicks;
+            ac.handleMessageReceived({ MessageType: 'Play', Data });
+        }
+    };
+
+    // ---------- Helpers ----------
+
+    const el = (tag, cls, html) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (html != null) e.innerHTML = html;
+        return e;
+    };
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const img = (id, type, tag, w, idx) => (tag ? `/Items/${id}/Images/${type}${idx != null ? '/' + idx : ''}?maxWidth=${w}&tag=${tag}&quality=85` : null);
+
+    // best 16:9 artwork for a card
+    const cardArt = (it) => {
+        if (it.ImageTags && it.ImageTags.Thumb) return img(it.Id, 'Thumb', it.ImageTags.Thumb, 600);
+        if (it.ParentThumbItemId && it.ParentThumbImageTag) return img(it.ParentThumbItemId, 'Thumb', it.ParentThumbImageTag, 600);
+        if (it.BackdropImageTags && it.BackdropImageTags.length) return img(it.Id, 'Backdrop', it.BackdropImageTags[0], 600, 0);
+        if (it.ParentBackdropItemId && it.ParentBackdropImageTags && it.ParentBackdropImageTags.length) return img(it.ParentBackdropItemId, 'Backdrop', it.ParentBackdropImageTags[0], 600, 0);
+        if (it.ImageTags && it.ImageTags.Primary) return img(it.Id, 'Primary', it.ImageTags.Primary, 600);
+        return null;
+    };
+    // Channel logo chip. Works for a channel item or a program (programs don't
+    // carry their channel's image tag, so the logo is fetched by channel id).
+    const logoChip = (x, big) => {
+        const chip = el('div', 'hm-logo-chip' + (big ? ' big' : ''));
+        const isProgram = x && x.ChannelId && x.Type !== 'TvChannel';
+        const id = isProgram ? x.ChannelId : x && x.Id;
+        const name = isProgram ? (x.ChannelName || '') : (x && x.Name) || '';
+        const fallback = () => { chip.innerHTML = `<div class="hm-logo-fallback">${esc(name)}</div>`; };
+        if (!id) { fallback(); return chip; }
+        const i = new Image();
+        i.src = `/Items/${id}/Images/Primary?maxHeight=120`;
+        i.alt = '';
+        i.onerror = fallback;
+        chip.appendChild(i);
+        return chip;
+    };
+
+    let cssReady = null;
+    const ensureCss = () => {
+        if (cssReady && document.getElementById('hm-css')) return cssReady;
+        if (!document.getElementById('homer-tokens') && BASE) {
+            const t = document.createElement('link');
+            t.id = 'homer-tokens';
+            t.rel = 'stylesheet';
+            t.href = BASE.replace(/home\/$/, '') + 'shared/tokens.css' + QUERY;
+            document.head.appendChild(t);
+        }
+        const css = document.createElement('link');
+        css.id = 'hm-css';
+        css.rel = 'stylesheet';
+        css.href = BASE + 'home.css' + QUERY;
+        cssReady = new Promise((resolve) => {
+            css.onload = css.onerror = resolve;
+            setTimeout(resolve, 2000);
+        });
+        document.head.appendChild(css);
+        return cssReady;
+    };
+
+    // ---------- Home ----------
+
+    let home = null;
+
+    const createHome = (server) => {
+        const root = el('div');
+        root.id = 'hm-root';
+        root.style.visibility = 'hidden';
+        const stage = el('div');
+        stage.id = 'hm-stage';
+        root.appendChild(stage);
+        document.body.appendChild(root);
+
+        stage.innerHTML = `
+            <div class="hm-topbar">
+                <div class="hm-brand"><span class="hm-brand-mark"></span>HOMER<span class="hm-brand-sub">HOME</span></div>
+                <label class="hm-search" data-focus="search">
+                    <span class="material-icons" aria-hidden="true">search</span>
+                    <input type="text" placeholder="Search movies, shows and people" autocomplete="off" spellcheck="false" aria-label="Search">
+                </label>
+                <div class="hm-clock"><div class="hm-clock-time"></div><div class="hm-clock-date"></div></div>
+            </div>
+            <div class="hm-menu"></div>
+            <div class="hm-hero">
+                <div class="hm-hero-text">
+                    <div class="hm-eyebrow">On now</div>
+                    <div class="hm-hero-channel"></div>
+                    <div class="hm-hero-title">Loading…</div>
+                    <div class="hm-hero-meta"></div>
+                    <div class="hm-hero-desc"></div>
+                    <div class="hm-hero-actions"></div>
+                </div>
+                <div class="hm-preview">
+                    <div class="hm-preview-art"></div>
+                    <div class="hm-preview-logo"></div>
+                    <canvas width="1120" height="630"></canvas>
+                    <div class="hm-preview-badge"></div>
+                </div>
+            </div>
+            <div class="hm-rows"><div class="hm-rows-inner"></div></div>
+            <div class="hm-legend">
+                <span><span class="hm-key">▲▼◀▶</span>Move</span>
+                <span><span class="hm-key">OK</span>Select</span>
+                <span data-action="guide"><span class="hm-key">G</span>Guide</span>
+                <span data-action="search"><span class="hm-key">/</span>Search</span>
+            </div>`;
+
+        const $ = (s) => stage.querySelector(s);
+
+        const fit = () => {
+            const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+        };
+        fit();
+
+        const tick = () => {
+            const d = new Date();
+            $('.hm-clock-time').textContent = fmtTime(d);
+            $('.hm-clock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+        };
+        tick();
+        const clockTimer = setInterval(tick, 1000);
+
+        // ---------- Focus (spatial, like a remote) ----------
+        // Every selectable thing carries a .hm-focusable class; arrows pick the
+        // nearest one in that direction, the way a TV UI moves.
+        let focused = null;
+        let lastAbove = null; // where Up from the first row returns to
+        const setFocus = (node, { scroll = true } = {}) => {
+            if (!node || node === focused) return;
+            if (focused) focused.classList.remove('hm-focus');
+            focused = node;
+            node.classList.add('hm-focus');
+            if (scroll) revealFocused();
+            if (node.dataset.row != null && node.dataset.col != null) rowMemory[node.dataset.row] = +node.dataset.col;
+        };
+        const rect = (n) => n.getBoundingClientRect();
+        const move = (dir) => {
+            const all = [...stage.querySelectorAll('.hm-focusable')].filter((n) => n.offsetParent !== null);
+            if (!focused || !all.includes(focused)) { setFocus(all[0]); return; }
+            // down from the menu's last item or the On Now buttons lands on the first
+            // row; up from the first row goes back where you came from
+            if (dir === 'down' && focused.dataset.row == null && (focused === menu.lastChild || focused.closest('.hm-hero'))) {
+                const t = rowCard(0, rowMemory[0] ?? 0);
+                if (t) { lastAbove = focused; setFocus(t); return; }
+            }
+            if (dir === 'up' && focused.dataset.row === '0' && lastAbove && stage.contains(lastAbove)) {
+                setFocus(lastAbove);
+                return;
+            }
+            // moving between rows lands on the card you were last on in that row
+            if ((dir === 'up' || dir === 'down') && focused.dataset.row != null) {
+                const r = +focused.dataset.row + (dir === 'down' ? 1 : -1);
+                const target = rowCard(r, rowMemory[r] ?? 0);
+                if (target) { setFocus(target); return; }
+            }
+            const a = rect(focused);
+            const ax = a.left + a.width / 2;
+            const ay = a.top + a.height / 2;
+            let best = null;
+            let bestScore = Infinity;
+            for (const n of all) {
+                if (n === focused) continue;
+                const b = rect(n);
+                const bx = b.left + b.width / 2;
+                const by = b.top + b.height / 2;
+                const dx = bx - ax;
+                const dy = by - ay;
+                const ok = dir === 'left' ? dx < -4 : dir === 'right' ? dx > 4 : dir === 'up' ? dy < -4 : dy > 4;
+                if (!ok) continue;
+                const primary = dir === 'left' || dir === 'right' ? Math.abs(dx) : Math.abs(dy);
+                const cross = dir === 'left' || dir === 'right' ? Math.abs(dy) : Math.abs(dx);
+                const score = primary + cross * 2.5;
+                if (score < bestScore) { bestScore = score; best = n; }
+            }
+            if (best) setFocus(best);
+        };
+
+        // ---------- Rows: vertical scroll of the whole block, horizontal per row ----------
+        const rowMemory = {};
+        const rowOffsets = {}; // row index -> px scrolled horizontally
+        let scrollY = 0;
+        const rowsInner = () => $('.hm-rows-inner');
+        const rowsViewH = () => $('.hm-rows').clientHeight;
+        const setScrollY = (y, animate) => {
+            const max = Math.max(0, rowsInner().scrollHeight - rowsViewH());
+            scrollY = Math.max(0, Math.min(max, y));
+            rowsInner().style.transition = animate ? 'transform 180ms ease' : 'none';
+            rowsInner().style.transform = `translateY(${-scrollY}px)`;
+        };
+        const rowCard = (r, c) => {
+            const row = stage.querySelector(`.hm-row[data-row="${r}"]`);
+            if (!row) return null;
+            const cards = row.querySelectorAll('.hm-card');
+            return cards[Math.max(0, Math.min(cards.length - 1, c))] || null;
+        };
+        const setRowOffset = (r, x, animate) => {
+            const row = stage.querySelector(`.hm-row[data-row="${r}"]`);
+            if (!row) return;
+            const slider = row.querySelector('.hm-row-slider');
+            const track = row.querySelector('.hm-row-track');
+            const max = Math.max(0, slider.scrollWidth - track.clientWidth + 72);
+            rowOffsets[r] = Math.max(0, Math.min(max, x));
+            slider.style.transition = animate ? 'transform 180ms ease' : 'none';
+            slider.style.transform = `translateX(${-rowOffsets[r]}px)`;
+        };
+        const revealFocused = () => {
+            if (!focused || focused.dataset.row == null) {
+                if (focused && !focused.closest('.hm-rows')) setScrollY(0, true);
+                return;
+            }
+            const r = +focused.dataset.row;
+            // vertical: bring the row into view
+            const top = r * ROW_H;
+            if (top < scrollY) setScrollY(top, true);
+            else if (top + ROW_H > scrollY + rowsViewH()) setScrollY(top + ROW_H - rowsViewH(), true);
+            // horizontal: keep the card inside the track
+            const c = +focused.dataset.col;
+            const x = c * (300 + 22);
+            const trackW = focused.closest('.hm-row-track').clientWidth;
+            const off = rowOffsets[r] || 0;
+            if (x < off) setRowOffset(r, x, true);
+            else if (x + 300 + 40 > off + trackW) setRowOffset(r, x + 300 + 40 - trackW, true);
+        };
+
+        // ---------- Menu ----------
+        let views = [];
+        const route = (hash) => { location.hash = hash; };
+        const viewRoute = (type) => {
+            const v = views.find((x) => x.CollectionType === type);
+            if (!v) return null;
+            return type === 'movies'
+                ? `#/movies?topParentId=${v.Id}&collectionType=movies`
+                : `#/tv?topParentId=${v.Id}&collectionType=tvshows`;
+        };
+        const openGuide = () => {
+            if (window.ChannelGuide && window.ChannelGuide.open) window.ChannelGuide.open();
+            else route('#/livetv?tab=1');
+        };
+        const MENU = [
+            { icon: 'live_tv', label: 'Live TV Guide', hint: 'G', act: openGuide },
+            { icon: 'movie', label: 'Movies', act: () => { const r = viewRoute('movies'); if (r) route(r); } },
+            { icon: 'tv', label: 'TV Shows', act: () => { const r = viewRoute('tvshows'); if (r) route(r); } },
+            { icon: 'fiber_smart_record', label: 'Recordings', act: () => route('#/livetv?tab=3') },
+            { icon: 'search', label: 'Search', hint: '/', act: () => focusSearch() },
+            { icon: 'settings', label: 'Settings', act: () => route('#/mypreferencesmenu') }
+        ];
+        const menu = $('.hm-menu');
+        MENU.forEach((m) => {
+            const item = el('div', 'hm-menu-item hm-focusable',
+                `<span class="material-icons" aria-hidden="true">${m.icon}</span>${esc(m.label)}${m.hint ? `<span class="hm-menu-hint">${m.hint}</span>` : ''}`);
+            item._act = m.act;
+            menu.appendChild(item);
+        });
+
+        // ---------- Search ----------
+        const searchInput = $('.hm-search input');
+        const focusSearch = () => { searchInput.focus(); searchInput.select(); };
+        const runSearch = () => {
+            const q = searchInput.value.trim();
+            if (q) route(`#/search?query=${encodeURIComponent(q)}`);
+        };
+
+        // ---------- On Now hero ----------
+        let hero = null; // { program, channel }
+        const showHero = () => {
+            const box = $('.hm-hero');
+            const actions = $('.hm-hero-actions');
+            actions.innerHTML = '';
+            if (!hero) {
+                $('.hm-eyebrow').textContent = 'Live TV';
+                $('.hm-hero-channel').innerHTML = '';
+                $('.hm-hero-title').textContent = 'Nothing listed right now';
+                $('.hm-hero-meta').innerHTML = '';
+                $('.hm-hero-desc').textContent = 'Open the guide to browse every channel.';
+            } else {
+                const { program: p } = hero;
+                const s = new Date(p.StartDate);
+                const e = new Date(p.EndDate);
+                $('.hm-eyebrow').textContent = 'On now';
+                const chanLine = $('.hm-hero-channel');
+                chanLine.innerHTML = '';
+                chanLine.appendChild(logoChip(p));
+                chanLine.appendChild(el('span', '', `<b>${esc(p.ChannelNumber || '')}</b> ${esc(p.ChannelName || '')}`));
+                $('.hm-hero-title').textContent = p.Name;
+                const meta = $('.hm-hero-meta');
+                meta.innerHTML = '';
+                meta.appendChild(el('span', 'hm-chip live', 'Live'));
+                meta.appendChild(el('span', 'hm-chip', `${fmtTime(s)} – ${fmtTime(e)}`));
+                if (p.EpisodeTitle) meta.appendChild(el('span', 'hm-chip', esc(p.EpisodeTitle)));
+                $('.hm-hero-desc').textContent = p.Overview || '';
+                const art = $('.hm-preview-art');
+                const logo = $('.hm-preview-logo');
+                if (p.ImageTags && p.ImageTags.Primary) {
+                    art.style.backgroundImage = `url(${img(p.Id, 'Primary', p.ImageTags.Primary, 900)})`;
+                    logo.innerHTML = '';
+                } else {
+                    art.style.backgroundImage = 'none';
+                    logo.innerHTML = '';
+                    logo.appendChild(logoChip(p, true));
+                }
+                $('.hm-preview-badge').innerHTML = '<span class="hm-chip live">Live</span>';
+                const watch = el('div', 'hm-btn hm-focusable', '<span class="material-icons" aria-hidden="true">play_arrow</span>Watch');
+                watch._act = () => play(p.ChannelId);
+                actions.appendChild(watch);
+            }
+            const guideBtn = el('div', 'hm-btn hm-focusable', '<span class="material-icons" aria-hidden="true">grid_view</span>Guide');
+            guideBtn._act = openGuide;
+            actions.appendChild(guideBtn);
+            box.classList.toggle('empty', !hero);
+        };
+
+        // live mirror of whatever is playing (not when it's in the floating window)
+        const canvas = $('.hm-preview canvas');
+        const c2d = canvas.getContext('2d');
+        const mirror = () => {
+            const v = [...document.querySelectorAll('video')]
+                .find((x) => !root.contains(x) && x !== document.pictureInPictureElement && !x.paused && x.readyState >= 2 && x.videoWidth > 0);
+            root.classList.toggle('hm-live-on', !!v);
+            if (!v) return;
+            const cw = canvas.width;
+            const chh = canvas.height;
+            const vr = v.videoWidth / v.videoHeight;
+            const cr = cw / chh;
+            let sw = v.videoWidth; let sh = v.videoHeight; let sx = 0; let sy = 0;
+            if (vr > cr) { sw = sh * cr; sx = (v.videoWidth - sw) / 2; } else { sh = sw / cr; sy = (v.videoHeight - sh) / 2; }
+            try { c2d.drawImage(v, sx, sy, sw, sh, 0, 0, cw, chh); } catch { root.classList.remove('hm-live-on'); }
+        };
+        const mirrorTimer = setInterval(mirror, 66);
+
+        // ---------- Rows ----------
+        const rowsBox = rowsInner();
+        let rowCount = 0;
+        const addRow = (title, items, toCard) => {
+            const r = rowCount++;
+            const row = el('div', 'hm-row');
+            row.dataset.row = r;
+            row.appendChild(el('div', 'hm-row-title', esc(title)));
+            const track = el('div', 'hm-row-track');
+            const slider = el('div', 'hm-row-slider');
+            items.forEach((it, c) => {
+                const card = toCard(it);
+                card.classList.add('hm-card', 'hm-focusable');
+                card.dataset.row = r;
+                card.dataset.col = c;
+                slider.appendChild(card);
+            });
+            track.appendChild(slider);
+            row.appendChild(track);
+            rowsBox.appendChild(row);
+        };
+        const mediaCard = (it) => {
+            const card = el('div');
+            const art = cardArt(it);
+            card.appendChild(el('div', 'hm-card-img')).style.backgroundImage = art ? `url(${art})` : 'none';
+            card.appendChild(el('div', 'hm-card-shade'));
+            const isEp = it.Type === 'Episode';
+            const title = isEp ? it.SeriesName : it.Name;
+            const sub = isEp
+                ? [it.ParentIndexNumber != null && it.IndexNumber != null ? `S${it.ParentIndexNumber} E${it.IndexNumber}` : '', it.Name].filter(Boolean).join(' · ')
+                : [it.ProductionYear, it.OfficialRating].filter(Boolean).join(' · ');
+            card.appendChild(el('div', 'hm-card-text', `<div class="hm-card-title">${esc(title)}</div><div class="hm-card-sub">${esc(sub)}</div>`));
+            const pct = it.UserData && it.UserData.PlayedPercentage;
+            if (pct) card.appendChild(el('div', 'hm-card-progress', `<i style="width:${Math.round(pct)}%"></i>`));
+            card._act = () => route(`#/details?id=${it.Id}&serverId=${server.Id}`);
+            return card;
+        };
+        const liveCard = (p) => {
+            const card = el('div');
+            const art = p.ImageTags && p.ImageTags.Primary ? img(p.Id, 'Primary', p.ImageTags.Primary, 600) : null;
+            card.appendChild(el('div', 'hm-card-img')).style.backgroundImage = art ? `url(${art})` : 'none';
+            card.appendChild(el('div', 'hm-card-shade'));
+            const logo = el('div', 'hm-card-logo');
+            logo.appendChild(logoChip(p));
+            card.appendChild(logo);
+            card.appendChild(el('div', 'hm-card-live', '<span class="hm-chip live">Live</span>'));
+            const e = new Date(p.EndDate);
+            card.appendChild(el('div', 'hm-card-text', `<div class="hm-card-title">${esc(p.Name)}</div><div class="hm-card-sub">${esc(p.ChannelName || '')} · until ${esc(fmtTime(e))}</div>`));
+            const s = new Date(p.StartDate);
+            const pct = Math.max(0, Math.min(100, ((Date.now() - s) / (e - s)) * 100));
+            card.appendChild(el('div', 'hm-card-progress', `<i style="width:${Math.round(pct)}%"></i>`));
+            card._act = () => play(p.ChannelId);
+            return card;
+        };
+
+        // ---------- Input ----------
+        const activate = () => { if (focused && focused._act) focused._act(); };
+        const onKey = (ev) => {
+            if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+            if (document.getElementById('cg-root')) return; // the guide is on top
+            const k = ev.key;
+            if (ev.target === searchInput) {
+                if (k === 'Enter') { ev.preventDefault(); runSearch(); }
+                else if (k === 'Escape' || k === 'ArrowDown') { ev.preventDefault(); searchInput.blur(); setFocus(menu.firstChild); }
+                ev.stopPropagation();
+                return;
+            }
+            const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+            if (map[k]) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (k === 'ArrowUp' && focused && focused.classList.contains('hm-menu-item') && focused === menu.firstChild) { focusSearch(); return; }
+                move(map[k]);
+            } else if (k === 'Enter') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (!ev.repeat) activate();
+            } else if (k === '/') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                focusSearch();
+            }
+        };
+        const onClick = (ev) => {
+            const t = ev.target.closest('.hm-focusable');
+            if (t && stage.contains(t)) { setFocus(t, { scroll: false }); activate(); return; }
+            const leg = ev.target.closest('.hm-legend [data-action]');
+            if (leg) {
+                if (leg.dataset.action === 'guide') openGuide();
+                else if (leg.dataset.action === 'search') focusSearch();
+            }
+        };
+        const onOver = (ev) => {
+            const t = ev.target.closest('.hm-focusable');
+            if (t && stage.contains(t)) setFocus(t, { scroll: false });
+        };
+        // trackpad: vertical scrolls the rows, horizontal scrolls the row under the pointer
+        const onWheelCapture = (ev) => {
+            if (!root.contains(ev.target)) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
+            const px = (d) => (ev.deltaMode === 1 ? d * 40 : ev.deltaMode === 2 ? d * 400 : d);
+            const dx = px(ev.deltaX);
+            const dy = px(ev.deltaY);
+            const rowEl = ev.target.closest('.hm-row');
+            if (Math.abs(dx) > Math.abs(dy) && rowEl) setRowOffset(+rowEl.dataset.row, (rowOffsets[+rowEl.dataset.row] || 0) + dx, false);
+            else if (ev.target.closest('.hm-rows')) setScrollY(scrollY + dy, false);
+        };
+
+        document.addEventListener('keydown', onKey, true);
+        window.addEventListener('resize', fit);
+        window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+        stage.addEventListener('click', onClick);
+        stage.addEventListener('mouseover', onOver);
+
+        const self = {
+            show() { root.style.visibility = ''; },
+            teardown() {
+                document.removeEventListener('keydown', onKey, true);
+                window.removeEventListener('resize', fit);
+                window.removeEventListener('wheel', onWheelCapture, { capture: true });
+                clearInterval(clockTimer);
+                clearInterval(mirrorTimer);
+                root.remove();
+            }
+        };
+
+        // ---------- Data ----------
+        (async () => {
+            const uid = server.UserId;
+            const fields = 'Fields=Overview,PrimaryImageAspectRatio&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1';
+            const safe = (p) => p.catch((err) => { console.warn('[HOMER Home]', err); return null; });
+            const [viewsRes, resume, nextUp, onNow] = await Promise.all([
+                safe(api(`/Users/${uid}/Views`)),
+                safe(api(`/Users/${uid}/Items/Resume?Limit=16&MediaTypes=Video&${fields}`)),
+                safe(api(`/Shows/NextUp?UserId=${uid}&Limit=16&${fields}`)),
+                safe(api(`/LiveTv/Programs/Recommended?UserId=${uid}&IsAiring=true&Limit=40&EnableImages=true&ImageTypeLimit=1&Fields=ChannelInfo,Overview`))
+            ]);
+            if (home !== self) return;
+            views = (viewsRes && viewsRes.Items) || [];
+            const movieView = views.find((v) => v.CollectionType === 'movies');
+            const tvView = views.find((v) => v.CollectionType === 'tvshows');
+            const [latestMovies, latestTv] = await Promise.all([
+                movieView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${movieView.Id}&Limit=16&${fields}`)) : null,
+                tvView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${tvView.Id}&Limit=16&${fields}`)) : null
+            ]);
+            if (home !== self) return;
+
+            const live = ((onNow && onNow.Items) || []).filter((p) => !PLACEHOLDER.test(p.Name || ''));
+            hero = live.length ? { program: live[0] } : null;
+            showHero();
+
+            const resumeItems = (resume && resume.Items) || [];
+            const nextItems = (nextUp && nextUp.Items) || [];
+            if (resumeItems.length) addRow('Continue watching', resumeItems, mediaCard);
+            if (nextItems.length) addRow('Up next', nextItems, mediaCard);
+            if (live.length > 1) addRow('On now', live.slice(1, 17), liveCard);
+            if (latestMovies && latestMovies.length) addRow('Recently added movies', latestMovies, mediaCard);
+            if (latestTv && latestTv.length) addRow('Recently added TV', latestTv, mediaCard);
+            if (!rowCount) rowsBox.appendChild(el('div', 'hm-row-empty', 'Nothing to show yet.'));
+
+            setFocus(menu.firstChild, { scroll: false });
+        })().catch((err) => {
+            console.error('[HOMER Home]', err);
+            if (home === self) $('.hm-hero-title').textContent = 'Couldn\'t load home';
+        });
+
+        return self;
+    };
+
+    const open = () => {
+        if (home) return;
+        const server = getServer();
+        if (!server) return;
+        home = createHome(server);
+        const h = home;
+        ensureCss().then(() => h.show());
+    };
+
+    const close = () => {
+        if (!home) return;
+        const h = home;
+        home = null;
+        h.teardown();
+    };
+
+    // ---------- Take over Jellyfin's home route ----------
+    const isHomeRoute = () => /^#\/(home(\.html)?)?(\?.*)?$/.test(location.hash) || location.hash === '' || location.hash === '#/';
+    const sync = () => {
+        if (isHomeRoute() && getServer()) open();
+        else close();
+    };
+    let queued = false;
+    const queue = () => {
+        if (queued) return;
+        queued = true;
+        setTimeout(() => { queued = false; sync(); }, 50);
+    };
+    const onRoute = () => queue();
+
+    window.addEventListener('hashchange', onRoute);
+    window.addEventListener('popstate', onRoute);
+    let observer = null;
+    const start = () => {
+        observer = new MutationObserver(queue);
+        observer.observe(document.body, { childList: true });
+        queue();
+    };
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+
+    window.HomerHome = {
+        version: VERSION,
+        open,
+        close,
+        destroy() {
+            close();
+            observer && observer.disconnect();
+            window.removeEventListener('hashchange', onRoute);
+            window.removeEventListener('popstate', onRoute);
+            document.getElementById('hm-css')?.remove();
+            cssReady = null;
+        }
+    };
+})();
