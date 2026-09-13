@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.1
+
+- Movies and TV Shows in a TiVo "My Shows" layout: the list on the left, the
+  selected title's art, details and Play / Resume / Restart on the right.
+  A–Z or Recently Added, a filter box, and in-progress and unwatched markers.
+- Show, movie, season and episode pages replaced: season tabs over an episode
+  list, with the selected episode's details and preview above.
+- Both fill the window edge to edge, like Home and the guide.
+
 ## v0.2.0
 
 - HOMER: one loader (`homer.js`) for every screen, replacing the direct

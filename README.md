@@ -1,7 +1,19 @@
 # HOMER for Jellyfin
 
 A TiVo-style TV-appliance interface for Jellyfin Web: a HOMER Home screen, the
-Channel Guide, and a global skin so every remaining Jellyfin page matches.
+Channel Guide, Movies and TV Shows screens, and a global skin so every remaining
+Jellyfin page matches.
+
+## Movies and TV Shows
+
+![Movies](screenshots/library-movies.jpg)
+
+Movies and TV Shows open in a "My Shows" style list: titles on the left, the
+selected one's art, details and Play / Resume / Restart on the right. Sort A–Z
+or by Recently Added, and press **/** to filter. A show opens to season tabs
+over an episode list. Arrow keys move, OK plays, Esc goes back.
+
+![TV Shows](screenshots/library-series.jpg)
 
 ## Channel Guide
 
@@ -39,14 +51,14 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.0/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.2.1/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.1.0`), so an update never changes your
-guide until you edit the tag yourself. jsDelivr and browsers both cache
+The URL is pinned to a release tag (`@v0.2.1`), so an update never changes
+anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 
 ## Controls
