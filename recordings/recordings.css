@@ -1,0 +1,1190 @@
+/*
+ * HOMER Recordings (Live TV → Recordings). Same 1080-tall stage, palette, type,
+ * focus rings, chips and key legend as the library screens (library.css);
+ * colors come from shared/tokens.css with the guide's values as fallbacks.
+ */
+
+#hr-root {
+    --bg0: var(--homer-bg0, #02050a);
+    --bg1: var(--homer-bg1, #07142a);
+    --panel: var(--homer-panel, rgba(9, 20, 38, 0.72));
+    --line: var(--homer-line, rgba(160, 190, 230, 0.12));
+    --line-strong: var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    --cell: var(--homer-cell, rgba(20, 36, 60, 0.78));
+    --cell-hi: var(--homer-cell-hi, rgba(32, 62, 102, 0.9));
+    --text: var(--homer-text, #f4f7fb);
+    --dim: var(--homer-dim, #8ea3bd);
+    --faint: var(--homer-faint, #5a6f89);
+    --accent: var(--homer-accent, #2f8cff);
+    --accent-2: var(--homer-accent-2, #6fd3ff);
+    --needle: var(--homer-needle, #ffb020);
+    --live: var(--homer-live, #ff3b3b);
+    --focus-ring: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
+    --focus-fill: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    --font: var(--homer-font, "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+    --cond: var(--homer-font-cond, "Barlow Semi Condensed", "Barlow", sans-serif);
+    --danger-fill: linear-gradient(180deg, #ff5a4f, #d42a22);
+
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    background: #000;
+    font-family: var(--font);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+#hr-stage {
+    /* the info panel is as wide as the window allows, up to 820 (a 16:9 preview
+       of 820×461); the list takes the rest */
+    --detail-w: clamp(628px, calc(100% - 972px), 820px);
+
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: center center;
+    background:
+        radial-gradient(1200px 700px at 12% -10%, rgba(47, 140, 255, 0.22), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(111, 211, 255, 0.10), transparent 55%),
+        linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 70%);
+    overflow: hidden;
+}
+
+/* same faint scanline texture as the guide */
+#hr-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+    z-index: 20;
+}
+
+/* ---------- Top bar ---------- */
+
+.hr-topbar {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 44px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 2;
+}
+
+.hr-brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    font-size: 26px;
+}
+
+.hr-brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, var(--accent-2), var(--accent) 60%, #1450c8);
+    box-shadow: 0 6px 22px rgba(47, 140, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    display: grid;
+    place-items: center;
+}
+
+.hr-brand-mark::before {
+    content: "";
+    width: 18px;
+    height: 13px;
+    border: 3px solid #fff;
+    border-radius: 4px;
+}
+
+.hr-brand-mark .material-icons {
+    display: none;
+    font-size: 28px;
+    color: #fff;
+}
+
+.hr-brand-sub {
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    font-size: 18px;
+    padding-left: 18px;
+    border-left: 2px solid var(--line-strong);
+    text-transform: uppercase;
+}
+
+/* the HOMER logo is the way Home (so is H) */
+.hr-brand.homer-home {
+    cursor: pointer;
+    margin: -8px -16px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    transition: background 120ms ease;
+}
+
+.hr-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
+.hr-brand.homer-home:hover .hr-brand-mark::before { display: none; }
+.hr-brand.homer-home:hover .hr-brand-mark .material-icons { display: block; }
+
+.hr-clock {
+    text-align: right;
+    line-height: 1;
+}
+
+.hr-clock-time {
+    font-size: 40px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.hr-clock-date {
+    margin-top: 6px;
+    font-size: 17px;
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+/* ---------- Chips ---------- */
+
+.hr-chip {
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.hr-chip.genre {
+    background: rgba(47, 140, 255, 0.14);
+    border-color: rgba(111, 211, 255, 0.3);
+    color: #cfe9ff;
+}
+
+.hr-chip-new {
+    background: var(--accent);
+    border-color: transparent;
+}
+
+.hr-chip-resume {
+    background: var(--needle);
+    border-color: transparent;
+    color: #1d1200;
+}
+
+.hr-chip-warn {
+    background: rgba(255, 176, 32, 0.16);
+    border-color: rgba(255, 176, 32, 0.55);
+    color: #ffd98a;
+}
+
+/* red = records, like the guide's red dot */
+.hr-chip-rec,
+.hr-chip-sched {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-color: transparent;
+}
+
+.hr-chip-rec { background: var(--live); }
+
+.hr-chip-sched {
+    background: rgba(9, 20, 38, 0.86);
+    border-color: rgba(255, 90, 90, 0.5);
+}
+
+.hr-chip-rec::before,
+.hr-chip-sched::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.hr-chip-sched::before {
+    background: var(--live);
+    box-shadow: 0 0 8px rgba(255, 59, 59, 0.8);
+}
+
+.hr-chip-rec::before { animation: hr-pulse 1.6s ease-in-out infinite; }
+
+@keyframes hr-pulse {
+    50% { opacity: 0.35; }
+}
+
+/* ---------- Channel logo chip: light, so every logo keeps its own colors ---------- */
+
+.hr-logo {
+    flex: none;
+    height: 40px;
+    min-width: 84px;
+    max-width: 180px;
+    padding: 4px 10px;
+    box-sizing: border-box;
+    border-radius: 9px;
+    background: rgba(235, 242, 250, 0.94);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.hr-logo img {
+    max-height: 30px;
+    max-width: 150px;
+    object-fit: contain;
+    display: block;
+}
+
+.hr-logo.text span {
+    font-family: var(--cond);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.05;
+    color: #0b1a2e;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ---------- List panel: tabs + rows ---------- */
+
+.hr-list {
+    position: absolute;
+    left: 72px;
+    right: calc(120px + var(--detail-w));
+    top: 132px;
+    bottom: 96px;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+}
+
+.hr-list-head {
+    position: relative;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 0 24px 0 12px;
+    border-bottom: 1px solid var(--line-strong);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+}
+
+.hr-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 5px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--line);
+}
+
+.hr-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 7px;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.hr-tab:hover { color: var(--text); }
+
+.hr-tab.on {
+    background: var(--accent);
+    color: #fff;
+}
+
+.hr-tab.focus {
+    background: var(--focus-fill);
+    box-shadow: 0 0 0 3px #fff, 0 6px 20px rgba(47, 140, 255, 0.55);
+}
+
+.hr-tab-n {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    font-size: 15px;
+    min-width: 22px;
+    padding: 1px 6px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+}
+
+.hr-tab-n:empty { display: none; }
+.hr-tab.on .hr-tab-n { background: rgba(0, 0, 0, 0.22); }
+
+.hr-count {
+    min-width: 0;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* inside a show's folder: its name, and the way back out */
+.hr-crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    color: var(--accent-2);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-crumb .material-icons { font-size: 26px; }
+.hr-crumb:hover { color: var(--text); }
+
+.hr-rows {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+/* positioned, so row offsetTop is measured from the top of the list */
+.hr-rows-inner {
+    position: relative;
+    display: flow-root; /* keep the first row's margin inside, so offsets are exact */
+    padding-bottom: 12px;
+}
+
+.hr-row {
+    position: relative;
+    height: 96px;
+    margin: 8px 12px 0;
+    padding: 0 22px 0 10px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: rgba(20, 36, 60, 0.5);
+    border: 1px solid rgba(160, 190, 230, 0.06);
+    cursor: pointer;
+    overflow: hidden;
+    box-sizing: border-box;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+/* 16:9 art, the channel's logo tucked in the corner */
+.hr-thumb {
+    position: relative;
+    flex: none;
+    width: 136px;
+    height: 76px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #16345c, #0a1a30);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.hr-thumb > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.hr-thumb > img.in { opacity: 1; }
+
+.hr-thumb-logo {
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+}
+
+.hr-thumb-logo .hr-logo {
+    height: 24px;
+    min-width: 0;
+    max-width: 76px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.hr-thumb-logo .hr-logo img {
+    max-height: 18px;
+    max-width: 64px;
+}
+
+.hr-thumb-logo .hr-logo.text span { font-size: 11px; -webkit-line-clamp: 1; }
+
+/* no art: the channel's logo fills the tile */
+.hr-thumb.bare {
+    display: grid;
+    place-items: center;
+}
+
+.hr-thumb.bare .hr-thumb-logo {
+    position: static;
+}
+
+.hr-thumb.bare .hr-logo,
+.hr-thumb-logo.big .hr-logo {
+    height: 52px;
+    min-width: 0;
+    max-width: 120px;
+    padding: 5px 9px;
+    border-radius: 8px;
+}
+
+.hr-thumb.bare .hr-logo img,
+.hr-thumb-logo.big .hr-logo img {
+    max-height: 40px;
+    max-width: 102px;
+}
+
+.hr-thumb.bare .hr-logo.text span { font-size: 14px; }
+
+/* a show's folder: a second card peeking out behind the art */
+.hr-row.folder .hr-thumb {
+    overflow: visible;
+    isolation: isolate; /* keeps the card behind inside the tile, not behind the row */
+    margin-top: -6px;
+}
+
+.hr-row.folder .hr-thumb::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    right: -7px;
+    top: 7px;
+    bottom: -7px;
+    border-radius: 8px;
+    background: rgba(111, 211, 255, 0.22);
+    border: 1px solid rgba(111, 211, 255, 0.35);
+    z-index: -1;
+}
+
+.hr-row.folder .hr-thumb > img { border-radius: 8px; }
+
+/* Scheduled: when it records, big, where your eye starts */
+.hr-when {
+    flex: none;
+    width: 118px;
+    align-self: stretch;
+    margin-left: -10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--line-strong);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.035), transparent);
+    font-family: var(--cond);
+    line-height: 1;
+}
+
+.hr-when small {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+    white-space: nowrap;
+}
+
+.hr-when b {
+    font-size: 32px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hr-when em {
+    font-style: normal;
+    font-size: 16px;
+    font-weight: 700;
+    margin-left: 3px;
+    color: var(--dim);
+}
+
+.hr-row-timer .hr-thumb.bare {
+    width: 120px;
+    background: none;
+    box-shadow: none;
+}
+
+.hr-row-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.hr-row-title {
+    font-size: 25px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-row-sub {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 18px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-row-flag {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 28px;
+}
+
+/* not watched yet: a glowing blue dot, like the library */
+.hr-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 10px rgba(111, 211, 255, 0.8);
+}
+
+/* set to record: the guide's red dot */
+.hr-rec-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.8);
+}
+
+.hr-rec-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--live);
+    color: #fff;
+}
+
+.hr-rec-pill::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    animation: hr-pulse 1.6s ease-in-out infinite;
+}
+
+.hr-count-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.hr-count-dot::before {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 10px rgba(111, 211, 255, 0.8);
+}
+
+.hr-check {
+    font-size: 26px;
+    color: var(--faint);
+}
+
+.hr-chev {
+    font-size: 30px;
+    color: var(--dim);
+    margin-right: -8px;
+}
+
+.hr-series-ic {
+    font-size: 22px;
+    color: var(--dim);
+}
+
+.hr-left,
+.hr-upcoming,
+.hr-warn {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hr-left { color: var(--needle); }
+.hr-upcoming { color: var(--accent-2); }
+.hr-warn { color: var(--needle); }
+
+.hr-row-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.hr-row-progress > i {
+    display: block;
+    height: 100%;
+    background: var(--accent-2);
+    opacity: 0.9;
+}
+
+.hr-row.played:not(.sel) .hr-row-title { color: #b7c5d6; }
+.hr-row.played:not(.sel) .hr-thumb > img { opacity: 0.7; }
+
+/* the highlight: resting when the remote is elsewhere, full focus when it's here */
+.hr-row.sel {
+    background: var(--cell-hi);
+    border-color: rgba(160, 200, 255, 0.3);
+}
+
+.hr-row.sel::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 4px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent-2);
+    z-index: 1;
+}
+
+.hr-zone-list .hr-row.sel {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    z-index: 2;
+}
+
+.hr-zone-list .hr-row.sel::before { display: none; }
+.hr-zone-list .hr-row.sel .hr-row-sub { color: rgba(255, 255, 255, 0.85); }
+.hr-zone-list .hr-row.sel .hr-dot { background: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); }
+.hr-zone-list .hr-row.sel .hr-rec-dot { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
+.hr-zone-list .hr-row.sel .hr-count-dot,
+.hr-zone-list .hr-row.sel .hr-check,
+.hr-zone-list .hr-row.sel .hr-chev,
+.hr-zone-list .hr-row.sel .hr-series-ic,
+.hr-zone-list .hr-row.sel .hr-upcoming { color: #fff; }
+.hr-zone-list .hr-row.sel .hr-count-dot::before { background: #fff; }
+.hr-zone-list .hr-row.sel .hr-left,
+.hr-zone-list .hr-row.sel .hr-warn { color: #ffe1a3; }
+.hr-zone-list .hr-row.sel .hr-row-progress > i { background: #fff; }
+.hr-zone-list .hr-row.sel .hr-when { border-right-color: rgba(255, 255, 255, 0.3); }
+.hr-zone-list .hr-row.sel .hr-when small,
+.hr-zone-list .hr-row.sel .hr-when em { color: rgba(255, 255, 255, 0.85); }
+.hr-zone-list .hr-row.folder.sel .hr-thumb::before { background: rgba(255, 255, 255, 0.35); border-color: rgba(255, 255, 255, 0.6); }
+
+/* ---------- Info panel: preview window, then the selection's details ---------- */
+
+.hr-detail {
+    position: absolute;
+    right: 72px;
+    width: var(--detail-w);
+    top: 132px;
+    bottom: 96px;
+    display: flex;
+    flex-direction: column;
+}
+
+.hr-preview {
+    position: relative;
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 18px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(111, 211, 255, 0.35), transparent 55%),
+        linear-gradient(135deg, #113767, #061326);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--line-strong), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.hr-preview-art {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 30%;
+    opacity: 0;
+    transition: opacity 220ms ease;
+}
+
+.hr-preview-art.in { opacity: 1; }
+
+.hr-preview-poster,
+.hr-preview-logo {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.hr-preview-poster img {
+    height: 82%;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.hr-preview-logo .hr-logo {
+    height: 120px;
+    min-width: 220px;
+    max-width: 380px;
+    padding: 14px 28px;
+    border-radius: 22px;
+}
+
+.hr-preview-logo .hr-logo img {
+    max-height: 92px;
+    max-width: 320px;
+}
+
+.hr-preview-logo .hr-logo.text span { font-size: 30px; }
+
+.hr-preview-badge {
+    position: absolute;
+    left: 18px;
+    top: 16px;
+}
+
+.hr-preview-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 40px 18px 16px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.8), transparent);
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: #d6e2f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.hr-preview-bar:has(span:empty + span:empty) { display: none; }
+
+.hr-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.hr-progress > i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 12px var(--accent-2);
+}
+
+.hr-text {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: 22px;
+    min-width: 0;
+}
+
+.hr-kicker {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+    min-width: 0;
+}
+
+.hr-kicker .hr-logo {
+    height: 34px;
+    min-width: 64px;
+    padding: 3px 9px;
+    border-radius: 8px;
+}
+
+.hr-kicker .hr-logo img { max-height: 26px; max-width: 120px; }
+.hr-kicker .hr-logo.text span { font-size: 14px; -webkit-line-clamp: 1; }
+
+.hr-kicker-text {
+    min-width: 0;
+    font-family: var(--cond);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-kicker-text i {
+    font-style: normal;
+    color: var(--dim);
+    font-weight: 600;
+}
+
+.hr-title {
+    font-size: 54px;
+    font-weight: 800;
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+    text-shadow: 0 2px 24px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 1.06em;
+}
+
+.hr-title.long { font-size: 44px; }
+
+.hr-episode {
+    margin-top: 6px;
+    font-size: 25px;
+    font-weight: 600;
+    color: #dbe6f3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-episode b {
+    color: var(--accent-2);
+    font-weight: 700;
+    margin-right: 12px;
+}
+
+.hr-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    align-items: center;
+    max-height: 38px;
+    overflow: hidden;
+}
+
+.hr-meta:empty { display: none; }
+
+.hr-desc {
+    margin-top: 14px;
+    font-size: 22px;
+    line-height: 1.4;
+    color: #c5d2e2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hr-desc.empty { display: none; }
+
+/* ---------- Action buttons ---------- */
+
+.hr-actions {
+    display: flex;
+    gap: 16px;
+    margin-top: auto;
+    padding-top: 16px;
+    min-height: 60px;
+}
+
+.hr-actions:empty { visibility: hidden; }
+
+.hr-btn {
+    height: 60px;
+    min-width: 176px;
+    padding: 0 26px 0 20px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--cell);
+    border: 1px solid var(--line-strong);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    box-sizing: border-box;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.hr-btn .material-icons { font-size: 30px; }
+
+/* the button OK will press when the highlight is in the list */
+.hr-btn.cur { border-color: rgba(160, 200, 255, 0.45); background: var(--cell-hi); }
+
+.hr-btn.focus {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    color: #fff;
+}
+
+.hr-btn.danger .material-icons { color: #ff8a80; }
+.hr-btn.danger.focus .material-icons { color: #fff; }
+
+/* waiting for the second OK: red, and it says so */
+.hr-btn.armed,
+.hr-btn.armed.focus {
+    background: var(--danger-fill);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 0 3px #fff, 0 10px 30px rgba(255, 59, 59, 0.55);
+}
+
+.hr-btn.armed .material-icons { color: #fff; }
+.hr-btn.armed:not(.busy) { animation: hr-armed 1s ease-in-out infinite; }
+.hr-btn.busy { opacity: 0.8; cursor: progress; }
+
+@keyframes hr-armed {
+    50% { box-shadow: 0 0 0 3px #fff, 0 10px 36px rgba(255, 59, 59, 0.9); }
+}
+
+/* ---------- Empty / loading / error ---------- */
+
+.hr-state {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    padding: 0 56px 40px;
+    pointer-events: none;
+}
+
+.hr-state.show { display: flex; }
+
+.hr-state b {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.hr-state span {
+    max-width: 660px;
+    font-family: var(--cond);
+    font-size: 21px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hr-state em {
+    display: inline-grid;
+    place-items: center;
+    min-width: 30px;
+    height: 28px;
+    padding: 0 7px;
+    margin: 0 2px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-style: normal;
+    font-weight: 700;
+    font-size: 16px;
+    vertical-align: 2px;
+    box-sizing: border-box;
+}
+
+.hr-spinner {
+    width: 160px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.hr-spinner::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 12px var(--accent-2);
+    animation: hr-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes hr-sweep {
+    0% { left: -40%; }
+    100% { left: 100%; }
+}
+
+/* ---------- Remote legend ---------- */
+
+.hr-legend {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    bottom: 30px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 36px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.hr-key {
+    display: inline-grid;
+    place-items: center;
+    min-width: 34px;
+    height: 30px;
+    padding: 0 8px;
+    margin-right: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.hr-legend .spacer { flex: 1; }
+
+.hr-legend [data-action] {
+    cursor: pointer;
+    transition: color 120ms ease;
+}
+
+.hr-legend [data-action]:hover { color: var(--text); }
+.hr-legend .danger { color: #ff9d96; }
+.hr-legend .danger .hr-key { background: var(--live); border-color: transparent; }
+
+/* ---------- Toast ---------- */
+
+.hr-toast {
+    position: absolute;
+    left: 50%;
+    top: 50px;
+    z-index: 10;
+    max-width: 880px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.94);
+    box-shadow: 0 0 0 1px var(--line-strong), 0 16px 40px rgba(0, 0, 0, 0.55);
+    font-family: var(--cond);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: var(--text);
+    opacity: 0;
+    visibility: hidden; /* opacity alone left a faint ghost of the pill under the scanline blend */
+    transform: translate(-50%, -10px);
+    transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+    pointer-events: none;
+}
+
+.hr-toast-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-toast.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
+}
+
+.hr-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
+
+/* ---------- No art and no channel: a quiet TV glyph ---------- */
+
+.hr-noart {
+    font-size: 34px;
+    color: rgba(160, 190, 230, 0.35);
+}
+
+.hr-preview-logo .hr-noart,
+.hr-preview-empty {
+    font-size: 132px;
+    color: rgba(160, 190, 230, 0.22);
+}
+
+.hr-zone-list .hr-row.sel .hr-noart { color: rgba(255, 255, 255, 0.55); }
