@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.1';
+    const VERSION = '0.1.2';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -485,10 +485,23 @@
             else if (k === 'r' || k === 'R') record();
             else close();
         };
+        // One channel per notch-sized chunk of scrolling, with a short cooldown, so
+        // a trackpad swipe (dozens of tiny wheel events) doesn't race down the list.
+        const WHEEL_STEP = 120;      // px of accumulated scroll per channel
+        const WHEEL_COOLDOWN = 140;  // ms between channel moves
+        let wheelAcc = 0;
+        let wheelLast = 0;
         const onWheel = (ev) => {
             ev.preventDefault();
             if (!rows.length) return;
-            const r = sel.row + (ev.deltaY > 0 ? 1 : -1);
+            const px = ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * 400 : ev.deltaY;
+            if (Math.sign(px) !== Math.sign(wheelAcc)) wheelAcc = 0;
+            wheelAcc += px;
+            const t = performance.now();
+            if (Math.abs(wheelAcc) < WHEEL_STEP || t - wheelLast < WHEEL_COOLDOWN) return;
+            wheelLast = t;
+            const r = sel.row + (wheelAcc > 0 ? 1 : -1);
+            wheelAcc = 0;
             select(r, nearestCol(r));
         };
         const onLegendClick = (ev) => {

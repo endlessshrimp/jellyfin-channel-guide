@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.2
+
+- Mouse wheel / trackpad scrolling moves one channel per notch-sized chunk
+  with a short cooldown, instead of one channel per wheel event.
+
 ## v0.1.1
 
 - Jellyfin's own Live TV → Guide tab now opens Channel Guide instead of the
