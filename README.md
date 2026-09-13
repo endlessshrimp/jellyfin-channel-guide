@@ -10,6 +10,10 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
 - **OK / Enter** (or a click) starts the channel in the same browser tab.
 - **R** schedules a one-time recording of the selected program. Programs that
   are set to record get a red dot.
+- Opens on top of whatever's playing, so the video keeps going: press **G** or
+  the Guide button in the player's controls. Shrinking the player into the
+  browser's floating window brings the guide up behind it.
+- The preview window shows the live picture of what you're watching.
 - Scales a fixed 1920×1080 layout to fit any window, the way a TV UI does.
 - Uses your existing Jellyfin sign-in. There's nothing to configure and no
   separate account or API key.
@@ -29,7 +33,7 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "Channel Guide", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.4/guide/guide.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.1.5/guide/guide.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the

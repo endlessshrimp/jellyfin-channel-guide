@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.4';
+    const VERSION = '0.1.5';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -147,6 +147,7 @@
     // ---------- Guide ----------
 
     let guide = null; // the open guide instance, or null
+    let nowWatching = null; // channel last started from the guide
     let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
     let tabSuppressed = false; // closed from that tab; don't reopen until it's left
     const LIVETV_HOME = '#/livetv?tab=0';
@@ -208,6 +209,8 @@
                 <div class="cg-preview">
                     <div class="cg-preview-art"></div>
                     <div class="cg-preview-logo"></div>
+                    <canvas class="cg-preview-live" width="1120" height="630"></canvas>
+                    <div class="cg-preview-now"></div>
                     <div class="cg-preview-badge"></div>
                     <div class="cg-preview-bar"><span class="cg-preview-left"></span><span class="cg-preview-right"></span></div>
                     <div class="cg-progress"><i></i></div>
@@ -431,6 +434,7 @@
         const watch = () => {
             const cur = current();
             if (!cur) return;
+            nowWatching = cur.row.ch;
             close({ returnToLiveTv: false });
             playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
@@ -610,11 +614,38 @@
         root.addEventListener('wheel', onWheel, { passive: false });
         $('.cg-legend').addEventListener('click', onLegendClick);
 
+        // ---------- Live preview ----------
+        // While something is playing (full screen underneath, or in the browser's
+        // floating picture-in-picture window), the preview shows that live picture.
+        const liveCanvas = $('.cg-preview-live');
+        const live2d = liveCanvas.getContext('2d');
+        const playingVideo = () => [...document.querySelectorAll('video')]
+            .find((v) => !root.contains(v) && !v.paused && v.readyState >= 2 && v.videoWidth > 0);
+        const mirror = () => {
+            const v = playingVideo();
+            root.classList.toggle('cg-live-on', !!v);
+            if (!v) return;
+            const cw = liveCanvas.width;
+            const chh = liveCanvas.height;
+            const vr = v.videoWidth / v.videoHeight;
+            const cr = cw / chh;
+            let sw = v.videoWidth; let sh = v.videoHeight; let sx = 0; let sy = 0;
+            if (vr > cr) { sw = sh * cr; sx = (v.videoWidth - sw) / 2; } else { sh = sw / cr; sy = (v.videoHeight - sh) / 2; }
+            try {
+                live2d.drawImage(v, sx, sy, sw, sh, 0, 0, cw, chh);
+                $('.cg-preview-now').textContent = nowWatching ? `Now watching · ${nowWatching.Name}` : 'Now watching';
+            } catch {
+                root.classList.remove('cg-live-on');
+            }
+        };
+        const mirrorTimer = setInterval(mirror, 66);
+
         const self = {
             show() {
                 root.style.visibility = '';
             },
             teardown() {
+                clearInterval(mirrorTimer);
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
@@ -686,6 +717,7 @@
         setTimeout(() => {
             syncQueued = false;
             syncButton();
+            syncOsdButton();
             syncTakeover();
         }, 50);
     };
@@ -727,12 +759,66 @@
         open();
     };
 
+    // ---------- Guide over the player ----------
+    // Leaving Jellyfin's player page stops the video, so the guide never makes you
+    // leave it: it opens on top of whatever is on screen and the video keeps going.
+
+    const openOverPlayer = () => {
+        if (guide || !getServer()) return;
+        openedFromTab = false;
+        open();
+    };
+
+    // Shrinking the player into the browser's floating window sends Jellyfin back
+    // to the previous page; put the guide up behind the floating video instead.
+    let pipPendingUntil = 0;
+    const onEnterPip = (ev) => {
+        if (!(ev.target instanceof HTMLVideoElement)) return;
+        pipPendingUntil = Date.now() + 3000;
+        setTimeout(() => {
+            if (pipPendingUntil) {
+                pipPendingUntil = 0;
+                openOverPlayer();
+            }
+        }, 1200);
+    };
+
+    // A Guide button in the player's own control bar
+    const OSD_BTN_CLASS = 'cgOsdGuideButton';
+    const syncOsdButton = () => {
+        const bar = document.querySelector('.videoOsdBottom .buttons');
+        if (!bar || bar.querySelector('.' + OSD_BTN_CLASS) || !getServer()) return;
+        let btn;
+        try {
+            btn = document.createElement('button', { is: 'paper-icon-button-light' });
+        } catch {
+            btn = document.createElement('button');
+        }
+        btn.type = 'button';
+        btn.setAttribute('is', 'paper-icon-button-light');
+        btn.className = `autoSize paper-icon-button-light ${OSD_BTN_CLASS}`;
+        btn.title = 'Guide';
+        btn.setAttribute('aria-label', 'Guide');
+        btn.innerHTML = '<span class="xlargePaperIconButton material-icons live_tv" aria-hidden="true"></span>';
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openOverPlayer();
+        });
+        const before = bar.querySelector('.btnPip, .btnVideoOsdSettings, .btnFullscreen');
+        bar.insertBefore(btn, before || null);
+    };
+
     // Jellyfin Web is a single-page app: leaving the current view (back button,
     // a link) should take the guide down with it.
     const onRouteChange = () => {
         close({ returnToLiveTv: false });
         tabSuppressed = false;
         queueSync();
+        if (pipPendingUntil && Date.now() < pipPendingUntil) {
+            pipPendingUntil = 0;
+            setTimeout(openOverPlayer, 300);
+        }
     };
 
     let observer = null;
@@ -742,7 +828,9 @@
         queueSync();
     };
 
-    document.addEventListener('keydown', onGlobalKey);
+    // capture phase, so Jellyfin's player page can't swallow the key first
+    document.addEventListener('keydown', onGlobalKey, true);
+    document.addEventListener('enterpictureinpicture', onEnterPip, true);
     window.addEventListener('hashchange', onRouteChange);
     window.addEventListener('popstate', onRouteChange);
     if (document.body) start();
@@ -755,7 +843,9 @@
         destroy() {
             close();
             observer && observer.disconnect();
-            document.removeEventListener('keydown', onGlobalKey);
+            document.removeEventListener('keydown', onGlobalKey, true);
+            document.removeEventListener('enterpictureinpicture', onEnterPip, true);
+            document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             document.removeEventListener('DOMContentLoaded', start);
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);

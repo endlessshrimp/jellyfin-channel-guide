@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.5
+
+- The guide opens over the player without leaving it, so playback continues:
+  G, or a new Guide button in the player's control bar.
+- Entering the browser's picture-in-picture window brings the guide up behind
+  the floating video instead of the channel's details page.
+- The preview window mirrors the live video that's playing ("Now watching").
+
 ## v0.1.4
 
 - Filter box in the top bar (or press /): narrows the grid to channels whose
