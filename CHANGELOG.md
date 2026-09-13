@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.3
+
+- Recordings: a HOMER Recordings screen replaces Jellyfin's. Recorded (shows
+  with several recordings fold into one row), Scheduled and Series tabs; Play,
+  Resume, Restart; Delete, Cancel recording and Cancel series, each with an
+  OK-again confirm.
+
 ## v0.3.2
 
 - Search: a HOMER Search screen replaces Jellyfin's search results. Movies, TV

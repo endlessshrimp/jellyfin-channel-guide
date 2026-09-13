@@ -33,4 +33,5 @@
     js('library/library.js');
     js('settings/settings.js');
     js('search/search.js');
+    js('recordings/recordings.js');
 })();
