@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.3
+
+- Wheel/trackpad scrolling pages the grid 5 channels (one screen) at a time,
+  keeping the highlight in the same spot; one swipe = one page.
+
 ## v0.1.2
 
 - Mouse wheel / trackpad scrolling moves one channel per notch-sized chunk

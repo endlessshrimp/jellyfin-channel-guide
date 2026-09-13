@@ -12,7 +12,7 @@
  * window.ChannelGuide = { open, close, version }
  */
 (() => {
-    const VERSION = '0.1.2';
+    const VERSION = '0.1.3';
 
     // Loading twice (hot reload, or the injector plus a manual copy) replaces the
     // previous instance instead of attaching a second button/key handler.
@@ -485,12 +485,21 @@
             else if (k === 'r' || k === 'R') record();
             else close();
         };
-        // One channel per notch-sized chunk of scrolling, with a short cooldown, so
-        // a trackpad swipe (dozens of tiny wheel events) doesn't race down the list.
-        const WHEEL_STEP = 120;      // px of accumulated scroll per channel
-        const WHEEL_COOLDOWN = 140;  // ms between channel moves
+        // Wheel/trackpad pages the grid a full screen (5 channels) at a time, like a
+        // cable box's page up/down. The highlight keeps its spot on screen. A short
+        // cooldown keeps one trackpad swipe from paging several screens at once.
+        const WHEEL_STEP = 60;       // px of accumulated scroll per page
+        const WHEEL_COOLDOWN = 320;  // ms between pages
         let wheelAcc = 0;
         let wheelLast = 0;
+        const pageBy = (dir) => {
+            const maxTop = Math.max(0, rows.length - VISIBLE_ROWS);
+            const newTop = Math.max(0, Math.min(maxTop, viewTop + dir * VISIBLE_ROWS));
+            const shift = newTop === viewTop ? dir * VISIBLE_ROWS : newTop - viewTop;
+            const r = Math.max(0, Math.min(rows.length - 1, sel.row + shift));
+            viewTop = newTop;
+            select(r, nearestCol(r));
+        };
         const onWheel = (ev) => {
             ev.preventDefault();
             if (!rows.length) return;
@@ -500,9 +509,9 @@
             const t = performance.now();
             if (Math.abs(wheelAcc) < WHEEL_STEP || t - wheelLast < WHEEL_COOLDOWN) return;
             wheelLast = t;
-            const r = sel.row + (wheelAcc > 0 ? 1 : -1);
+            const dir = wheelAcc > 0 ? 1 : -1;
             wheelAcc = 0;
-            select(r, nearestCol(r));
+            pageBy(dir);
         };
         const onLegendClick = (ev) => {
             const item = ev.target.closest('[data-action]');
