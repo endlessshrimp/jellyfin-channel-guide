@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.3.13
+
+- Phone guide: in landscape, a docked video shows through its strip (the
+  backdrop behind the strip hid it).
 
 - Search on a phone has a layout of its own. The search box is at the top,
   where the keyboard can't cover it, and on an empty search it has the focus,
