@@ -48,10 +48,12 @@
     js('library/library.js');
     js('library/library-phone.js'); // the library screens' phone layout
     js('settings/settings.js');
+    js('settings/settings-phone.js'); // Settings' phone layout
     js('search/search.js');
     js('search/search-phone.js'); // Search's phone layout
     js('recordings/recordings-model.js'); // the DVR's recordings and timers
     js('recordings/recordings.js');
     js('recordings/recordings-phone.js'); // Recordings' phone layout
     js('forecast/forecast.js');
+    js('forecast/forecast-phone.js'); // Weather's phone layout
 })();

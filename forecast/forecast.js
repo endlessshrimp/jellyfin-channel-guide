@@ -24,6 +24,10 @@
  * Remote/keyboard: Esc/Backspace goes back, H goes Home, OK tries again after
  * an error.
  *
+ * On a phone (shared/layout.js) Weather draws forecast/forecast-phone.js
+ * instead: the same panels in one column (two across in landscape). Both
+ * layouts get their forecast, sentences, skies and radar from here.
+ *
  * window.HomerForecast = { open, close, destroy, version }
  */
 (() => {
@@ -222,12 +226,13 @@
     // Web Mercator (EPSG:3857), which both servers draw in
     const EARTH = 6378137;
     const merc = (lat, lon) => [EARTH * lon * Math.PI / 180, EARTH * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
-    // the map's area: MAP_KM across, centered on the place; and stage pixels in it
-    const mapArea = (lat, lon) => {
+    // the map's area: km across, centered on the place; and map pixels in it
+    // (w × h: on TV MAP_W × MAP_H stage pixels)
+    const mapArea = (lat, lon, w = MAP_W, h = MAP_H, km = MAP_KM) => {
         const [x, y] = merc(lat, lon);
-        const half = MAP_KM * 500 / Math.cos(lat * Math.PI / 180); // Mercator stretches away from the equator
-        const box = [x - half, y - half * MAP_H / MAP_W, x + half, y + half * MAP_H / MAP_W];
-        const px = (mx, my) => [(mx - box[0]) / (box[2] - box[0]) * MAP_W, (box[3] - my) / (box[3] - box[1]) * MAP_H];
+        const half = km * 500 / Math.cos(lat * Math.PI / 180); // Mercator stretches away from the equator
+        const box = [x - half, y - half * h / w, x + half, y + half * h / w];
+        const px = (mx, my) => [(mx - box[0]) / (box[2] - box[0]) * w, (box[3] - my) / (box[3] - box[1]) * h];
         return { box, center: [x, y], px };
     };
 
@@ -248,16 +253,16 @@
         return out;
     };
     // one picture: the rain over the map's area, transparent everywhere else
-    const frameUrl = (ws, box, scale, at) => `${OPENGEO}${ws}/${ws}_bref_qcd/ows?` + new URLSearchParams({
+    const frameUrl = (ws, box, w, h, scale, at) => `${OPENGEO}${ws}/${ws}_bref_qcd/ows?` + new URLSearchParams({
         service: 'WMS', version: '1.3.0', request: 'GetMap', layers: `${ws}_bref_qcd`, styles: '',
         format: 'image/png', transparent: 'true', crs: 'EPSG:3857', bbox: box.join(','),
-        width: MAP_W * scale, height: MAP_H * scale, time: new Date(at).toISOString(),
+        width: w * scale, height: h * scale, time: new Date(at).toISOString(),
     });
 
     // the interstates, drawn by the Census server in HOMER's dim grey; always
     // at twice the map's size (its main roads only draw at that scale or closer)
-    const roadsUrl = (box) => TIGER + 'Transportation/MapServer/export?' + new URLSearchParams({
-        bbox: box.join(','), bboxSR: 3857, imageSR: 3857, size: `${MAP_W * 2},${MAP_H * 2}`,
+    const roadsUrl = (box, w, h) => TIGER + 'Transportation/MapServer/export?' + new URLSearchParams({
+        bbox: box.join(','), bboxSR: 3857, imageSR: 3857, size: `${w * 2},${h * 2}`,
         format: 'png32', transparent: 'true', f: 'image',
         dynamicLayers: JSON.stringify([{
             id: 101, minScale: 0, maxScale: 0, source: { type: 'mapLayer', mapLayerId: 1 }, // primary roads
@@ -493,6 +498,403 @@
         setTimeout(() => old.forEach((o) => o.remove()), 1600);
     };
 
+    // ---------- The forecast, ready to draw (both layouts use these) ----------
+
+    // formatters in the place's own time zone
+    const makeFormatters = (tz) => {
+        const f = (opts) => {
+            try { return new Intl.DateTimeFormat([], { ...opts, timeZone: tz }); } catch { return new Intl.DateTimeFormat([], opts); }
+        };
+        const hour = f({ hour: 'numeric' });
+        const time = f({ hour: 'numeric', minute: '2-digit' });
+        const weekday = f({ weekday: 'long' });
+        const wdShort = f({ weekday: 'short' });
+        const date = f({ month: 'short', day: 'numeric' });
+        return {
+            hour: (at) => hour.format(at),
+            time: (at) => time.format(at),
+            weekday: (at) => weekday.format(at),
+            wdShort: (at) => wdShort.format(at),
+            date: (at) => date.format(at),
+        };
+    };
+
+    // fc is HomerWeather.forecast()'s result; fmt, makeFormatters(fc.timeZone)
+    const hourNow = (fc) => clamp(Math.floor((Date.now() - fc.hours[0].at) / 3600000), 0, fc.hours.length - 1);
+    // the index of the hour that starts day d
+    const dayStart = (fc, d) => {
+        const at = fc.days[d] && fc.days[d].at;
+        const i = fc.hours.findIndex((h) => h.at >= at);
+        return i < 0 ? fc.hours.length : i;
+    };
+    const dayOf = (fc, i) => {
+        const at = fc.hours[i].at;
+        let d = 0;
+        for (let k = 1; k < fc.days.length; k++) if (at >= fc.days[k].at) d = k;
+        return d;
+    };
+
+    // the title band's sentence: what's coming
+    const summary = (fc, fmt) => {
+        const i0 = hourNow(fc);
+        const ahead = fc.hours.slice(i0, i0 + 25);
+        const cur = fc.current;
+        const parts = [];
+        if (wet(cur.code)) {
+            const dry = ahead.findIndex((h, k) => k > 0 && !wet(h.code) && (h.pop == null || h.pop < 30));
+            parts.push(dry > 0 ? `${wetWord(cur.code)} until about ${fmt.hour(ahead[dry].at)}` : `${wetWord(cur.code)} through the next day`);
+        } else {
+            const likely = ahead.findIndex((h, k) => k > 0 && h.pop >= 50);
+            const maybe = ahead.findIndex((h, k) => k > 0 && h.pop >= 20);
+            if (likely > 0) parts.push(`${wetWord(wet(ahead[likely].code) ? ahead[likely].code : 61)} likely around ${fmt.hour(ahead[likely].at)}`);
+            else if (maybe > 0) parts.push(`A chance of ${wetWord(wet(ahead[maybe].code) ? ahead[maybe].code : 61).toLowerCase()} around ${fmt.hour(ahead[maybe].at)}`);
+            else parts.push('Dry for the next 24 hours');
+        }
+        // the next turn of the temperature: today's high if it's still coming, else the overnight low
+        const next12 = ahead.slice(0, 13);
+        const temps = next12.map((h) => h.temp);
+        const peak = temps.indexOf(Math.max(...temps));
+        const dip = temps.indexOf(Math.min(...temps));
+        const now = cur.temp;
+        if (peak > 0 && Math.round(temps[peak]) > now) parts.push(`Up to ${deg(temps[peak])} by ${fmt.hour(next12[peak].at)}`);
+        else if (dip > 0 && Math.round(temps[dip]) < now) parts.push(`Down to ${deg(temps[dip])} by ${fmt.hour(next12[dip].at)}`);
+        return parts.join('. ') + '.';
+    };
+
+    // Now's sky: its weather, lit for the time of day
+    const nowSky = (fc) => [fc.current.code, skyTime(Date.now(), fc.current.isDay, fc.days[0])];
+    // Now's readings, [label, value] (an empty value means no reading)
+    const nowFacts = (fc, fmt) => {
+        const cur = fc.current;
+        const now = Date.now();
+        const today = fc.days[0] || {};
+        const tomorrow = fc.days[1] || {};
+        const sun = now < today.sunrise ? ['Sunrise', today.sunrise]
+            : now < today.sunset ? ['Sunset', today.sunset]
+                : ['Sunrise', tomorrow.sunrise];
+        return [
+            ['Feels like', cur.feels == null ? '' : deg(cur.feels)],
+            ['Humidity', cur.humidity == null ? '' : `${cur.humidity}%`],
+            ['Wind', cur.wind == null ? '' : cur.wind < 1 ? 'Calm' : `${compass(cur.windFrom)} ${cur.wind} mph`],
+            [sun[0], isFinite(sun[1]) ? fmt.time(sun[1]) : '']
+        ];
+    };
+
+    // The next 14 hours: Now, then two hours at a time. A slot shows its
+    // first hour's temperature, the wetter hour's conditions when rain is
+    // likely, and the higher chance of rain of the two.
+    const stripSlots = (fc, fmt) => {
+        const i0 = hourNow(fc);
+        const slots = [];
+        for (let k = 0; k < SLOTS; k++) {
+            const i = k === 0 ? i0 : i0 + 1 + (k - 1) * STEP;
+            if (i >= fc.hours.length) break;
+            slots.push({ i, hrs: fc.hours.slice(i, k === 0 ? i + 1 : i + STEP) });
+        }
+        return slots.map(({ i, hrs }, k) => {
+            const h = hrs[0];
+            const isNow = k === 0;
+            const likely = hrs.filter((x) => wet(x.code) && x.pop >= 30);
+            // the Now slot shows the current reading, same as the panel above it
+            const code = isNow ? fc.current.code : likely.length ? Math.max(...likely.map((x) => x.code)) : h.code;
+            const { label, icon } = describe(code, isNow ? fc.current.isDay : h.isDay);
+            const pops = hrs.map((x) => x.pop).filter((v) => v != null);
+            const pop = pops.length ? Math.round(Math.max(...pops)) : null;
+            const newDay = k > 0 && dayOf(fc, i) !== dayOf(fc, slots[k - 1].i);
+            const time = isNow ? 'Now' : newDay ? `${fmt.wdShort(h.at)} ${fmt.hour(h.at)}` : fmt.hour(h.at);
+            return { now: isNow, newDay, time, label, icon, temp: deg(isNow ? fc.current.temp : h.temp), pop };
+        });
+    };
+    const stripRange = (slots) => `Next ${Math.max(1, (slots.length - 1) * STEP)} hours`;
+
+    // Open-Meteo's daily code is the worst hour of the day, so one stray
+    // hour of drizzle at 3 AM makes a sunny day "Heavy drizzle". A day
+    // shows what its daytime hours mostly are, or the wettest of them when
+    // rain is likely.
+    const dayCode = (fc, d) => {
+        const a = dayStart(fc, d);
+        const hrs = fc.hours.slice(a + 9, Math.min(a + 19, dayStart(fc, d + 1)));
+        if (!hrs.length) return fc.days[d].code;
+        const likely = hrs.filter((h) => wet(h.code) && h.pop >= 30);
+        if (likely.length) return Math.max(...likely.map((h) => h.code));
+        const count = {};
+        hrs.forEach((h) => { count[h.code] = (count[h.code] || 0) + 1; });
+        return Number(Object.keys(count).sort((x, y) => count[y] - count[x] || y - x)[0]);
+    };
+    // day d (1 is tomorrow), ready to draw; null when the forecast doesn't reach it
+    const dayInfo = (fc, fmt, d) => {
+        const day = fc.days[d];
+        if (!day) return null;
+        const code = dayCode(fc, d);
+        const { label, icon } = describe(code, true);
+        const noon = day.at + 12 * 3600000;
+        // the chance, and how much only when it's at all likely (a 2% day
+        // can still add up to 0.1 in). Open-Meteo's amount is melted, so
+        // a snowy day gets the chance alone.
+        const snow = wetWord(code) === 'Snow';
+        const rain = day.pop == null ? '' : `${Math.round(day.pop)}%${!snow && day.pop >= 10 && inches(day.precip) ? ` · ${inches(day.precip)}` : ''}`;
+        const wind = day.wind == null ? '' : day.wind < 1 ? 'Calm' : `${compass(day.windFrom)} ${day.wind} mph`;
+        return {
+            code, label, icon,
+            name: fmt.weekday(noon),
+            date: fmt.date(noon),
+            hi: deg(day.hi),
+            lo: deg(day.lo),
+            facts: [
+                [snow ? 'Snow' : 'Rain', rain], ['Wind', wind],
+                ['Sunrise', isFinite(day.sunrise) ? fmt.time(day.sunrise) : ''], ['Sunset', isFinite(day.sunset) ? fmt.time(day.sunset) : '']
+            ],
+        };
+    };
+
+    // The forecast while a layout is up: the first reading, a fresh one every
+    // 10 minutes, and a redraw when the hour turns. on.data(fc) draws a
+    // (new) forecast, on.status(s) says loading | ready | error, and on.tick()
+    // comes every 15 seconds (dawn and dusk come and go on their own time).
+    const createFeed = (on) => {
+        let alive = true;
+        let fc = null;
+        let status = 'loading';
+        let loadToken = 0;
+        const setStatus = (s) => {
+            status = s;
+            on.status(s);
+        };
+        const load = async (force = false) => {
+            const w = WX();
+            if (!w || typeof w.forecast !== 'function') { setStatus('error'); return; }
+            const token = ++loadToken;
+            if (!fc) setStatus('loading');
+            try {
+                const next = await w.forecast({ force });
+                if (!alive || token !== loadToken) return;
+                if (next !== fc) {
+                    fc = next;
+                    on.data(fc);
+                }
+                setStatus('ready');
+            } catch (err) {
+                if (!alive || token !== loadToken) return;
+                console.warn('[HOMER Weather]', err);
+                // keep showing the last good forecast for up to an hour
+                if (!fc || Date.now() - fc.fetchedAt > 60 * 60 * 1000) { fc = null; setStatus('error'); }
+            }
+        };
+        // a fresh reading every 10 minutes while the screen is up (forced: the
+        // shared one could be a few seconds short of stale and skip a round)
+        const refreshTimer = setInterval(() => load(true), REFRESH_MS);
+        // a new hour moves the strip along (and the sentence and sun time with it)
+        let lastHour = -1;
+        const hourTimer = setInterval(() => {
+            if (!fc || status !== 'ready') return;
+            on.tick();
+            const h = hourNow(fc);
+            if (h === lastHour) return;
+            if (lastHour >= 0) on.data(fc);
+            lastHour = h;
+        }, 15000);
+        return {
+            fc: () => fc,
+            status: () => status,
+            start() {
+                setStatus('loading');
+                load();
+            },
+            // OK / Try again after an error
+            retry() { if (status === 'error') load(true); },
+            stop() {
+                alive = false;
+                clearInterval(refreshTimer);
+                clearInterval(hourTimer);
+            },
+        };
+    };
+
+    // The radar panel for a place: the map and the loop, drawn into a panel's
+    // elements (els: box, land, frames, roads, lines, clock, ticks, offTitle,
+    // offText). The map is w × h map pixels and km across: on TV MAP_W × MAP_H
+    // stage pixels (a narrower panel shows its middle), on a phone the panel
+    // itself. t sizes the names (1 on TV), and they stay inside safe: [left,
+    // right, top, bottom]. scale() is how many picture pixels to a map pixel;
+    // fmt() the place's formatters.
+    const createRadar = ({ els, w = MAP_W, h = MAP_H, km = MAP_KM, t = 1, safe = [SAFE_X[0], SAFE_X[1], 70, MAP_H - 56], maxTowns = 8, scale = () => 1, fmt }) => {
+        let alive = true;
+        let radarFor = ''; // the place ("lat,lon") the panel is for
+        let radar = null; // { ws, area, scale, map } for the place, once it has one
+        let frames = []; // [{ at, img }], oldest first
+        let frameAt = 0; // which one is showing
+        let frameTimer = null;
+        let radarToken = 0;
+        const radarState = (s, title = '', text = '') => {
+            els.box.dataset.state = s; // loading | ready | off
+            els.offTitle.textContent = title;
+            els.offText.textContent = text;
+        };
+        const radarFailed = (who) => radarState('off', 'The radar didn\'t load',
+            `${who} didn't answer. HOMER tries again every few minutes.`);
+
+        // Play the loop: each picture for 300 ms, the newest for 1.5 s. Only
+        // the one showing is visible; the rest wait, already decoded.
+        const showFrame = (k) => {
+            frames.forEach((f, i) => f.img.classList.toggle('on', i === k));
+            els.clock.textContent = frames[k] ? fmt().time(frames[k].at) : '';
+            els.ticks.querySelectorAll('i').forEach((q, i) => q.classList.toggle('on', i <= k));
+        };
+        const play = () => {
+            clearTimeout(frameTimer);
+            if (!alive || !frames.length) return;
+            frameAt = Math.min(frameAt, frames.length - 1);
+            showFrame(frameAt);
+            const last = frameAt === frames.length - 1;
+            frameTimer = setTimeout(() => {
+                frameAt = last ? 0 : frameAt + 1;
+                play();
+            }, last ? 1500 : 300);
+        };
+
+        // the last hour of pictures; ones already here are kept, new ones are
+        // swapped in once they've all loaded and decoded
+        const loadFrames = async () => {
+            if (!radar) return;
+            const token = ++radarToken;
+            const { ws, area, scale: sc } = radar;
+            try {
+                const times = pickFrames(await radarTimes(ws));
+                if (!times.length) throw new Error('no radar pictures');
+                const have = new Map(frames.map((f) => [f.at, f]));
+                const next = (await Promise.all(times.map((at) => have.get(at) || new Promise((resolve) => {
+                    const img = new Image();
+                    img.alt = '';
+                    img.draggable = false;
+                    img.onload = () => Promise.resolve(img.decode && img.decode()).catch(() => {}).then(() => resolve({ at, img }));
+                    img.onerror = () => resolve(null);
+                    img.src = frameUrl(ws, area.box, w, h, sc, at);
+                })))).filter(Boolean);
+                if (!alive || token !== radarToken) return;
+                if (!next.length) throw new Error('no radar pictures loaded');
+                frames.filter((f) => !next.includes(f)).forEach((f) => f.img.remove());
+                next.forEach((f) => { if (!f.img.isConnected) els.frames.appendChild(f.img); });
+                const fresh = !frames.length || frames[frames.length - 1].at !== next[next.length - 1].at;
+                frames = next;
+                els.ticks.innerHTML = '<i></i>'.repeat(frames.length);
+                if (fresh) frameAt = 0; // a new loop starts from the beginning
+                radarState('ready');
+                play();
+            } catch (err) {
+                if (!alive || token !== radarToken) return;
+                console.warn('[HOMER Weather] radar', err);
+                // keep the last good loop; the next round may work
+                if (!frames.length) radarFailed('The National Weather Service');
+            }
+        };
+
+        // the map: land, then (over the rain) county and state lines, the
+        // interstates, the bigger towns, and the place itself
+        const r1 = (v) => +v.toFixed(1);
+        const drawMap = (shapes, place) => {
+            const { px } = radar.area;
+            const path = (features) => features.map((f) => (f.geometry && f.geometry.rings || [])
+                .map((ring) => 'M' + ring.map(([x, y]) => px(x, y).map((v) => v.toFixed(1)).join(' ')).join('L') + 'Z').join('')).join('');
+            els.land.innerHTML = `<path d="${path(shapes.states)}"/>`;
+            // the place, and as many towns as fit around it without crowding
+            const [cx, cy] = px(...radar.area.center);
+            const name = place.mode === 'device' ? 'Here' : String(place.name || '').split(',')[0];
+            const taken = [[cx - 8 * t, cy - 14 * t, cx + (16 + name.length * 10) * t, cy + 14 * t]];
+            const clear = (b) => taken.every((q) => b[2] < q[0] - 6 * t || b[0] > q[2] + 6 * t || b[3] < q[1] - 4 * t || b[1] > q[3] + 4 * t);
+            const towns = [];
+            shapes.towns.forEach((town) => {
+                const a = town.attributes || {};
+                if (towns.length >= maxTowns || !a.BASENAME || a.BASENAME === name) return;
+                const [x, y] = px(...merc(parseFloat(a.CENTLAT), parseFloat(a.CENTLON)));
+                const tw = a.BASENAME.length * 8.4 * t;
+                // the name to the right of the dot, or else to the left; clear
+                // of the panel's edges, its title, the time and other names
+                const fits = (b) => b[0] >= safe[0] && b[2] <= safe[1] && b[1] >= safe[2] && b[3] <= safe[3] && clear(b);
+                const right = [x - 5 * t, y - 11 * t, x + 10 * t + tw, y + 11 * t];
+                const left = [x - 10 * t - tw, y - 11 * t, x + 5 * t, y + 11 * t];
+                const b = fits(right) ? right : fits(left) ? left : null;
+                if (!b) return;
+                taken.push(b);
+                const tx = b === right ? `x="${(x + 9 * t).toFixed(1)}"` : `x="${(x - 9 * t).toFixed(1)}" text-anchor="end"`;
+                towns.push(`<circle class="town" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r1(3 * t)}"/><text ${tx} y="${(y + 5.5 * t).toFixed(1)}">${esc(a.BASENAME)}</text>`);
+            });
+            els.lines.innerHTML = `
+                <path class="county" d="${path(shapes.counties)}"/>
+                <path class="state" d="${path(shapes.states)}"/>
+                ${towns.join('')}
+                <circle class="here" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r1(6 * t)}"/>
+                <text class="here" x="${(cx + 13 * t).toFixed(1)}" y="${(cy + 6.5 * t).toFixed(1)}">${esc(name)}</text>`;
+        };
+
+        const draw = (p) => {
+            if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') { radarState('off', 'Radar unavailable here'); return; }
+            const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
+            if (key === radarFor) return;
+            radarFor = key;
+            radarToken++;
+            radar = null;
+            clearTimeout(frameTimer);
+            frames.forEach((f) => f.img.remove());
+            frames = [];
+            els.land.innerHTML = '';
+            els.lines.innerHTML = '';
+            els.roads.removeAttribute('src');
+            radarState('loading');
+            const area = mapArea(p.lat, p.lon, w, h, km);
+            radar = { ws: radarRegion(p.lat, p.lon), area, scale: scale(), map: false };
+            loadMap(p, key).then((ok) => { if (ok) loadFrames(); });
+        };
+        // The map, which also says whether the place is in the US. Without it
+        // (the Census server didn't answer) a place that's roughly in the US
+        // still gets the rain, with just the place marked, and the map is
+        // tried again with the next loop.
+        const loadMap = (p, key) => mapShapes(p.lat, p.lon, radar.area.box).then((shapes) => {
+            if (!alive || radarFor !== key) return false;
+            // the NWS only covers the US: somewhere no county holds isn't
+            if (!inside(radar.area.center[0], radar.area.center[1], shapes.counties)) {
+                radar = null;
+                clearTimeout(frameTimer);
+                radarState('off', 'Radar unavailable here', 'The National Weather Service\'s radar covers the US and its territories.');
+                return false;
+            }
+            radar.map = true;
+            drawMap(shapes, p);
+            els.roads.src = roadsUrl(radar.area.box, w, h);
+            return true;
+        }, (err) => {
+            if (!alive || radarFor !== key) return false;
+            console.warn('[HOMER Weather] radar map', err);
+            if (!roughlyUS(p.lat, p.lon)) {
+                radarFor = ''; // look again next round
+                radar = null;
+                radarFailed('The Census Bureau\'s map server');
+                return false;
+            }
+            drawMap({ counties: [], states: [], towns: [] }, p);
+            return true;
+        });
+
+        return {
+            draw,
+            // a fresh loop (every 5 minutes while the screen is up)
+            refresh(p) {
+                if (!radar) {
+                    if (!radarFor) draw(p);
+                    return;
+                }
+                if (!radar.map) loadMap(p, radarFor);
+                loadFrames();
+            },
+            teardown() {
+                alive = false;
+                radarToken++;
+                clearTimeout(frameTimer);
+                frames.forEach((f) => f.img.remove());
+                frames = [];
+            },
+        };
+    };
+
     // Stylesheets load on first open. tokens.css normally comes from homer.js;
     // load it here too when this script is used on its own.
     let cssReady = null;
@@ -513,15 +915,20 @@
             document.head.appendChild(s);
         }
         if (cssReady && document.getElementById('hf-css')) return cssReady;
-        const css = document.createElement('link');
-        css.id = 'hf-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'forecast.css' + QUERY;
-        cssReady = new Promise((resolve) => {
-            css.onload = css.onerror = resolve;
-            setTimeout(resolve, 2000);
-        });
-        document.head.appendChild(css);
+        // both layouts' (the phone one is scoped to .hf-phone)
+        const link = (id, file) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
+            document.head.appendChild(css);
+            return new Promise((resolve) => {
+                css.onload = css.onerror = resolve;
+                setTimeout(resolve, 2000);
+            });
+        };
+        cssReady = Promise.all([link('hf-css', 'forecast.css'), link('hf-phone-css', 'forecast-phone.css')]);
         return cssReady;
     };
 
@@ -611,79 +1018,19 @@
         if (ae && ae !== document.body && !root.contains(ae) && typeof ae.blur === 'function') ae.blur();
 
         // ----- state -----
-        let alive = true;
-        let status = 'loading'; // loading | ready | error
-        let fc = null; // HomerWeather.forecast()'s result
         let fmt = null; // formatters in the place's own time zone
 
-        const hourNow = () => clamp(Math.floor((Date.now() - fc.hours[0].at) / 3600000), 0, fc.hours.length - 1);
-        // the index of the hour that starts day d
-        const dayStart = (d) => {
-            const at = fc.days[d] && fc.days[d].at;
-            const i = fc.hours.findIndex((h) => h.at >= at);
-            return i < 0 ? fc.hours.length : i;
-        };
-        const dayOf = (i) => {
-            const at = fc.hours[i].at;
-            let d = 0;
-            for (let k = 1; k < fc.days.length; k++) if (at >= fc.days[k].at) d = k;
-            return d;
-        };
-
-        const makeFormatters = (tz) => {
-            const f = (opts) => {
-                try { return new Intl.DateTimeFormat([], { ...opts, timeZone: tz }); } catch { return new Intl.DateTimeFormat([], opts); }
-            };
-            const hour = f({ hour: 'numeric' });
-            const time = f({ hour: 'numeric', minute: '2-digit' });
-            const weekday = f({ weekday: 'long' });
-            const wdShort = f({ weekday: 'short' });
-            const date = f({ month: 'short', day: 'numeric' });
-            return {
-                hour: (at) => hour.format(at),
-                time: (at) => time.format(at),
-                weekday: (at) => weekday.format(at),
-                wdShort: (at) => wdShort.format(at),
-                date: (at) => date.format(at),
-            };
-        };
-
         // ----- title band: the place, and what's coming -----
-        const summary = () => {
-            const i0 = hourNow();
-            const ahead = fc.hours.slice(i0, i0 + 25);
-            const cur = fc.current;
-            const parts = [];
-            if (wet(cur.code)) {
-                const dry = ahead.findIndex((h, k) => k > 0 && !wet(h.code) && (h.pop == null || h.pop < 30));
-                parts.push(dry > 0 ? `${wetWord(cur.code)} until about ${fmt.hour(ahead[dry].at)}` : `${wetWord(cur.code)} through the next day`);
-            } else {
-                const likely = ahead.findIndex((h, k) => k > 0 && h.pop >= 50);
-                const maybe = ahead.findIndex((h, k) => k > 0 && h.pop >= 20);
-                if (likely > 0) parts.push(`${wetWord(wet(ahead[likely].code) ? ahead[likely].code : 61)} likely around ${fmt.hour(ahead[likely].at)}`);
-                else if (maybe > 0) parts.push(`A chance of ${wetWord(wet(ahead[maybe].code) ? ahead[maybe].code : 61).toLowerCase()} around ${fmt.hour(ahead[maybe].at)}`);
-                else parts.push('Dry for the next 24 hours');
-            }
-            // the next turn of the temperature: today's high if it's still coming, else the overnight low
-            const next12 = ahead.slice(0, 13);
-            const temps = next12.map((h) => h.temp);
-            const peak = temps.indexOf(Math.max(...temps));
-            const dip = temps.indexOf(Math.min(...temps));
-            const now = cur.temp;
-            if (peak > 0 && Math.round(temps[peak]) > now) parts.push(`Up to ${deg(temps[peak])} by ${fmt.hour(next12[peak].at)}`);
-            else if (dip > 0 && Math.round(temps[dip]) < now) parts.push(`Down to ${deg(temps[dip])} by ${fmt.hour(next12[dip].at)}`);
-            return parts.join('. ') + '.';
-        };
-        const drawTitle = () => {
+        const drawTitle = (fc) => {
             $('.hf-title-place span:last-child').textContent = (fc.place && fc.place.name) || '';
-            $('.hf-title-line').textContent = summary();
+            $('.hf-title-line').textContent = summary(fc, fmt);
         };
 
         // ----- Now -----
         // a label and its value (Now's readings, and each day's)
         const stat = (k, v) => (v ? `<div class="hf-stat"><span class="hf-stat-k">${esc(k)}</span><span class="hf-stat-v">${esc(v)}</span></div>` : '');
-        const drawNowSky = () => setSky($('.hf-now .hf-sky'), fc.current.code, skyTime(Date.now(), fc.current.isDay, fc.days[0]));
-        const drawNow = () => {
+        const drawNowSky = (fc) => setSky($('.hf-now .hf-sky'), ...nowSky(fc));
+        const drawNow = (fc) => {
             const cur = fc.current;
             const { label, icon } = describe(cur.code, cur.isDay);
             $('.hf-now-temp').textContent = deg(cur.temp);
@@ -692,281 +1039,65 @@
             if (img.getAttribute('src') !== src) img.setAttribute('src', src);
             img.alt = label;
             $('.hf-now-cond').textContent = label;
-            drawNowSky();
-
-            const now = Date.now();
-            const today = fc.days[0] || {};
-            const tomorrow = fc.days[1] || {};
-            const sun = now < today.sunrise ? ['Sunrise', today.sunrise]
-                : now < today.sunset ? ['Sunset', today.sunset]
-                    : ['Sunrise', tomorrow.sunrise];
-            $('.hf-now-stats').innerHTML = [
-                stat('Feels like', cur.feels == null ? '' : deg(cur.feels)),
-                stat('Humidity', cur.humidity == null ? '' : `${cur.humidity}%`),
-                stat('Wind', cur.wind == null ? '' : cur.wind < 1 ? 'Calm' : `${compass(cur.windFrom)} ${cur.wind} mph`),
-                stat(sun[0], isFinite(sun[1]) ? fmt.time(sun[1]) : '')
-            ].join('');
+            drawNowSky(fc);
+            $('.hf-now-stats').innerHTML = nowFacts(fc, fmt).map(([k, v]) => stat(k, v)).join('');
         };
 
         // ----- the next 14 hours, under Now -----
-        // Now, then two hours at a time: a slot shows its first hour's
-        // temperature, the wetter hour's conditions when rain is likely, and
-        // the higher chance of rain of the two.
-        const drawStrip = () => {
-            const i0 = hourNow();
-            const slots = [];
-            for (let k = 0; k < SLOTS; k++) {
-                const i = k === 0 ? i0 : i0 + 1 + (k - 1) * STEP;
-                if (i >= fc.hours.length) break;
-                slots.push({ i, hrs: fc.hours.slice(i, k === 0 ? i + 1 : i + STEP) });
-            }
+        const drawStrip = (fc) => {
+            const slots = stripSlots(fc, fmt);
             const box = $('.hf-strip-cols');
-            box.innerHTML = slots.map(({ i, hrs }, k) => {
-                const h = hrs[0];
-                const isNow = k === 0;
-                const likely = hrs.filter((x) => wet(x.code) && x.pop >= 30);
-                // the Now slot shows the current reading, same as the panel above it
-                const code = isNow ? fc.current.code : likely.length ? Math.max(...likely.map((x) => x.code)) : h.code;
-                const { label, icon } = describe(code, isNow ? fc.current.isDay : h.isDay);
-                const pops = hrs.map((x) => x.pop).filter((v) => v != null);
-                const pop = pops.length ? Math.round(Math.max(...pops)) : null;
-                const newDay = k > 0 && dayOf(i) !== dayOf(slots[k - 1].i);
-                const time = isNow ? 'Now' : newDay ? `${fmt.wdShort(h.at)} ${fmt.hour(h.at)}` : fmt.hour(h.at);
-                return `
-                    <div class="hf-slot${isNow ? ' now' : ''}${newDay ? ' new-day' : ''}" title="${esc(label)}">
-                        <div class="hf-slot-time">${esc(time)}</div>
-                        ${stillImg(icon, 'hf-slot-icon')}
-                        <div class="hf-slot-temp">${deg(isNow ? fc.current.temp : h.temp)}</div>
-                        <div class="hf-slot-pop${pop >= 10 ? '' : ' dry'}"><i></i>${pop == null ? '–' : pop + '%'}</div>
-                    </div>`;
-            }).join('');
+            box.innerHTML = slots.map((sl) => `
+                    <div class="hf-slot${sl.now ? ' now' : ''}${sl.newDay ? ' new-day' : ''}" title="${esc(sl.label)}">
+                        <div class="hf-slot-time">${esc(sl.time)}</div>
+                        ${stillImg(sl.icon, 'hf-slot-icon')}
+                        <div class="hf-slot-temp">${sl.temp}</div>
+                        <div class="hf-slot-pop${sl.pop >= 10 ? '' : ' dry'}"><i></i>${sl.pop == null ? '–' : sl.pop + '%'}</div>
+                    </div>`).join('');
             fillStills(box);
-            $('.hf-strip-range').textContent = `Next ${Math.max(1, (slots.length - 1) * STEP)} hours`;
+            $('.hf-strip-range').textContent = stripRange(slots);
         };
 
-        // ----- the next three days -----
-        // Open-Meteo's daily code is the worst hour of the day, so one stray
-        // hour of drizzle at 3 AM makes a sunny day "Heavy drizzle". A day
-        // shows what its daytime hours mostly are, or the wettest of them when
-        // rain is likely.
-        const dayCode = (d) => {
-            const a = dayStart(d);
-            const hrs = fc.hours.slice(a + 9, Math.min(a + 19, dayStart(d + 1)));
-            if (!hrs.length) return fc.days[d].code;
-            const likely = hrs.filter((h) => wet(h.code) && h.pop >= 30);
-            if (likely.length) return Math.max(...likely.map((h) => h.code));
-            const count = {};
-            hrs.forEach((h) => { count[h.code] = (count[h.code] || 0) + 1; });
-            return Number(Object.keys(count).sort((x, y) => count[y] - count[x] || y - x)[0]);
-        };
-        // a panel a day, each on its daytime sky
-        const drawDays = () => {
+        // ----- the next three days: a panel a day, each on its daytime sky -----
+        const drawDays = (fc) => {
             stage.querySelectorAll('.hf-day').forEach((pane, k) => {
-                const d = fc.days[k + 1];
+                const d = dayInfo(fc, fmt, k + 1);
                 const body = pane.querySelector('.hf-day-body');
                 pane.style.visibility = d ? '' : 'hidden';
                 if (!d) return;
-                const code = dayCode(k + 1);
-                const { label, icon } = describe(code, true);
-                setSky(pane.querySelector('.hf-sky'), code, 'day');
-                const noon = d.at + 12 * 3600000;
-                // the chance, and how much only when it's at all likely (a 2% day
-                // can still add up to 0.1 in). Open-Meteo's amount is melted, so
-                // a snowy day gets the chance alone.
-                const snow = wetWord(code) === 'Snow';
-                const rain = d.pop == null ? '' : `${Math.round(d.pop)}%${!snow && d.pop >= 10 && inches(d.precip) ? ` · ${inches(d.precip)}` : ''}`;
-                const wind = d.wind == null ? '' : d.wind < 1 ? 'Calm' : `${compass(d.windFrom)} ${d.wind} mph`;
+                setSky(pane.querySelector('.hf-sky'), d.code, 'day');
                 body.innerHTML = `
-                    <div class="hf-day-top"><span class="hf-day-name">${esc(fmt.weekday(noon))}</span><span class="hf-day-date">${esc(fmt.date(noon))}</span></div>
+                    <div class="hf-day-top"><span class="hf-day-name">${esc(d.name)}</span><span class="hf-day-date">${esc(d.date)}</span></div>
                     <div class="hf-day-mid">
-                        ${stillImg(icon, 'hf-day-icon')}
+                        ${stillImg(d.icon, 'hf-day-icon')}
                         <div class="hf-day-main">
-                            <div class="hf-day-temps"><span class="hf-day-hi">${deg(d.hi)}</span><span class="hf-day-lo">${deg(d.lo)}</span></div>
-                            <div class="hf-day-cond">${esc(label)}</div>
+                            <div class="hf-day-temps"><span class="hf-day-hi">${d.hi}</span><span class="hf-day-lo">${d.lo}</span></div>
+                            <div class="hf-day-cond">${esc(d.label)}</div>
                         </div>
                     </div>
                     <div class="hf-day-facts">
-                        ${stat(snow ? 'Snow' : 'Rain', rain)}${stat('Wind', wind)}
-                        ${stat('Sunrise', isFinite(d.sunrise) ? fmt.time(d.sunrise) : '')}${stat('Sunset', isFinite(d.sunset) ? fmt.time(d.sunset) : '')}
+                        ${d.facts.map(([k, v]) => stat(k, v)).join('')}
                     </div>`;
                 fillStills(body);
             });
         };
 
         // ----- radar -----
-        const radarBox = $('.hf-radar');
-        let radarFor = ''; // the place ("lat,lon") the panel is for
-        let radar = null; // { ws, area, scale, map } for the place, once it has one
-        let frames = []; // [{ at, img }], oldest first
-        let frameAt = 0; // which one is showing
-        let frameTimer = null;
-        let radarToken = 0;
-        const radarState = (s, title = '', text = '') => {
-            radarBox.dataset.state = s; // loading | ready | off
-            $('.hf-radar-off b').textContent = title;
-            $('.hf-radar-off span').textContent = text;
-        };
-        const radarFailed = (who) => radarState('off', 'The radar didn\'t load',
-            `${who} didn't answer. HOMER tries again every few minutes.`);
-
-        // Play the loop: each picture for 300 ms, the newest for 1.5 s. Only
-        // the one showing is visible; the rest wait, already decoded.
-        const showFrame = (k) => {
-            frames.forEach((f, i) => f.img.classList.toggle('on', i === k));
-            $('.hf-radar-clock').textContent = frames[k] ? fmt.time(frames[k].at) : '';
-            $('.hf-radar-ticks').querySelectorAll('i').forEach((t, i) => t.classList.toggle('on', i <= k));
-        };
-        const play = () => {
-            clearTimeout(frameTimer);
-            if (!alive || !frames.length) return;
-            frameAt = Math.min(frameAt, frames.length - 1);
-            showFrame(frameAt);
-            const last = frameAt === frames.length - 1;
-            frameTimer = setTimeout(() => {
-                frameAt = last ? 0 : frameAt + 1;
-                play();
-            }, last ? 1500 : 300);
-        };
-
-        // the last hour of pictures; ones already here are kept, new ones are
-        // swapped in once they've all loaded and decoded
-        const loadFrames = async () => {
-            if (!radar) return;
-            const token = ++radarToken;
-            const { ws, area, scale } = radar;
-            try {
-                const times = pickFrames(await radarTimes(ws));
-                if (!times.length) throw new Error('no radar pictures');
-                const have = new Map(frames.map((f) => [f.at, f]));
-                const next = (await Promise.all(times.map((at) => have.get(at) || new Promise((resolve) => {
-                    const img = new Image();
-                    img.alt = '';
-                    img.draggable = false;
-                    img.onload = () => Promise.resolve(img.decode && img.decode()).catch(() => {}).then(() => resolve({ at, img }));
-                    img.onerror = () => resolve(null);
-                    img.src = frameUrl(ws, area.box, scale, at);
-                })))).filter(Boolean);
-                if (!alive || token !== radarToken) return;
-                if (!next.length) throw new Error('no radar pictures loaded');
-                const box = $('.hf-radar-frames');
-                frames.filter((f) => !next.includes(f)).forEach((f) => f.img.remove());
-                next.forEach((f) => { if (!f.img.isConnected) box.appendChild(f.img); });
-                const fresh = !frames.length || frames[frames.length - 1].at !== next[next.length - 1].at;
-                frames = next;
-                $('.hf-radar-ticks').innerHTML = '<i></i>'.repeat(frames.length);
-                if (fresh) frameAt = 0; // a new loop starts from the beginning
-                radarState('ready');
-                play();
-            } catch (err) {
-                if (!alive || token !== radarToken) return;
-                console.warn('[HOMER Weather] radar', err);
-                // keep the last good loop; the next round may work
-                if (!frames.length) radarFailed('The National Weather Service');
-            }
-        };
-
-        // the map: land, then (over the rain) county and state lines, the
-        // interstates, the bigger towns, and the place itself
-        const drawMap = (shapes, place) => {
-            const { px } = radar.area;
-            const path = (features) => features.map((f) => (f.geometry && f.geometry.rings || [])
-                .map((ring) => 'M' + ring.map(([x, y]) => px(x, y).map((v) => v.toFixed(1)).join(' ')).join('L') + 'Z').join('')).join('');
-            $('.hf-radar-land').innerHTML = `<path d="${path(shapes.states)}"/>`;
-            // the place, and as many towns as fit around it without crowding
-            const [cx, cy] = px(...radar.area.center);
-            const name = place.mode === 'device' ? 'Here' : String(place.name || '').split(',')[0];
-            const taken = [[cx - 8, cy - 14, cx + 16 + name.length * 10, cy + 14]];
-            const clear = (b) => taken.every((t) => b[2] < t[0] - 6 || b[0] > t[2] + 6 || b[3] < t[1] - 4 || b[1] > t[3] + 4);
-            const towns = [];
-            shapes.towns.forEach((t) => {
-                const a = t.attributes || {};
-                if (towns.length >= 8 || !a.BASENAME || a.BASENAME === name) return;
-                const [x, y] = px(...merc(parseFloat(a.CENTLAT), parseFloat(a.CENTLON)));
-                const w = a.BASENAME.length * 8.4;
-                // the name to the right of the dot, or else to the left; clear
-                // of the panel's edges, its title, the time and other names
-                const fits = (b) => b[0] >= SAFE_X[0] && b[2] <= SAFE_X[1] && b[1] >= 70 && b[3] <= MAP_H - 56 && clear(b);
-                const right = [x - 5, y - 11, x + 10 + w, y + 11];
-                const left = [x - 10 - w, y - 11, x + 5, y + 11];
-                const b = fits(right) ? right : fits(left) ? left : null;
-                if (!b) return;
-                taken.push(b);
-                const tx = b === right ? `x="${(x + 9).toFixed(1)}"` : `x="${(x - 9).toFixed(1)}" text-anchor="end"`;
-                towns.push(`<circle class="town" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3"/><text ${tx} y="${(y + 5.5).toFixed(1)}">${esc(a.BASENAME)}</text>`);
-            });
-            $('.hf-radar-lines').innerHTML = `
-                <path class="county" d="${path(shapes.counties)}"/>
-                <path class="state" d="${path(shapes.states)}"/>
-                ${towns.join('')}
-                <circle class="here" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6"/>
-                <text class="here" x="${(cx + 13).toFixed(1)}" y="${(cy + 6.5).toFixed(1)}">${esc(name)}</text>`;
-        };
-
-        const drawRadar = () => {
-            const p = fc.place;
-            if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') { radarState('off', 'Radar unavailable here'); return; }
-            const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
-            if (key === radarFor) return;
-            radarFor = key;
-            radarToken++;
-            radar = null;
-            clearTimeout(frameTimer);
-            frames.forEach((f) => f.img.remove());
-            frames = [];
-            $('.hf-radar-land').innerHTML = '';
-            $('.hf-radar-lines').innerHTML = '';
-            $('.hf-radar-roads').removeAttribute('src');
-            radarState('loading');
+        const radar = createRadar({
+            els: {
+                box: $('.hf-radar'), land: $('.hf-radar-land'), frames: $('.hf-radar-frames'), roads: $('.hf-radar-roads'),
+                lines: $('.hf-radar-lines'), clock: $('.hf-radar-clock'), ticks: $('.hf-radar-ticks'),
+                offTitle: $('.hf-radar-off b'), offText: $('.hf-radar-off span'),
+            },
             // twice the detail on a screen with pixels to spare (a 4K TV)
-            const scale = stage.getBoundingClientRect().height / 1080 * (window.devicePixelRatio || 1) > 1.25 ? 2 : 1;
-            const area = mapArea(p.lat, p.lon);
-            radar = { ws: radarRegion(p.lat, p.lon), area, scale, map: false };
-            loadMap(p, key).then((ok) => { if (ok) loadFrames(); });
-        };
-        // The map, which also says whether the place is in the US. Without it
-        // (the Census server didn't answer) a place that's roughly in the US
-        // still gets the rain, with just the place marked, and the map is
-        // tried again with the next loop.
-        const loadMap = (p, key) => mapShapes(p.lat, p.lon, radar.area.box).then((shapes) => {
-            if (!alive || radarFor !== key) return false;
-            // the NWS only covers the US: somewhere no county holds isn't
-            if (!inside(radar.area.center[0], radar.area.center[1], shapes.counties)) {
-                radar = null;
-                clearTimeout(frameTimer);
-                radarState('off', 'Radar unavailable here', 'The National Weather Service\'s radar covers the US and its territories.');
-                return false;
-            }
-            radar.map = true;
-            drawMap(shapes, p);
-            $('.hf-radar-roads').src = roadsUrl(radar.area.box);
-            return true;
-        }, (err) => {
-            if (!alive || radarFor !== key) return false;
-            console.warn('[HOMER Weather] radar map', err);
-            if (!roughlyUS(p.lat, p.lon)) {
-                radarFor = ''; // look again next round
-                radar = null;
-                radarFailed('The Census Bureau\'s map server');
-                return false;
-            }
-            drawMap({ counties: [], states: [], towns: [] }, p);
-            return true;
+            scale: () => (stage.getBoundingClientRect().height / 1080 * (window.devicePixelRatio || 1) > 1.25 ? 2 : 1),
+            fmt: () => fmt,
         });
-        // a fresh loop every 5 minutes while the screen is up
-        const radarTimer = setInterval(() => {
-            if (!fc) return;
-            if (!radar) {
-                if (!radarFor) drawRadar();
-                return;
-            }
-            if (!radar.map) loadMap(fc.place, radarFor);
-            loadFrames();
-        }, RADAR_MS);
 
         // ----- legend -----
         const updateLegend = () => {
             const items = [];
-            if (status === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
+            if (feed.status() === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer',
                 { key: 'H', label: 'Home', action: 'home' },
@@ -976,9 +1107,8 @@
                 : `<span data-action="${i.action}"><span class="hf-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
         };
 
-        // ----- status -----
+        // ----- the forecast: loading, then drawn -----
         const setStatus = (s) => {
-            status = s;
             root.classList.toggle('hf-ready', s === 'ready');
             const box = $('.hf-state');
             if (s === 'loading') box.innerHTML = '<b>Checking the forecast…</b>';
@@ -987,51 +1117,23 @@
             box.classList.toggle('show', s !== 'ready');
             updateLegend();
         };
-
-        const drawAll = () => {
+        const drawAll = (fc) => {
             fmt = makeFormatters(fc.timeZone);
-            drawTitle();
-            drawNow();
-            drawStrip();
-            drawDays();
-            drawRadar();
+            drawTitle(fc);
+            drawNow(fc);
+            drawStrip(fc);
+            drawDays(fc);
+            radar.draw(fc.place);
         };
-
-        let loadToken = 0;
-        const load = async (force = false) => {
-            const w = WX();
-            if (!w || typeof w.forecast !== 'function') { setStatus('error'); return; }
-            const token = ++loadToken;
-            if (!fc) setStatus('loading');
-            try {
-                const next = await w.forecast({ force });
-                if (!alive || token !== loadToken) return;
-                if (next !== fc) {
-                    fc = next;
-                    drawAll();
-                }
-                setStatus('ready');
-            } catch (err) {
-                if (!alive || token !== loadToken) return;
-                console.warn('[HOMER Weather]', err);
-                // keep showing the last good forecast for up to an hour
-                if (!fc || Date.now() - fc.fetchedAt > 60 * 60 * 1000) { fc = null; setStatus('error'); }
-            }
-        };
-        // a fresh reading every 10 minutes while the screen is up (forced: the
-        // shared one could be a few seconds short of stale and skip a round)
-        const refreshTimer = setInterval(() => load(true), REFRESH_MS);
-        // a new hour moves the strip along (and the sentence and sun time with
-        // it); dawn and dusk come and go on their own time
-        let lastHour = -1;
-        const hourTimer = setInterval(() => {
-            if (!fc || status !== 'ready') return;
-            drawNowSky();
-            const h = hourNow();
-            if (h === lastHour) return;
-            if (lastHour >= 0) drawAll();
-            lastHour = h;
-        }, 15000);
+        const feed = createFeed({
+            data: drawAll,
+            status: setStatus,
+            tick: () => drawNowSky(feed.fc()),
+        });
+        // a fresh radar loop every 5 minutes while the screen is up
+        const radarTimer = setInterval(() => {
+            if (feed.fc()) radar.refresh(feed.fc().place);
+        }, RADAR_MS);
 
         // ----- docked video -----
         const syncDocked = () => {
@@ -1044,9 +1146,7 @@
             ev.preventDefault();
             ev.stopPropagation();
         };
-        const ok = () => {
-            if (status === 'error') load(true);
-        };
+        const ok = () => feed.retry();
         const onKey = (ev) => {
             // the guide opens on top of us; it gets the keys while it's up
             if (document.getElementById('cg-root')) return;
@@ -1095,23 +1195,20 @@
         stage.addEventListener('click', onClick);
 
         syncDocked();
-        setStatus('loading');
-        load();
+        feed.start();
 
         return {
+            phone: false,
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
-                alive = false;
+                feed.stop();
+                radar.teardown();
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
-                clearInterval(refreshTimer);
-                clearInterval(hourTimer);
                 clearInterval(radarTimer);
-                clearTimeout(frameTimer);
-                radarToken++;
                 wxDetach();
                 root.remove();
             }
@@ -1145,10 +1242,31 @@
             screen.sync();
             return;
         }
-        const s = createScreen();
+        const s = draw();
         screen = s;
         ensureCss().then(() => { if (screen === s) s.show(); });
     };
+
+    // The phone layout: shared/layout.js says when; forecast/forecast-phone.js
+    // draws it (and registers it with the layout once it has loaded), from
+    // the same forecast, sentences, skies and radar as the TV screen.
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerForecastPhone && window.HomerLayout.usePhone('weather'));
+    const PHONE_CTX = {
+        createFeed, createRadar, makeFormatters, summary, nowSky, nowFacts, stripSlots, stripRange, dayInfo,
+        describe, iconUrl, stillImg, fillStills, setSky, deg, esc, RADAR_MS,
+        goHome, goBack, docked,
+    };
+    const draw = () => (phoneLayout() ? window.HomerForecastPhone.create(PHONE_CTX) : createScreen());
+
+    // The phone and TV layouts switch places (a window resized across the
+    // line, mostly): draw the other one.
+    const onLayout = () => {
+        if (!screen || screen.phone === phoneLayout()) return;
+        closeScreen();
+        lastSig = '';
+        sync();
+    };
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
 
     // HomerPlayer may load after this script; subscribe once it's there.
     let unsubscribe = null;
@@ -1218,6 +1336,7 @@
         destroy() {
             destroyed = true;
             closeScreen();
+            offLayout();
             observer && observer.disconnect();
             if (unsubscribe) safe(unsubscribe);
             unsubscribe = null;
@@ -1225,6 +1344,7 @@
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);
             document.getElementById('hf-css')?.remove();
+            document.getElementById('hf-phone-css')?.remove();
             cssReady = null;
         }
     };
