@@ -956,7 +956,7 @@
     .cg-phone.gp-docked .gp-head {
         grid-column: 1;
         grid-row: 2;
-        align-self: start;
+        align-self: stretch; /* fills the column under the video, backdrop and all */
         display: block;
         border-bottom: 0;
     }
