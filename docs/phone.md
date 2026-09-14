@@ -2,12 +2,9 @@
 
 HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
-so do mobile browsers. A screen can draw a phone layout of its own. The guide
-and Search have one; the others still draw their TV layout, shrunk to fit.
-and Home have one (`guide/guide-phone.js`, `home/home-phone.js`); a screen
-without one draws its TV layout, shrunk to fit.
-so do mobile browsers. A screen can draw a phone layout of its own. The guide,
-Settings and Weather have one; a screen that doesn't still draws its TV
+so do mobile browsers. Every HOMER screen has a phone layout of its own: the
+guide, Home, Movies and TV Shows with their details pages, Search,
+Recordings, Settings and Weather. A screen without one would draw its TV
 layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
