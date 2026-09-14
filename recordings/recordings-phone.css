@@ -1,0 +1,1105 @@
+/*
+ * HOMER Recordings, phone layout (recordings/recordings-phone.js). Everything
+ * is scoped to .hr-phone; colors, type and the logo chips come from
+ * shared/tokens.css, the top bar and tab bar around it from shared/phone.css,
+ * and the look from the phone guide (guide/guide-phone.css).
+ *
+ * Like the phone guide, it sits above the phone's bars and a docked video
+ * (HomerPlayer pins the real video at 99995): its panels start below the top
+ * bar and end above the tab bar, and the video strip is a hole the video
+ * shows through. Only the sheet and its scrim cover the bars.
+ */
+
+/* (#hr-root.hr-phone: over shell.css's #hr-root, which is the TV screen's,
+   and over phone.css's squeeze for screens without a phone layout) */
+#hr-root.hr-phone,
+html.homer-chrome #hr-root.hr-phone {
+    --dock-h: calc(100vw * 9 / 16);
+
+    position: fixed;
+    inset: 0;
+    top: 0 !important;
+    bottom: 0 !important;
+    z-index: 99997;
+    overflow: visible;
+    background: none;
+    pointer-events: none;
+    font-family: var(--homer-font);
+    color: var(--homer-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+.hr-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.hr-phone [hidden] { display: none !important; }
+
+.hr-phone .rp-main {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--homer-phone-top);
+    bottom: var(--homer-phone-tabs);
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+.hr-phone .rp-side {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+}
+
+/* the TV screens' faint scanline texture */
+.hr-phone .rp-side::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+}
+
+/* ---------- Docked video (as in the phone guide) ---------- */
+
+.hr-phone .rp-dock {
+    position: relative;
+    flex: none;
+    display: none;
+    width: 100%;
+    height: var(--dock-h);
+    overflow: hidden;
+    cursor: pointer;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.hr-phone.rp-docked .rp-dock { display: block; }
+
+/* the video is in: let it show through */
+.hr-phone.rp-dock-live .rp-dock { background: none; }
+.hr-phone.rp-dock-live .rp-dock-idle { display: none; }
+
+.hr-phone .rp-dock-idle {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.hr-phone .rp-dock-tuning {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hr-phone .rp-dock-logo .rp-logo {
+    width: auto;
+    height: 66px;
+    min-width: 120px;
+    padding: 8px 14px;
+    border-radius: 12px;
+}
+
+.hr-phone .rp-dock-logo .rp-logo img {
+    max-height: 48px;
+    max-width: 110px;
+}
+
+.hr-phone .rp-badge {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--homer-live);
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hr-phone .rp-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.hr-phone .rp-dock-ctl {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+}
+
+.hr-phone .rp-dock-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.hr-phone .rp-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    font-size: 21px;
+    color: #fff;
+}
+
+.hr-phone .rp-dock-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 22px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), transparent);
+    font-family: var(--homer-font-cond);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.hr-phone .rp-dock-what {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-phone .rp-dock-left { flex: none; }
+
+.hr-phone .rp-dock-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.hr-phone .rp-dock-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+/* ---------- Recorded / Scheduled / Series ---------- */
+
+.hr-phone .rp-head {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.hr-phone .rp-seg {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--homer-line-strong);
+}
+
+.hr-phone .rp-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #c5d2e3;
+    font-family: var(--homer-font-cond);
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hr-phone .rp-seg-btn span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-phone .rp-seg-btn i {
+    flex: none;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--homer-dim);
+}
+
+.hr-phone .rp-seg-btn i:empty { display: none; }
+
+.hr-phone .rp-seg-btn.on {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 6px 18px rgba(47, 140, 255, 0.4);
+}
+
+.hr-phone .rp-seg-btn.on i { color: rgba(255, 255, 255, 0.8); }
+
+/* inside a show's folder: back to all of them */
+.hr-phone .rp-crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 -2px;
+    min-width: 0;
+}
+
+.hr-phone .rp-up {
+    flex: none;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px 0 4px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #d6e0ec;
+}
+
+.hr-phone .rp-up .material-icons { font-size: 24px; }
+
+.hr-phone .rp-crumb-title {
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- The list ---------- */
+
+.hr-phone .rp-list {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 8px 12px 12px;
+}
+
+.hr-phone .rp-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.hr-phone .rp-rows:empty { display: none; }
+
+/* Scheduled: a heading per day */
+.hr-phone .rp-day {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 6px -12px 0;
+    padding: 9px 16px 6px;
+    background: linear-gradient(180deg, #050d1c 70%, rgba(5, 13, 28, 0));
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-needle);
+}
+
+.hr-phone .rp-day:first-child { margin-top: -8px; }
+
+.hr-phone .rp-row {
+    position: relative;
+    flex: none;
+    min-height: 84px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px 9px 9px;
+    border-radius: 12px;
+    background: var(--homer-cell);
+    border: 1px solid rgba(160, 190, 230, 0.08);
+    overflow: hidden;
+    cursor: pointer;
+    outline: none;
+}
+
+.hr-phone .rp-row:active { background: var(--homer-cell-hi); }
+.hr-phone .rp-row:focus-visible { box-shadow: 0 0 0 2px #fff; }
+
+@media (hover: hover) {
+    .hr-phone .rp-row:hover { background: var(--homer-cell-hi); }
+}
+
+/* recording right now */
+.hr-phone .rp-row.rec-now {
+    background: rgba(60, 22, 34, 0.82);
+    border-color: rgba(255, 59, 59, 0.35);
+}
+
+.hr-phone .rp-thumb {
+    position: relative;
+    flex: none;
+    width: 112px;
+    height: 63px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(160deg, #1d3a66, #0a1628 75%);
+    box-shadow: inset 0 0 0 1px var(--homer-line);
+}
+
+.hr-phone .rp-thumb > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.hr-phone .rp-thumb > img.in { opacity: 1; }
+
+/* the channel in the corner of the art */
+.hr-phone .rp-thumb .rp-logo {
+    position: absolute;
+    left: 5px;
+    bottom: 5px;
+    width: auto;
+    max-width: 64px;
+    height: 22px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.hr-phone .rp-thumb .rp-logo img { max-height: 16px; max-width: 52px; }
+.hr-phone .rp-thumb .rp-logo.text span { font-size: 10px; -webkit-line-clamp: 1; }
+
+/* no art: the channel fills the tile */
+.hr-phone .rp-thumb.bare {
+    display: grid;
+    place-items: center;
+}
+
+.hr-phone .rp-thumb.bare .rp-logo {
+    position: static;
+    width: 84px;
+    max-width: none;
+    height: 40px;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.hr-phone .rp-thumb.bare .rp-logo img { max-height: 30px; max-width: 70px; }
+.hr-phone .rp-thumb.bare .rp-logo.text span { font-size: 12px; -webkit-line-clamp: 2; }
+.hr-phone .rp-thumb.bare > .material-icons { font-size: 30px; color: var(--homer-faint); }
+
+.hr-phone .rp-thumb-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.hr-phone .rp-thumb-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-needle);
+}
+
+/* a show's folder: its recordings stacked behind the art */
+.hr-phone .rp-row.folder .rp-thumb {
+    overflow: visible;
+    margin: 4px 6px 0 0;
+    box-shadow: inset 0 0 0 1px var(--homer-line), 3px -3px 0 -1px #2a4468, 6px -6px 0 -2px #1b2e4a;
+}
+
+.hr-phone .rp-row.folder .rp-thumb > img { border-radius: 8px; }
+
+.hr-phone .rp-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.hr-phone .rp-title {
+    font-size: 16.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* nothing under the title but the time: it can take two lines */
+.hr-phone .rp-title.wrap {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.hr-phone .rp-row.played .rp-title { color: #c5d2e3; }
+
+.hr-phone .rp-sub,
+.hr-phone .rp-meta {
+    margin-top: 3px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-phone .rp-sub { color: #c5d2e3; }
+.hr-phone .rp-meta { color: var(--homer-dim); }
+.hr-phone .rp-meta.live { color: #ff7a7a; }
+
+/* set to record (a scheduled row): the guide's red dot */
+.hr-phone .rp-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--homer-live);
+    box-shadow: 0 0 8px rgba(255, 59, 59, 0.7);
+    vertical-align: 1px;
+}
+
+.hr-phone .rp-row-timer .rp-logo {
+    width: 66px;
+    height: 40px;
+}
+
+.hr-phone .rp-flag {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--homer-dim);
+}
+
+.hr-phone .rp-flag .material-icons { font-size: 26px; }
+
+.hr-phone .rp-new {
+    width: 10px;
+    height: 10px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--homer-accent-2);
+    box-shadow: 0 0 8px rgba(111, 211, 255, 0.6);
+}
+
+.hr-phone .rp-check .material-icons { font-size: 20px; color: var(--homer-faint); }
+
+.hr-phone .rp-count {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    box-sizing: border-box;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: var(--homer-accent);
+    color: #fff;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.hr-phone .rp-rec-pill,
+.hr-phone .rp-warn {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: var(--homer-font-cond);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+.hr-phone .rp-rec-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--homer-live);
+}
+
+.hr-phone .rp-rec-pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    animation: rp-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rp-pulse {
+    50% { opacity: 0.35; }
+}
+
+.hr-phone .rp-warn {
+    background: rgba(255, 176, 32, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255, 176, 32, 0.55);
+    color: #ffd98a;
+}
+
+/* ---------- Channel logo chip (shared/tokens.css, shared/logos.js) ---------- */
+
+.hr-phone .rp-logo {
+    flex: none;
+    box-sizing: border-box;
+    width: 66px;
+    height: 40px;
+    padding: 4px 7px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: var(--homer-logo-bg);
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.hr-phone .rp-logo img {
+    display: block;
+    max-width: 100%;
+    max-height: 30px;
+    object-fit: contain;
+}
+
+.hr-phone .rp-logo.text span {
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 1.05;
+    color: var(--homer-logo-ink);
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hr-phone .rp-logo.none .material-icons { font-size: 22px; color: var(--homer-dim); }
+
+/* ---------- Loading, empty, couldn't load ---------- */
+
+.hr-phone .rp-state {
+    display: none;
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--homer-dim);
+}
+
+.hr-phone .rp-state.show {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.hr-phone .rp-state > .material-icons {
+    font-size: 44px;
+    color: var(--homer-faint);
+    margin-bottom: 4px;
+}
+
+.hr-phone .rp-state b {
+    font-size: 18px;
+    color: var(--homer-text);
+}
+
+.hr-phone .rp-state span {
+    max-width: 300px;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.hr-phone .rp-state-btn {
+    margin-top: 14px;
+    height: 48px;
+    padding: 0 20px 0 16px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--homer-line-strong);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--homer-text);
+}
+
+.hr-phone .rp-state-btn span { font-size: inherit; line-height: 1; }
+
+.hr-phone .rp-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.12);
+    border-top-color: var(--homer-accent-2);
+    animation: rp-spin 900ms linear infinite;
+}
+
+@keyframes rp-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Toast ---------- */
+
+.hr-phone .rp-toast {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--homer-phone-top) + 74px);
+    z-index: 7;
+    box-sizing: border-box;
+    max-width: calc(100% - 32px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.55);
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.hr-phone.rp-docked .rp-toast { top: calc(var(--homer-phone-top) + var(--dock-h) + 74px); }
+
+.hr-phone .rp-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.hr-phone .rp-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 12px 30px rgba(0, 0, 0, 0.55); }
+
+.hr-phone .rp-toast-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- Sheet (as in the phone guide) ---------- */
+
+.hr-phone .rp-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.hr-phone.rp-sheet-open .rp-scrim {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.hr-phone .rp-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    box-sizing: border-box;
+    max-height: calc(100% - var(--homer-phone-top) - 12px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px calc(18px + var(--homer-phone-right)) calc(22px + env(safe-area-inset-bottom, 0px)) calc(18px + var(--homer-phone-left));
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(180deg, #11264a, #07142a 60%);
+    border-top: 1px solid var(--homer-line-strong);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.6);
+    transform: translateY(105%);
+    visibility: hidden;
+    transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 240ms;
+}
+
+.hr-phone.rp-docked .rp-sheet { max-height: calc(100% - var(--homer-phone-top) - var(--dock-h) - 8px); }
+
+.hr-phone.rp-sheet-open .rp-sheet {
+    transform: translateY(var(--rp-drag, 0px));
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+
+.hr-phone .rp-grab {
+    width: 40px;
+    height: 5px;
+    margin: 0 auto 16px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.hr-phone .rp-sheet-hd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.hr-phone .rp-sheet-hd .rp-logo {
+    width: 72px;
+    height: 42px;
+}
+
+.hr-phone .rp-sheet-ch {
+    min-width: 0;
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--homer-dim);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-phone .rp-sheet-title {
+    margin: 14px 0 0;
+    font-size: 26px;
+    line-height: 1.1;
+    font-weight: 800;
+}
+
+.hr-phone .rp-sheet-ep {
+    margin-top: 6px;
+    font-family: var(--homer-font-cond);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--homer-accent-2);
+}
+
+.hr-phone .rp-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 12px;
+}
+
+.hr-phone .rp-pills:empty { display: none; }
+
+.hr-phone .rp-pill {
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.hr-phone .rp-pill.rec { background: var(--homer-live); border-color: transparent; }
+.hr-phone .rp-pill.set { background: rgba(255, 59, 59, 0.16); border-color: rgba(255, 90, 90, 0.6); color: #ffb3b3; }
+.hr-phone .rp-pill.resume { background: var(--homer-needle); border-color: transparent; color: #1d1200; }
+.hr-phone .rp-pill.series { background: var(--homer-movie); border-color: transparent; color: #03101f; }
+.hr-phone .rp-pill.warn { background: rgba(255, 176, 32, 0.16); border-color: rgba(255, 176, 32, 0.55); color: #ffd98a; }
+
+.hr-phone .rp-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--homer-needle);
+}
+
+.hr-phone .rp-progress-bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.hr-phone .rp-progress-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-needle);
+}
+
+/* a series: what's coming up */
+.hr-phone .rp-upcoming {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--homer-line);
+}
+
+.hr-phone .rp-upcoming h3 {
+    margin: 0;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.hr-phone .rp-up-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 7px;
+    font-size: 14.5px;
+    white-space: nowrap;
+}
+
+.hr-phone .rp-up-row b { flex: none; }
+
+.hr-phone .rp-up-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #c5d2e3;
+}
+
+.hr-phone .rp-desc {
+    margin: 12px 0 0;
+    font-size: 14.5px;
+    line-height: 1.4;
+    color: #c5d2e3;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* big buttons: Play (or Resume and Restart) side by side, Delete under them */
+.hr-phone .rp-acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.hr-phone .rp-act {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 54px;
+    border-radius: 14px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid var(--homer-line-strong);
+    font-weight: 700;
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hr-phone .rp-act .material-icons { flex: none; font-size: 24px; }
+
+.hr-phone .rp-act span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hr-phone .rp-act.primary {
+    background: var(--homer-focus-fill);
+    border-color: transparent;
+    box-shadow: 0 8px 24px rgba(47, 140, 255, 0.35);
+}
+
+.hr-phone .rp-act.danger {
+    flex-basis: 100%;
+    background: rgba(3, 9, 18, 0.9);
+    border-color: rgba(255, 59, 59, 0.75);
+}
+
+.hr-phone .rp-act.danger .material-icons { color: #ff7a7a; }
+
+/* Cancel/Stop recording: the guide's stop square */
+.hr-phone .rp-act.rec i {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--homer-live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.75);
+}
+
+/* the first tap: "Tap again to …" */
+.hr-phone .rp-act.armed {
+    background: var(--homer-live);
+    border-color: #fff;
+    animation: rp-arm 1s ease-in-out infinite;
+}
+
+.hr-phone .rp-act.armed .material-icons { color: #fff; }
+.hr-phone .rp-act.armed.rec i { background: #fff; box-shadow: none; }
+
+.hr-phone .rp-act.busy {
+    animation: none;
+    opacity: 0.75;
+}
+
+@keyframes rp-arm {
+    50% { box-shadow: 0 0 0 6px rgba(255, 59, 59, 0.22); }
+}
+
+/* ---------- Landscape: two columns of rows; the video beside the list ---------- */
+
+@media (orientation: landscape) {
+    #hr-root.hr-phone,
+    html.homer-chrome #hr-root.hr-phone {
+        --dock-h: calc((100vw - var(--homer-phone-left) - var(--homer-phone-right)) * 0.42 * 9 / 16);
+    }
+
+    .hr-phone .rp-main {
+        flex-direction: row;
+        left: var(--homer-phone-left);
+        right: var(--homer-phone-right);
+    }
+
+    .hr-phone .rp-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 12px;
+    }
+
+    .hr-phone .rp-seg { flex: 0 1 460px; }
+    .hr-phone .rp-seg-btn { height: 40px; }
+    .hr-phone .rp-crumb { flex: 1; margin: 0; }
+
+    .hr-phone .rp-list { padding-top: 6px; }
+
+    .hr-phone .rp-rows {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+    }
+
+    .hr-phone .rp-day { grid-column: 1 / -1; }
+
+    .hr-phone .rp-row { min-height: 72px; padding-top: 6px; padding-bottom: 6px; }
+    .hr-phone .rp-thumb { width: 104px; height: 58px; }
+
+    /* docked: the video at the top left with the tabs under it, the list
+       down the right */
+    .hr-phone.rp-docked .rp-main {
+        display: grid;
+        grid-template-columns: 42% minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+    }
+
+    .hr-phone.rp-docked .rp-side { display: contents; }
+
+    .hr-phone.rp-docked .rp-dock {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
+    }
+
+    .hr-phone.rp-docked .rp-head {
+        grid-column: 1;
+        grid-row: 2;
+        align-self: start;
+        display: block;
+        border-bottom: 0;
+        padding: 10px 12px;
+    }
+
+    .hr-phone.rp-docked .rp-crumb { margin-top: 8px; }
+
+    .hr-phone.rp-docked .rp-list {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        border-left: 1px solid var(--homer-line);
+    }
+
+    .hr-phone.rp-docked .rp-rows { display: flex; }
+
+    /* the sheet: narrower, and every button on one line */
+    .hr-phone .rp-sheet {
+        left: 50%;
+        right: auto;
+        width: min(640px, 100%);
+        transform: translate(-50%, 105%);
+    }
+
+    .hr-phone.rp-sheet-open .rp-sheet { transform: translate(-50%, var(--rp-drag, 0px)); }
+    .hr-phone .rp-desc { -webkit-line-clamp: 2; }
+    .hr-phone .rp-act.danger { flex-basis: 0; }
+    .hr-phone .rp-acts { margin-top: 16px; }
+    .hr-phone .rp-toast { top: calc(var(--homer-phone-top) + 60px); }
+    .hr-phone.rp-docked .rp-toast { top: calc(var(--homer-phone-top) + 60px); }
+    .hr-phone.rp-docked .rp-sheet { max-height: calc(100% - var(--homer-phone-top) - 12px); }
+}
