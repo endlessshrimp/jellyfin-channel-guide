@@ -45,7 +45,9 @@
     js('home/home.js');
     js('library/library.js');
     js('settings/settings.js');
+    js('settings/settings-phone.js'); // Settings' phone layout
     js('search/search.js');
     js('recordings/recordings.js');
     js('forecast/forecast.js');
+    js('forecast/forecast-phone.js'); // Weather's phone layout
 })();

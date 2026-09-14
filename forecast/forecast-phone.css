@@ -1,0 +1,871 @@
+/*
+ * HOMER Weather, phone layout (forecast/forecast-phone.js). Everything is
+ * scoped to .hf-phone; colors and type come from shared/tokens.css (and the
+ * #hf-root palette in shared/shell.css and forecast.css), and the top bar and
+ * tab bar around it from shared/phone.css, which also puts the screen between
+ * them.
+ *
+ * Portrait: one column. Landscape: the title band, then Now beside the radar,
+ * then the three days side by side. Now and the days sit on illustrated skies
+ * (forecast.js draws them) under a navy scrim. A docked video sits over
+ * .fp-video (HomerPlayer pins it at 99995); its controls are under it.
+ */
+
+#hf-root.hf-phone {
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(520px 320px at 10% -8%, rgba(47, 140, 255, 0.2), transparent 65%),
+        linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+
+.hf-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+/* ---------- Docked video ---------- */
+
+.hf-phone .fp-dock {
+    display: none;
+    flex: none;
+    position: relative;
+    z-index: 1;
+    background: #02060d;
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.hf-phone.fp-docked .fp-dock { display: block; }
+
+.hf-phone .fp-video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.hf-phone .fp-video-idle {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hf-phone.fp-live .fp-video-idle { visibility: hidden; }
+
+.hf-phone .fp-dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 48px;
+    padding: 0 4px 0 14px;
+}
+
+.hf-phone .fp-dock-what {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: #d6e0ec;
+    white-space: nowrap;
+}
+
+.hf-phone .fp-dock-what span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hf-phone .fp-live-badge {
+    flex: none;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--homer-live);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hf-phone .fp-dock-btn {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.hf-phone .fp-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    font-size: 21px;
+}
+
+/* ---------- The column ---------- */
+
+.hf-phone .fp-scroll {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px calc(16px + var(--homer-phone-right)) 24px calc(16px + var(--homer-phone-left));
+}
+
+.hf-phone .fp-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+.hf-phone.fp-ready .fp-body { opacity: 1; }
+
+.hf-phone .fp-panel {
+    position: relative;
+    box-sizing: border-box;
+    border-radius: 18px;
+    background: var(--homer-panel);
+    box-shadow: 0 0 0 1px var(--homer-line), 0 14px 36px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.hf-phone .fp-head {
+    position: relative;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--homer-accent-2);
+    white-space: nowrap;
+}
+
+/* ---------- Title band ---------- */
+
+.hf-phone .fp-title {
+    padding: 12px 16px 13px 14px;
+    border-radius: 14px;
+    background: linear-gradient(90deg, rgba(47, 140, 255, 0.34), rgba(47, 140, 255, 0.1) 70%, rgba(47, 140, 255, 0.05));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px var(--homer-line);
+}
+
+.hf-phone .fp-place {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hf-phone .fp-place .material-icons {
+    flex: none;
+    font-size: 20px;
+    color: var(--homer-accent-2);
+}
+
+.hf-phone .fp-place span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hf-phone .fp-line {
+    margin-top: 5px;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--soft);
+}
+
+/* ---------- Skies (behind Now and the days) ---------- */
+
+.hf-phone .fp-sky {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* one layer per sky; a new one fades in over the old */
+.hf-phone .fp-sky i {
+    position: absolute;
+    inset: 0;
+    background: right top / cover no-repeat; /* the sun and clouds are up in the right corner */
+    opacity: 0;
+    transition: opacity 1400ms ease;
+}
+
+.hf-phone .fp-sky i.on { opacity: 1; }
+
+/* the scrim: navy over the sky, heavier than on TV (the text covers more of
+   a narrow panel), lightest up by the sun and the clouds */
+.hf-phone .fp-sky::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+.hf-phone .fp-now .fp-sky::after {
+    background:
+        linear-gradient(180deg, rgba(4, 11, 24, 0.1) 0%, rgba(4, 11, 24, 0.45) 38%, rgba(4, 11, 24, 0.72) 70%, rgba(4, 11, 24, 0.8) 100%),
+        linear-gradient(90deg, rgba(4, 11, 24, 0.5) 0%, rgba(4, 11, 24, 0.28) 55%, rgba(4, 11, 24, 0.05) 100%);
+}
+
+.hf-phone .fp-day .fp-sky::after {
+    background:
+        linear-gradient(180deg, rgba(4, 11, 24, 0.1) 0%, rgba(4, 11, 24, 0.5) 100%),
+        linear-gradient(90deg, rgba(4, 11, 24, 0.66) 0%, rgba(4, 11, 24, 0.5) 50%, rgba(4, 11, 24, 0.42) 100%);
+}
+
+.hf-phone .fp-now > :not(.fp-sky),
+.hf-phone .fp-day-body {
+    position: relative;
+    text-shadow: 0 1px 2px rgba(2, 8, 20, 0.55), 0 0 16px rgba(2, 8, 20, 0.5);
+}
+
+/* ---------- Now ---------- */
+
+.hf-phone .fp-now { padding: 15px 16px 14px; }
+
+.hf-phone .fp-now-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.hf-phone .fp-now-icon {
+    flex: none;
+    width: 104px;
+    height: 104px;
+    margin: -12px -6px -12px -16px; /* the art has built-in padding */
+    pointer-events: none;
+}
+
+.hf-phone .fp-now-temp {
+    font-size: 80px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.hf-phone .fp-now-cond {
+    margin-top: 4px;
+    font-size: 23px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.hf-phone .fp-now-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    gap: 5px 22px;
+    margin-top: 10px;
+}
+
+.hf-phone .fp-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.hf-phone .fp-stat-k {
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--soft);
+}
+
+.hf-phone .fp-stat-v {
+    font-size: 16.5px;
+    font-weight: 700;
+}
+
+/* the next hours: a row of slots that swipes sideways, out to the panel's edges */
+.hf-phone .fp-strip { margin-top: 16px; }
+
+.hf-phone .fp-strip-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--soft);
+    white-space: nowrap;
+}
+
+.hf-phone .fp-key-rain {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    font-weight: 600;
+    font-size: 13.5px;
+}
+
+/* a raindrop: a rounded square turned on its corner */
+.hf-phone .fp-key-rain i,
+.hf-phone .fp-slot-pop i {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 0 50% 50% 50%;
+    transform: rotate(45deg);
+    background: var(--rain-light);
+}
+
+.hf-phone .fp-slots {
+    display: flex;
+    gap: 8px;
+    margin: 8px -16px 0;
+    padding: 0 16px 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding: 0 16px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hf-phone .fp-slots::-webkit-scrollbar { display: none; }
+
+/* a fade on the side that has more */
+.hf-phone .fp-slots.more-right {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+}
+
+.hf-phone .fp-slots.more-left {
+    -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent);
+}
+
+.hf-phone .fp-slots.more-left.more-right {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+.hf-phone .fp-slot {
+    flex: none;
+    width: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    scroll-snap-align: start;
+}
+
+.hf-phone .fp-slot-time {
+    box-sizing: border-box;
+    width: 100%;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--soft);
+    white-space: nowrap;
+    text-shadow: none;
+}
+
+.hf-phone .fp-slot.new-day .fp-slot-time { color: var(--homer-text); }
+
+.hf-phone .fp-slot.now .fp-slot-time {
+    background: var(--homer-needle);
+    color: #1b1300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.hf-phone .fp-slot-icon {
+    width: 56px;
+    height: 56px;
+    margin: -1px 0 -7px;
+    pointer-events: none;
+}
+
+.hf-phone .fp-slot-temp {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.hf-phone .fp-slot-pop {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 18px;
+    margin-top: 4px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* under 10%: no drop, and quieter */
+.hf-phone .fp-slot-pop.dry { color: var(--homer-dim); }
+.hf-phone .fp-slot-pop.dry i { display: none; }
+
+/* ---------- Radar ---------- */
+
+.hf-phone .fp-radar {
+    aspect-ratio: 8 / 7;
+    max-width: 100%;
+    background: #081120; /* water */
+}
+
+/* forecast.js draws the map for the panel's size (in CSS pixels) */
+.hf-phone .fp-radar-map {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+.hf-phone .fp-radar-map > *,
+.hf-phone .fp-radar-frames img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+
+.hf-phone .fp-radar-land path { fill: #0f1c30; }
+
+/* the rain, exactly as the NWS draws it: no filter, no opacity */
+.hf-phone .fp-radar-frames img { visibility: hidden; }
+.hf-phone .fp-radar-frames img.on { visibility: visible; }
+
+/* interstates: a dim grey line, even over the rain */
+.hf-phone .fp-radar-roads { opacity: 0.5; }
+
+.hf-phone .fp-radar-lines path {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+}
+
+.hf-phone .fp-radar-lines .county {
+    stroke: rgba(160, 190, 230, 0.16);
+    stroke-width: 0.8;
+}
+
+.hf-phone .fp-radar-lines .state {
+    stroke: rgba(170, 200, 240, 0.42);
+    stroke-width: 1.3;
+}
+
+/* the names: 0.8 of the TV's (forecast-phone.js NAME_SCALE) */
+.hf-phone .fp-radar-lines text {
+    font-family: var(--homer-font-cond);
+    font-size: 12.8px;
+    font-weight: 600;
+    fill: rgba(222, 231, 244, 0.85);
+    paint-order: stroke;
+    stroke: rgba(5, 12, 26, 0.85);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+}
+
+.hf-phone .fp-radar-lines .town { fill: rgba(222, 231, 244, 0.7); }
+
+.hf-phone .fp-radar-lines circle.here {
+    fill: var(--homer-accent-2);
+    stroke: #04101f;
+    stroke-width: 2px;
+}
+
+.hf-phone .fp-radar-lines text.here {
+    font-family: var(--homer-font);
+    font-size: 15.2px;
+    font-weight: 800;
+    fill: #fff;
+    stroke-width: 3px;
+}
+
+.hf-phone .fp-radar .fp-head {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 14px 16px 24px;
+    background: linear-gradient(180deg, rgba(5, 12, 26, 0.9) 30%, rgba(5, 12, 26, 0));
+}
+
+.hf-phone .fp-radar-name {
+    padding-left: 12px;
+    border-left: 1.5px solid var(--homer-line-strong);
+    font-family: var(--homer-font);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--soft);
+}
+
+/* the time of the picture on screen, and how far through the hour it is */
+.hf-phone .fp-radar-time {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 8px;
+    background: rgba(5, 12, 26, 0.82);
+    box-shadow: 0 0 0 1px var(--homer-line-strong);
+}
+
+.hf-phone .fp-radar-clock {
+    min-width: 58px;
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.hf-phone .fp-radar-ticks {
+    display: flex;
+    gap: 2px;
+}
+
+.hf-phone .fp-radar-ticks i {
+    width: 5px;
+    height: 10px;
+    border-radius: 1.5px;
+    background: rgba(160, 190, 230, 0.22);
+}
+
+.hf-phone .fp-radar-ticks i.on { background: var(--homer-accent-2); }
+
+.hf-phone .fp-radar:not([data-state="ready"]) .fp-radar-map,
+.hf-phone .fp-radar:not([data-state="ready"]) .fp-radar-time { display: none; }
+
+/* no radar here, or it didn't load: faint range rings and a sentence */
+.hf-phone .fp-radar-off {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 44px 28px 0;
+    text-align: center;
+    background: repeating-radial-gradient(circle at 50% 56%, transparent 0 44px, rgba(160, 190, 230, 0.09) 44px 45.5px);
+}
+
+.hf-phone .fp-radar[data-state="off"] .fp-radar-off { display: flex; }
+
+.hf-phone .fp-radar-off b {
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.hf-phone .fp-radar-off span {
+    max-width: 300px;
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+/* ---------- Next 3 days ---------- */
+
+.hf-phone .fp-days {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hf-phone .fp-day[hidden] { display: none; }
+
+.hf-phone .fp-day-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 14px;
+    padding: 13px 16px 13px 16px;
+}
+
+.hf-phone .fp-day-main { min-width: 0; }
+
+.hf-phone .fp-day-top {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.hf-phone .fp-day-name {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.hf-phone .fp-day-date {
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--soft);
+}
+
+.hf-phone .fp-day-mid {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.hf-phone .fp-day-icon {
+    flex: none;
+    width: 68px;
+    height: 68px;
+    margin: -6px -2px -6px -10px;
+    pointer-events: none;
+}
+
+.hf-phone .fp-day-temps {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    line-height: 1;
+}
+
+.hf-phone .fp-day-hi {
+    font-size: 40px;
+    font-weight: 800;
+}
+
+.hf-phone .fp-day-lo {
+    font-size: 25px;
+    font-weight: 600;
+    color: var(--soft);
+}
+
+.hf-phone .fp-day-cond {
+    margin-top: 2px;
+    font-size: 15.5px;
+    font-weight: 600;
+    color: var(--soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* rain, wind, sunrise and sunset down the right */
+.hf-phone .fp-day-facts {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 3px 9px;
+    align-content: center;
+}
+
+.hf-phone .fp-day-facts .fp-stat { display: contents; }
+.hf-phone .fp-day-facts .fp-stat-k { font-size: 13.5px; }
+.hf-phone .fp-day-facts .fp-stat-v { font-size: 15px; text-align: right; }
+
+/* ---------- Loading / error ---------- */
+
+.hf-phone .fp-state {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 28px 40px;
+    text-align: center;
+}
+
+.hf-phone .fp-state.show { display: flex; }
+
+.hf-phone .fp-state b {
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.hf-phone .fp-state > span {
+    font-family: var(--homer-font-cond);
+    font-size: 15.5px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+.hf-phone .fp-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    margin-top: 8px;
+    padding: 0 20px 0 16px;
+    border-radius: 23px;
+    background: var(--homer-focus-fill);
+    box-shadow: 0 8px 24px rgba(47, 140, 255, 0.35);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* ---------- Landscape: Now beside the radar, the days side by side ---------- */
+
+@media (orientation: landscape) {
+    .hf-phone .fp-scroll { padding-top: 10px; }
+
+    .hf-phone .fp-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .hf-phone .fp-title {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        padding: 9px 16px 10px 14px;
+    }
+
+    .hf-phone .fp-place { flex: none; max-width: 40%; }
+
+    .hf-phone .fp-line {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        padding-left: 14px;
+        border-left: 1.5px solid var(--homer-line-strong);
+    }
+
+    /* Now fits the height: conditions under the temperature, the readings
+       beside them, the next hours across the bottom */
+    .hf-phone .fp-now {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "head head" "main stats" "cond stats" "strip strip";
+        column-gap: 20px;
+        padding: 13px 16px 12px;
+    }
+
+    .hf-phone .fp-now .fp-head { grid-area: head; }
+    .hf-phone .fp-now-main { grid-area: main; }
+    .hf-phone .fp-now-cond { grid-area: cond; font-size: 20px; }
+    .hf-phone .fp-strip { grid-area: strip; margin-top: 12px; }
+
+    .hf-phone .fp-now-icon {
+        width: 88px;
+        height: 88px;
+        margin: -10px -6px -10px -14px;
+    }
+
+    .hf-phone .fp-now-temp { font-size: 66px; }
+
+    .hf-phone .fp-now-stats {
+        grid-area: stats;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 3px;
+        margin: 0;
+        align-self: center;
+    }
+
+    .hf-phone .fp-slot-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 0 -5px;
+    }
+
+    /* as tall as Now beside it */
+    .hf-phone .fp-radar {
+        aspect-ratio: auto;
+        min-height: 240px;
+    }
+
+    .hf-phone .fp-days {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    /* a narrower day: the facts under it */
+    .hf-phone .fp-day-body {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 8px;
+        padding: 12px 14px;
+    }
+
+    .hf-phone .fp-day-facts { grid-template-columns: auto 1fr auto 1fr; }
+    .hf-phone .fp-day-facts .fp-stat-v { text-align: left; }
+
+    /* docked: the video at the left, the forecast beside it in one column */
+    .hf-phone.fp-docked { flex-direction: row; }
+
+    .hf-phone.fp-docked .fp-dock {
+        width: 40%;
+        padding-left: var(--homer-phone-left);
+        border-bottom: 0;
+        border-right: 1px solid var(--homer-line);
+    }
+
+    .hf-phone.fp-docked .fp-scroll { padding-left: 14px; }
+    .hf-phone.fp-docked .fp-body { display: flex; }
+    .hf-phone.fp-docked .fp-now { display: block; }
+    .hf-phone.fp-docked .fp-now-stats { grid-template-columns: repeat(2, minmax(0, max-content)); gap: 5px 22px; margin-top: 10px; }
+    .hf-phone.fp-docked .fp-radar { aspect-ratio: 8 / 7; }
+    .hf-phone.fp-docked .fp-days { display: flex; }
+    .hf-phone.fp-docked .fp-day-body { grid-template-columns: minmax(0, 1fr) auto; }
+    .hf-phone.fp-docked .fp-day-facts { grid-template-columns: auto auto; }
+    .hf-phone.fp-docked .fp-day-facts .fp-stat-v { text-align: right; }
+    .hf-phone.fp-docked .fp-title { display: block; }
+    .hf-phone.fp-docked .fp-place { max-width: none; }
+    .hf-phone.fp-docked .fp-line { margin-top: 5px; padding: 0; border: 0; }
+}

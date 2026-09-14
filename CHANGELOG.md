@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Settings on a phone is one column: each setting with what it's set to,
+  and a tap opens its choices right under it (one at a time, one level
+  deep), with whether it's saved to your account or kept on this device,
+  what it does, and a check on the current value. A tap on a choice saves
+  it, as on TV. Weather location's ZIP code box brings up the number pad,
+  stays above it, and has its own Save button. Sign out still asks for a
+  second tap. Who's signed in and the server are at the bottom. Nothing
+  spills off the side any more. In landscape the choices go two to a row.
+- Weather on a phone is one column that scrolls: the place and what's
+  coming, Now (with feels like, humidity, wind and the next sunrise or
+  sunset), the next 14 hours in a strip you swipe sideways, the radar
+  across the full width (its map, lines and town names drawn for the
+  panel's size, with the time of each picture), then the next three days.
+  Now and the days keep their illustrated skies, under a heavier scrim. In
+  landscape, Now sits beside the radar and the days go side by side. No
+  clock and no key legend; the weather stays in the top bar.
+- On both, a video playing in a preview window docks at the top, with what's
+  playing, Full screen and **✕** under it.
+- Under the hood: Settings' settings and saving (settings.js createModel) and
+  Weather's forecast, sentences, skies and radar (forecast.js) are shared by
+  the TV and phone layouts, which live in settings/settings-phone.js and
+  forecast/forecast-phone.js. The TV screens look and work exactly as
+  before.
+
 ## v0.3.12
 
 - Guide on touch screens (tablets, and any screen that can't hover): the

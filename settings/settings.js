@@ -17,6 +17,10 @@
  * Remote/keyboard: ▲▼ move, ◀▶ between the list and the choices, OK selects,
  * Esc/Backspace goes back, H goes Home.
  *
+ * On a phone (shared/layout.js) Settings draws settings/settings-phone.js
+ * instead: one column, each setting's choices opening under it. Both layouts
+ * draw from the same settings (createModel below).
+ *
  * window.HomerSettings = { open, close, destroy, version }
  */
 (() => {
@@ -117,15 +121,20 @@
             document.head.appendChild(s);
         }
         if (cssReady && document.getElementById('hx-css')) return cssReady;
-        const css = document.createElement('link');
-        css.id = 'hx-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'settings.css' + QUERY;
-        cssReady = new Promise((resolve) => {
-            css.onload = css.onerror = resolve;
-            setTimeout(resolve, 2000);
-        });
-        document.head.appendChild(css);
+        // both layouts' (the phone one is scoped to .hx-phone)
+        const link = (id, file) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
+            document.head.appendChild(css);
+            return new Promise((resolve) => {
+                css.onload = css.onerror = resolve;
+                setTimeout(resolve, 2000);
+            });
+        };
+        cssReady = Promise.all([link('hx-css', 'settings.css'), link('hx-phone-css', 'settings-phone.css')]);
         return cssReady;
     };
 
@@ -284,6 +293,195 @@
         });
     };
 
+    // ---------- The settings (both layouts draw from these) ----------
+    // What each setting offers, what it's set to, and saving a choice. The TV
+    // screen and the phone layout (settings/settings-phone.js) each make one
+    // when they open.
+
+    const wx = () => window.HomerWeather || null;
+
+    const SCOPES = {
+        device: { icon: 'devices', label: 'This device only' },
+        account: { icon: 'account_circle', label: 'Saved to your account' }
+    };
+
+    const createModel = (server) => {
+        const uid = server.UserId;
+        const m = {
+            status: 'loading', // loading | ready | error
+            cfg: {}, // the user's Configuration
+            cultures: null,
+            inNetwork: savedInNetwork(),
+            canTranscode: true,
+            user: null, // once loaded
+            info: null // the server's public info
+        };
+        let alive = true;
+
+        // ----- languages, checked against the server's cultures -----
+        const culture = (code) => (m.cultures || []).find((c) => lc(c.ThreeLetterISOLanguageName) === code
+            || (c.ThreeLetterISOLanguageNames || []).some((n) => lc(n) === code));
+        const langMatches = (o, v) => lc(o.value) === lc(v) || (o.aliases || []).includes(lc(v));
+        const languageOptions = (current) => {
+            const list = [{ value: '', label: 'Any', sub: 'Use each video\'s own default' }];
+            for (const [code, name] of LANGUAGES) {
+                const c = culture(code);
+                if (m.cultures && !c) continue; // the server doesn't know it
+                list.push({
+                    value: c ? c.ThreeLetterISOLanguageName : code,
+                    label: name,
+                    aliases: c ? [lc(c.ThreeLetterISOLanguageName), ...(c.ThreeLetterISOLanguageNames || []).map(lc)] : [code]
+                });
+            }
+            // a language set elsewhere that isn't on the short list still shows, checked
+            if (current && !list.some((o) => langMatches(o, current))) {
+                const c = culture(lc(current));
+                list.push({ value: current, label: c ? c.DisplayName : String(current).toUpperCase(), aliases: [lc(current)] });
+            }
+            return list;
+        };
+
+        // ----- the settings -----
+        const userSetting = (field) => ({
+            field,
+            current: () => m.cfg[field] || '',
+            matches: langMatches,
+            save: async (value) => {
+                const saved = await saveUserField(uid, field, value);
+                if (alive) m.cfg = saved;
+            }
+        });
+        const SETTINGS = [
+            {
+                id: 'audio', icon: 'record_voice_over', label: 'Audio language', scope: 'account',
+                desc: 'When a movie or show has more than one audio track, play this language.',
+                options: () => languageOptions(m.cfg.AudioLanguagePreference),
+                ...userSetting('AudioLanguagePreference')
+            },
+            {
+                id: 'subs', icon: 'subtitles', label: 'Subtitles', scope: 'account',
+                desc: 'When subtitles come on by themselves. You can always change them while watching.',
+                options: () => SUBTITLE_MODES,
+                ...userSetting('SubtitleMode'),
+                current: () => m.cfg.SubtitleMode || 'Default',
+                matches: (o, v) => o.value === v
+            },
+            {
+                id: 'sublang', icon: 'translate', label: 'Subtitle language', scope: 'account',
+                desc: 'The language to use when subtitles come on.',
+                options: () => languageOptions(m.cfg.SubtitleLanguagePreference),
+                ...userSetting('SubtitleLanguagePreference')
+            },
+            {
+                id: 'quality', icon: 'speed', label: 'Streaming quality', scope: 'device',
+                desc: 'The most this device asks the server for. Pick a lower limit if video stutters; Auto measures your connection.',
+                options: () => QUALITY.map((b) => ({ value: b, label: mbps(b), sub: b ? '' : 'Adjusts to your connection' })),
+                current: () => readQuality(m.inNetwork == null ? true : m.inNetwork),
+                matches: (o, v) => o.value === v,
+                save: async (value) => writeQuality(value)
+            },
+            {
+                id: 'weather', icon: 'wb_sunny', label: 'Weather location', scope: 'device',
+                desc: () => 'Where the temperature next to the clock comes from.'
+                    + (wx() && !wx().canUseDevice()
+                        ? ' Browsers only share their own location over a secure (HTTPS) connection, so this device uses a ZIP code.'
+                        : ''),
+                options: () => {
+                    const W = wx();
+                    if (!W) return [];
+                    const list = [];
+                    if (W.canUseDevice()) {
+                        list.push({
+                            value: 'device', label: 'This device\'s location',
+                            sub: W.deviceState() === 'denied' ? 'Blocked in this browser, so the ZIP code is used' : 'The browser asks once'
+                        });
+                    }
+                    const z = W.zip();
+                    list.push({ value: 'zip', label: 'ZIP code', sub: z.name, zip: z.zip, input: true });
+                    return list;
+                },
+                current: () => (wx() ? wx().mode() : ''),
+                matches: (o, v) => o.value === v,
+                valueLabel: () => {
+                    const W = wx();
+                    if (!W) return '';
+                    const z = W.zip();
+                    return W.mode() === 'device' ? 'This device\'s location' : `${z.zip} · ${z.name}`;
+                },
+                save: async (value) => { if (value === 'device') await wx().useDevice(); }
+            },
+            {
+                id: 'signout', icon: 'exit_to_app', label: 'Sign out', scope: 'device', action: true,
+                desc: 'Sign out of HOMER on this device and go to the sign-in screen.',
+                options: () => [{ value: 'signout', label: 'Sign out' }],
+                current: () => null,
+                matches: () => false
+            }
+        ];
+        m.all = SETTINGS;
+        m.visible = SETTINGS.slice();
+        m.scope = (s) => SCOPES[s.scope] || SCOPES.device;
+        m.desc = (s) => (typeof s.desc === 'function' ? s.desc() : s.desc);
+        m.valueLabel = (s) => {
+            if (s.action || m.status !== 'ready') return '';
+            if (s.valueLabel) return s.valueLabel();
+            const list = s.options();
+            const v = s.current();
+            const o = list.find((x) => s.matches(x, v));
+            return o ? o.label : '';
+        };
+        // who's signed in, and the server (HTML)
+        m.userLine = () => (m.user ? `Signed in as <b>${esc(m.user.Name || '')}</b>` : '');
+        m.serverLine = () => (m.info
+            ? `<b>${esc(m.info.ServerName || 'Jellyfin')}</b>${m.info.Version ? ` · Jellyfin ${esc(m.info.Version)}` : ''}`
+            : '');
+
+        // resolves true once the settings are in (false if closed meanwhile);
+        // throws when they can't be loaded
+        m.load = async () => {
+            m.status = 'loading';
+            try {
+                const [user, cults, info, endpoint] = await Promise.all([
+                    api(`/Users/${uid}`),
+                    api('/Localization/Cultures').catch(() => null),
+                    api('/System/Info/Public').catch(() => null),
+                    m.inNetwork == null ? api('/System/Endpoint').catch(() => null) : null
+                ]);
+                if (!alive) return false;
+                m.cfg = (user && user.Configuration) || {};
+                m.cultures = Array.isArray(cults) && cults.length ? cults : null;
+                if (m.inNetwork == null && endpoint && typeof endpoint.IsInNetwork === 'boolean') m.inNetwork = endpoint.IsInNetwork;
+                // Jellyfin Web hides the quality choice from accounts that can't transcode
+                m.canTranscode = !(user.Policy && user.Policy.EnableVideoPlaybackTranscoding === false);
+                m.visible = SETTINGS.filter((s) => s.id !== 'quality' || m.canTranscode);
+                m.user = user;
+                m.info = info;
+                m.status = 'ready';
+                return true;
+            } catch (err) {
+                console.warn('[HOMER Settings] load failed', err);
+                if (alive) m.status = 'error';
+                throw err;
+            }
+        };
+
+        // Save a choice. The new value shows at once (before this resolves)
+        // and goes back if the save fails (then this throws).
+        m.save = async (s, o) => {
+            const before = m.cfg;
+            if (s.field) m.cfg = Object.assign({}, m.cfg, { [s.field]: o.value });
+            try {
+                await s.save(o.value);
+            } catch (err) {
+                if (alive) m.cfg = before;
+                throw err;
+            }
+        };
+
+        m.dispose = () => { alive = false; };
+        return m;
+    };
+
     // ---------- Pixel scrolling (the choices list) ----------
     // The trackpad moves the list freely; keyboard selection nudges it just
     // enough to keep the highlight in view. Hover never scrolls.
@@ -335,8 +533,8 @@
 
     // ---------- The screen ----------
 
-    const createScreen = (server) => {
-        const uid = server.UserId;
+    const createScreen = (server, from) => {
+        const model = createModel(server);
         const root = el('div', 'homer-screen hx-root');
         root.id = 'hx-root';
         root.style.visibility = 'hidden'; // until settings.css has loaded
@@ -408,12 +606,8 @@
         };
 
         // ----- state -----
-        let status = 'loading'; // loading | ready | error
-        let cfg = {};
-        let cultures = null;
-        let inNetwork = savedInNetwork();
-        let canTranscode = true;
-        let sel = 0; // setting
+        // (the settings, their values and whether they've loaded: model)
+        let sel = Math.max(0, model.visible.findIndex((s) => from && s.id === from.id)); // setting
         let zone = 'list'; // list | options
         let opt = 0; // highlighted choice
         let armed = false; // sign out asked once
@@ -421,124 +615,15 @@
         let signingOut = false;
         let alive = true;
 
-        // ----- languages, checked against the server's cultures -----
-        const culture = (code) => (cultures || []).find((c) => lc(c.ThreeLetterISOLanguageName) === code
-            || (c.ThreeLetterISOLanguageNames || []).some((n) => lc(n) === code));
-        const langMatches = (o, v) => lc(o.value) === lc(v) || (o.aliases || []).includes(lc(v));
-        const languageOptions = (current) => {
-            const list = [{ value: '', label: 'Any', sub: 'Use each video\'s own default' }];
-            for (const [code, name] of LANGUAGES) {
-                const c = culture(code);
-                if (cultures && !c) continue; // the server doesn't know it
-                list.push({
-                    value: c ? c.ThreeLetterISOLanguageName : code,
-                    label: name,
-                    aliases: c ? [lc(c.ThreeLetterISOLanguageName), ...(c.ThreeLetterISOLanguageNames || []).map(lc)] : [code]
-                });
-            }
-            // a language set elsewhere that isn't on the short list still shows, checked
-            if (current && !list.some((o) => langMatches(o, current))) {
-                const c = culture(lc(current));
-                list.push({ value: current, label: c ? c.DisplayName : String(current).toUpperCase(), aliases: [lc(current)] });
-            }
-            return list;
-        };
-
-        // ----- the settings -----
-        const wx = () => window.HomerWeather || null;
-        const userSetting = (field) => ({
-            field,
-            current: () => cfg[field] || '',
-            matches: langMatches,
-            save: async (value) => {
-                const saved = await saveUserField(uid, field, value);
-                if (alive) cfg = saved;
-            }
-        });
-        const SETTINGS = [
-            {
-                id: 'audio', icon: 'record_voice_over', label: 'Audio language', scope: 'account',
-                desc: 'When a movie or show has more than one audio track, play this language.',
-                options: () => languageOptions(cfg.AudioLanguagePreference),
-                ...userSetting('AudioLanguagePreference')
-            },
-            {
-                id: 'subs', icon: 'subtitles', label: 'Subtitles', scope: 'account',
-                desc: 'When subtitles come on by themselves. You can always change them while watching.',
-                options: () => SUBTITLE_MODES,
-                ...userSetting('SubtitleMode'),
-                current: () => cfg.SubtitleMode || 'Default',
-                matches: (o, v) => o.value === v
-            },
-            {
-                id: 'sublang', icon: 'translate', label: 'Subtitle language', scope: 'account',
-                desc: 'The language to use when subtitles come on.',
-                options: () => languageOptions(cfg.SubtitleLanguagePreference),
-                ...userSetting('SubtitleLanguagePreference')
-            },
-            {
-                id: 'quality', icon: 'speed', label: 'Streaming quality', scope: 'device',
-                desc: 'The most this device asks the server for. Pick a lower limit if video stutters; Auto measures your connection.',
-                options: () => QUALITY.map((b) => ({ value: b, label: mbps(b), sub: b ? '' : 'Adjusts to your connection' })),
-                current: () => readQuality(inNetwork == null ? true : inNetwork),
-                matches: (o, v) => o.value === v,
-                save: async (value) => writeQuality(value)
-            },
-            {
-                id: 'weather', icon: 'wb_sunny', label: 'Weather location', scope: 'device',
-                desc: () => 'Where the temperature next to the clock comes from.'
-                    + (wx() && !wx().canUseDevice()
-                        ? ' Browsers only share their own location over a secure (HTTPS) connection, so this device uses a ZIP code.'
-                        : ''),
-                options: () => {
-                    const W = wx();
-                    if (!W) return [];
-                    const list = [];
-                    if (W.canUseDevice()) {
-                        list.push({
-                            value: 'device', label: 'This device\'s location',
-                            sub: W.deviceState() === 'denied' ? 'Blocked in this browser, so the ZIP code is used' : 'The browser asks once'
-                        });
-                    }
-                    const z = W.zip();
-                    list.push({ value: 'zip', label: 'ZIP code', sub: z.name, zip: z.zip, input: true });
-                    return list;
-                },
-                current: () => (wx() ? wx().mode() : ''),
-                matches: (o, v) => o.value === v,
-                valueLabel: () => {
-                    const W = wx();
-                    if (!W) return '';
-                    const z = W.zip();
-                    return W.mode() === 'device' ? 'This device\'s location' : `${z.zip} · ${z.name}`;
-                },
-                save: async (value) => { if (value === 'device') await wx().useDevice(); }
-            },
-            {
-                id: 'signout', icon: 'exit_to_app', label: 'Sign out', scope: 'device', action: true,
-                desc: 'Sign out of HOMER on this device and go to the sign-in screen.',
-                options: () => [{ value: 'signout', label: 'Sign out' }],
-                current: () => null,
-                matches: () => false
-            }
-        ];
-        let visible = SETTINGS.slice();
         let options = [];
 
-        const setting = () => visible[sel];
+        const setting = () => model.visible[sel];
         const curIndex = (s) => {
             const list = s === setting() ? options : s.options();
             const v = s.current();
             return list.findIndex((o) => s.matches(o, v));
         };
-        const valueLabel = (s) => {
-            if (s.action || status !== 'ready') return '';
-            if (s.valueLabel) return s.valueLabel();
-            const list = s.options();
-            const v = s.current();
-            const o = list.find((x) => s.matches(x, v));
-            return o ? o.label : '';
-        };
+        const valueLabel = model.valueLabel;
 
         // ----- drawing -----
         const itemsBox = $('.hx-items');
@@ -552,7 +637,7 @@
         };
 
         const drawList = () => {
-            itemsBox.innerHTML = visible.map((s, i) => `
+            itemsBox.innerHTML = model.visible.map((s, i) => `
                 <div class="hx-item${i === sel ? ' sel' : ''}${s.action ? ' action' : ''}" role="button" data-i="${i}">
                     <span class="material-icons hx-item-icon" aria-hidden="true">${s.icon}</span>
                     <div class="hx-item-text"><div class="hx-item-label">${esc(s.label)}</div>${s.action ? '' : `<div class="hx-item-value">${esc(valueLabel(s)) || '&nbsp;'}</div>`}</div>
@@ -566,11 +651,10 @@
 
         const drawInfo = () => {
             const s = setting();
-            $('.hx-info-scope').innerHTML = s.scope === 'device'
-                ? '<span class="material-icons" aria-hidden="true">devices</span>This device only'
-                : '<span class="material-icons" aria-hidden="true">account_circle</span>Saved to your account';
+            const scope = model.scope(s);
+            $('.hx-info-scope').innerHTML = `<span class="material-icons" aria-hidden="true">${scope.icon}</span>${scope.label}`;
             $('.hx-info-title').textContent = s.label;
-            $('.hx-info-desc').textContent = typeof s.desc === 'function' ? s.desc() : s.desc;
+            $('.hx-info-desc').textContent = model.desc(s);
         };
 
         const drawOptions = (revealCurrent) => {
@@ -608,10 +692,10 @@
 
         const updateLegend = () => {
             const items = [];
-            if (status === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
-            else if (status === 'ready' && zone === 'list') {
+            if (model.status === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
+            else if (model.status === 'ready' && zone === 'list') {
                 items.push({ key: '▲▼', label: 'Settings' }, { key: 'OK', label: 'Choices', action: 'ok' });
-            } else if (status === 'ready') {
+            } else if (model.status === 'ready') {
                 const s = setting();
                 items.push({ key: '▲▼', label: 'Choices' }, { key: '◀', label: 'Settings' },
                     { key: 'OK', label: s.action ? (armed ? 'Confirm sign out' : 'Sign out') : 'Select', action: 'ok' });
@@ -638,7 +722,7 @@
         };
 
         const selectSetting = (i) => {
-            i = clamp(i, 0, visible.length - 1);
+            i = clamp(i, 0, model.visible.length - 1);
             if (i === sel && options.length) return;
             disarm();
             sel = i;
@@ -659,7 +743,7 @@
         const choose = async (i) => {
             const s = setting();
             const o = options[i];
-            if (!o || status !== 'ready' || signingOut) return;
+            if (!o || model.status !== 'ready' || signingOut) return;
             if (s.action) {
                 if (!armed) {
                     armed = true;
@@ -684,19 +768,17 @@
                 toast('Saved');
                 return;
             }
-            // show the new check at once; put it back if the save fails
-            const before = { cfg };
-            if (s.field) cfg = Object.assign({}, cfg, { [s.field]: o.value });
+            // show the new check at once; it goes back if the save fails
+            const saving = model.save(s, o);
             markOptions();
             drawList();
             try {
-                await s.save(o.value);
+                await saving;
                 if (!alive) return;
                 toast('Saved');
             } catch (err) {
                 console.warn('[HOMER Settings] save failed', err);
                 if (!alive) return;
-                cfg = before.cfg;
                 toast('Couldn\'t save that. Try again.', 'err');
             }
             if (!alive) return;
@@ -762,7 +844,7 @@
             const t = ev.target;
             if (t && t.classList && t.classList.contains('hx-zip') && root.contains(t)) { onZipKey(ev); return; }
             // a digit on the ZIP row starts a new ZIP
-            if (zone === 'options' && status === 'ready' && /^\d$/.test(ev.key) && options[opt] && options[opt].input) {
+            if (zone === 'options' && model.status === 'ready' && /^\d$/.test(ev.key) && options[opt] && options[opt].input) {
                 ev.stopPropagation();
                 editZip(true);
                 return;
@@ -772,15 +854,15 @@
             if (k === 'h' || k === 'H') { stop(ev); goHome(); return; }
             if (BACK_KEYS.includes(k)) {
                 stop(ev);
-                if (zone === 'options' && status === 'ready') { disarm(); setZone('list'); }
+                if (zone === 'options' && model.status === 'ready') { disarm(); setZone('list'); }
                 else goBack();
                 return;
             }
             const nav = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(k);
             if (!nav) return;
             stop(ev); // nothing underneath should see the remote while Settings is up
-            if (status === 'error') { if (k === 'Enter') load(); return; }
-            if (status !== 'ready') return;
+            if (model.status === 'error') { if (k === 'Enter') load(); return; }
+            if (model.status !== 'ready') return;
             if (zone === 'list') {
                 if (k === 'ArrowUp') selectSetting(sel - 1);
                 else if (k === 'ArrowDown') selectSetting(sel + 1);
@@ -810,7 +892,7 @@
 
         const moved = hoverTracker();
         const onMove = (ev) => {
-            if (!moved(ev) || status !== 'ready' || signingOut) return;
+            if (!moved(ev) || model.status !== 'ready' || signingOut) return;
             const item = ev.target.closest('.hx-item');
             if (item) {
                 if (zone !== 'list') { disarm(); setZone('list'); }
@@ -832,14 +914,14 @@
                 if (a === 'home') goHome();
                 else if (a === 'back') goBack();
                 else if (a === 'ok') {
-                    if (status === 'error') load();
-                    else if (status !== 'ready') return;
+                    if (model.status === 'error') load();
+                    else if (model.status !== 'ready') return;
                     else if (zone === 'list') { opt = Math.max(0, curIndex(setting())); markOptions(); setZone('options'); }
                     else choose(opt);
                 }
                 return;
             }
-            if (status !== 'ready' || signingOut) return;
+            if (model.status !== 'ready' || signingOut) return;
             const item = ev.target.closest('.hx-item');
             if (item) {
                 selectSetting(Number(item.dataset.i));
@@ -870,42 +952,26 @@
 
         // ----- data -----
         const load = async () => {
-            status = 'loading';
+            const current = setting();
+            const loading = model.load(); // loading now
             setState('<div class="hx-spinner"></div><b>Loading settings…</b>');
             optsInner.innerHTML = '';
             drawList();
             drawInfo();
             updateLegend();
             try {
-                const [user, cults, info, endpoint] = await Promise.all([
-                    api(`/Users/${uid}`),
-                    api('/Localization/Cultures').catch(() => null),
-                    api('/System/Info/Public').catch(() => null),
-                    inNetwork == null ? api('/System/Endpoint').catch(() => null) : null
-                ]);
-                if (!alive) return;
-                cfg = (user && user.Configuration) || {};
-                cultures = Array.isArray(cults) && cults.length ? cults : null;
-                if (inNetwork == null && endpoint && typeof endpoint.IsInNetwork === 'boolean') inNetwork = endpoint.IsInNetwork;
-                // Jellyfin Web hides the quality choice from accounts that can't transcode
-                canTranscode = !(user.Policy && user.Policy.EnableVideoPlaybackTranscoding === false);
-                const current = setting();
-                visible = SETTINGS.filter((s) => s.id !== 'quality' || canTranscode);
-                sel = Math.max(0, visible.indexOf(current));
-                $('.hx-account-user').innerHTML = `Signed in as <b>${esc(user.Name || '')}</b>`;
-                $('.hx-account-server').innerHTML = info
-                    ? `<b>${esc(info.ServerName || 'Jellyfin')}</b>${info.Version ? ` · Jellyfin ${esc(info.Version)}` : ''}`
-                    : '';
-                status = 'ready';
+                if (!await loading || !alive) return;
+                // the list may be shorter now (no Streaming quality)
+                sel = Math.max(0, model.visible.indexOf(current));
+                $('.hx-account-user').innerHTML = model.userLine();
+                $('.hx-account-server').innerHTML = model.serverLine();
                 setState('');
                 drawList();
                 drawInfo();
                 drawOptions(true);
                 updateLegend();
-            } catch (err) {
-                console.warn('[HOMER Settings] load failed', err);
+            } catch {
                 if (!alive) return;
-                status = 'error';
                 setState('<b>Couldn\'t load your settings</b><span>Press OK to try again.</span>');
                 updateLegend();
             }
@@ -916,9 +982,13 @@
 
         return {
             root,
+            phone: false,
             show() { root.style.visibility = ''; },
+            // where Settings is, for the phone layout
+            state: () => ({ id: setting() ? setting().id : null }),
             teardown() {
                 alive = false;
+                model.dispose();
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
@@ -955,10 +1025,31 @@
             return;
         }
         if (screen) return;
-        const s = createScreen(server);
+        const s = draw(server, null);
         screen = s;
         ensureCss().then(() => { if (screen === s) s.show(); });
     };
+
+    // The phone layout: shared/layout.js says when; settings/settings-phone.js
+    // draws it (and registers it with the layout once it has loaded).
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerSettingsPhone && window.HomerLayout.usePhone('settings'));
+    const draw = (server, from) => (phoneLayout()
+        ? window.HomerSettingsPhone.create({ model: createModel(server), state: from, goHome, goBack, signOut })
+        : createScreen(server, from));
+
+    // The phone and TV layouts switch places (a window resized across the
+    // line, mostly): draw the other one, at the same setting.
+    const onLayout = () => {
+        if (!screen || screen.phone === phoneLayout()) return;
+        const server = getServer();
+        const from = screen.state();
+        closeScreen();
+        if (!server || destroyed) return;
+        const s = draw(server, from);
+        screen = s;
+        ensureCss().then(() => { if (screen === s) s.show(); });
+    };
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
 
     // HomerPlayer may load after this script; subscribe once it's there.
     let unsubscribe = null;
@@ -1026,6 +1117,7 @@
         destroy() {
             destroyed = true;
             closeScreen();
+            offLayout();
             if (observer) observer.disconnect();
             if (unsubscribe) { try { unsubscribe(); } catch { /* gone */ } }
             unsubscribe = null;
@@ -1033,6 +1125,7 @@
             window.removeEventListener('hashchange', onRouteChange);
             window.removeEventListener('popstate', onRouteChange);
             document.getElementById('hx-css')?.remove();
+            document.getElementById('hx-phone-css')?.remove();
             cssReady = null;
         }
     };

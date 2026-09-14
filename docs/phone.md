@@ -2,8 +2,9 @@
 
 HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
-so do mobile browsers. A screen can draw a phone layout of its own. The guide
-has one; the others still draw their TV layout, shrunk to fit.
+so do mobile browsers. A screen can draw a phone layout of its own. The guide,
+Settings and Weather have one; a screen that doesn't still draws its TV
+layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -74,6 +75,32 @@ around meanwhile.
    channel logos on the dark chip through `HomerLogos.watch(img, chip)` (it
    knocks out a dark logo). The approved frames are the phone guide's list and
    its docked strip with the record sheet.
+
+## Settings and Weather: a screen under the bars
+
+The guide's phone layout sits above the bars (99997) and leaves its video
+strip transparent. Settings (`settings/settings-phone.js`) and Weather
+(`forecast/forecast-phone.js`) are simpler, and a good pattern for a screen
+that's just a column:
+
+- The root keeps the screen's id and `.homer-screen` (plus `.hx-phone` /
+  `.hf-phone` to scope the CSS), so `shared/phone.css` puts it between the
+  bars and HomerPlayer and the chrome count it as a screen. It stays at the
+  screens' 99990, and scrolls inside itself.
+- Docked video: a 16:9 `[data-homer-preview]` at the top (at the left in
+  landscape), with what's playing, Full screen and ✕ in a bar under it. The
+  real video (99995) covers the preview; the controls sit clear of it, so
+  nothing needs to be see-through. A tap on the video is HomerPlayer's (full
+  screen).
+- The data stays in the TV file: Settings' `createModel(server)` (the
+  settings, their values, saving with the new value shown at once), and
+  Weather's `createFeed`, `summary`, `stripSlots`, `dayInfo`, the skies and
+  `createRadar` (the map and loop for any panel size, names scaled with `t`).
+  The TV file hands them to `create(ctx)`.
+- A text box on a phone: `inputmode="numeric"` (and `pattern="[0-9]*"` for
+  iPhones), 16px or larger so iPhones don't zoom, a real `<form>` so the
+  keyboard's Done/Go submits, and `visualViewport` to keep the box above the
+  keyboard (Settings' ZIP code).
 
 ## The shared TV shell: `shared/shell.css`
 
