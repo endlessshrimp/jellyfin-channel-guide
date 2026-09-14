@@ -1,0 +1,825 @@
+/*
+ * HOMER Home, phone layout (home/home-phone.js). Everything is scoped to
+ * #hm-root.hm-phone, so home.css (the TV stage) and this can both be loaded;
+ * colors, type and the logo chips come from shared/tokens.css, and the top
+ * bar and tab bar around it from shared/phone.css.
+ *
+ * Home sits between the phone's bars and above a docked video (HomerPlayer
+ * pins the real video at 99995): the video strip is a hole the video shows
+ * through, so only the parts around it paint a background. The strip is where
+ * the phone guide's is, so the video stays put going from one to the other.
+ */
+
+/* (#hm-root.hm-phone: over home.css's #hm-root, which is the TV stage's) */
+#hm-root.hm-phone {
+    --hmp-dock-h: calc(100vw * 9 / 16);
+    --hmp-card-w: clamp(180px, 60vw, 260px);
+    --hmp-side: 16px;
+    --hmp-head-h: 52px;
+
+    position: fixed;
+    inset: auto;
+    left: 0;
+    right: 0;
+    top: var(--homer-phone-top);
+    bottom: var(--homer-phone-tabs);
+    z-index: 99997; /* over the docked video, which shows through the strip */
+    overflow: visible;
+    background: none;
+    font-family: var(--homer-font);
+    color: var(--homer-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+.hm-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.hm-phone h1,
+.hm-phone h2,
+.hm-phone p {
+    margin: 0;
+}
+
+.hm-phone .hmp-main {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.hm-phone .hmp-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+}
+
+/* the TV screens' faint scanline texture */
+.hm-phone .hmp-body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+}
+
+.hm-phone .hmp-scroll {
+    position: absolute;
+    inset: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain; /* no pull-to-refresh, no scrolling the page behind */
+    scrollbar-width: none;
+}
+
+.hm-phone .hmp-scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- Docked video (the phone guide's strip) ---------- */
+
+.hm-phone .hmp-dock {
+    position: relative;
+    flex: none;
+    display: none;
+    width: 100%;
+    height: var(--hmp-dock-h);
+    overflow: hidden;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.hm-phone.hmp-docked .hmp-dock { display: block; }
+
+/* the video is in: let it show through */
+.hm-phone.hmp-dock-live .hmp-dock { background: none; }
+.hm-phone.hmp-dock-live .hmp-dock-idle { display: none; }
+
+.hm-phone .hmp-dock-video {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+}
+
+.hm-phone .hmp-dock-idle {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.hm-phone .hmp-dock-tuning {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hm-phone .hmp-dock-ctl {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+}
+
+.hm-phone .hmp-dock-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.hm-phone .hmp-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    font-size: 21px;
+    color: #fff;
+}
+
+.hm-phone .hmp-dock-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 22px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), transparent);
+    font-family: var(--homer-font-cond);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.85);
+    pointer-events: none; /* a tap here is a tap on the video */
+}
+
+.hm-phone .hmp-dock-what {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hm-phone .hmp-dock-left { flex: none; }
+
+.hm-phone .hmp-dock-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.hm-phone .hmp-dock-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+/* LIVE, on the strip, the On Now picture and live cards */
+.hm-phone .hmp-badge {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--homer-live);
+    font-family: var(--homer-font-cond);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+.hm-phone .hmp-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+/* ---------- Logo chips (home.js makes them; these are phone-sized) ---------- */
+
+.hm-phone .hm-logo-chip {
+    box-sizing: border-box;
+    width: 66px;
+    height: 40px;
+    min-width: 0;
+    padding: 4px 7px;
+    border-radius: 9px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line), 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.hm-phone .hm-logo-chip img {
+    max-width: 100%;
+    max-height: 30px;
+}
+
+.hm-phone .hm-logo-chip.big {
+    width: auto;
+    min-width: 120px;
+    height: 66px;
+    padding: 8px 14px;
+    border-radius: 12px;
+}
+
+.hm-phone .hm-logo-chip.big img {
+    max-width: 150px;
+    max-height: 48px;
+}
+
+.hm-phone .hm-logo-fallback {
+    font-size: 11px;
+    overflow: hidden;
+}
+
+/* ---------- The date, and Settings ---------- */
+
+.hm-phone .hmp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: var(--hmp-head-h);
+    padding: 0 10px 0 var(--hmp-side);
+}
+
+.hm-phone .hmp-date {
+    min-width: 0;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* a 44px target around a smaller pill */
+.hm-phone .hmp-settings {
+    flex: none;
+    height: 44px;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+}
+
+.hm-phone .hmp-settings-pill {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px 0 10px;
+    border-radius: 18px;
+    box-sizing: border-box;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d6e0ec;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.hm-phone .hmp-settings-pill .material-icons { font-size: 19px; color: var(--homer-accent-2); }
+.hm-phone .hmp-settings:active .hmp-settings-pill { background: var(--homer-cell-hi); }
+
+/* ---------- On Now ---------- */
+
+.hm-phone .hmp-art {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    overflow: hidden;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.hm-phone .hmp-art > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 22%; /* a poster cropped to 16:9 keeps faces, which are near the top */
+}
+
+/* the picture fades into the card under it */
+.hm-phone .hmp-art::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 38%;
+    background: linear-gradient(0deg, #061126, transparent);
+    pointer-events: none;
+}
+
+.hm-phone .hmp-art-logo {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.hm-phone .hmp-hero.loading .hmp-badge,
+.hm-phone .hmp-hero.empty .hmp-badge { display: none; }
+
+.hm-phone .hmp-hero-text {
+    position: relative;
+    padding: 0 var(--hmp-side) 4px;
+}
+
+.hm-phone .hmp-eyebrow {
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--homer-accent-2);
+}
+
+.hm-phone .hmp-hero-ch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    min-width: 0;
+}
+
+.hm-phone .hmp-hero-ch:empty { display: none; }
+
+/* no picture: the big chip above already says which channel */
+.hm-phone .hmp-art.noart + .hmp-hero-text .hmp-hero-ch .hm-logo-chip { display: none; }
+
+.hm-phone .hmp-hero-chname {
+    min-width: 0;
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    color: #d6e0ec;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hm-phone .hmp-hero-chname b {
+    margin-right: 7px;
+    font-weight: 700;
+    color: var(--homer-dim);
+    letter-spacing: 0.04em;
+}
+
+.hm-phone .hmp-hero-title {
+    margin-top: 10px;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.005em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hm-phone .hmp-hero-meta {
+    margin-top: 6px;
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    color: #b7c6d8;
+}
+
+.hm-phone .hmp-hero-meta:empty { display: none; }
+
+.hm-phone .hmp-bar {
+    height: 3px;
+    margin-top: 9px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.hm-phone .hmp-bar b {
+    display: block;
+    height: 100%;
+    background: var(--homer-accent-2);
+}
+
+/* the description: only when there's nothing on, or beside a docked video */
+.hm-phone .hmp-hero-desc {
+    display: none;
+    margin-top: 8px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #b7c6d8;
+}
+
+.hm-phone .hmp-hero.empty .hmp-hero-desc { display: block; }
+
+.hm-phone .hmp-acts {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.hm-phone .hmp-acts:empty { display: none; }
+
+.hm-phone .hmp-act {
+    flex: 1;
+    min-width: 0;
+    height: 52px;
+    border-radius: 14px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 14px;
+    font-weight: 700;
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hm-phone .hmp-act .material-icons { flex: none; font-size: 24px; }
+
+.hm-phone .hmp-act span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hm-phone .hmp-act-watch {
+    flex: 1.6;
+    background: var(--homer-focus-fill);
+    box-shadow: 0 8px 24px rgba(47, 140, 255, 0.35);
+}
+
+.hm-phone .hmp-act-guide {
+    background: var(--homer-cell);
+    border: 1.5px solid var(--homer-line-strong);
+}
+
+.hm-phone .hmp-act:active { filter: brightness(1.2); }
+
+/* ---------- Rows: strips of cards ---------- */
+
+.hm-phone .hmp-rows { padding: 8px 0 22px; }
+
+.hm-phone .hmp-row { margin-top: 20px; }
+
+.hm-phone .hmp-row-title {
+    margin: 0 var(--hmp-side) 10px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.hm-phone .hmp-strip {
+    display: flex;
+    gap: 10px;
+    padding: 0 var(--hmp-side);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding: 0 var(--hmp-side);
+    scrollbar-width: none;
+}
+
+.hm-phone .hmp-strip::-webkit-scrollbar { display: none; }
+
+/* (the end padding of a scrolling row, which browsers drop) */
+.hm-phone .hmp-strip::after {
+    content: "";
+    flex: 0 0 calc(var(--hmp-side) - 10px);
+}
+
+.hm-phone .hmp-card {
+    flex: 0 0 var(--hmp-card-w);
+    width: var(--hmp-card-w);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    scroll-snap-align: start;
+}
+
+.hm-phone .hmp-card-art {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #12305a, #071427);
+    box-shadow: inset 0 0 0 1px var(--homer-line);
+    transition: transform 120ms ease;
+}
+
+.hm-phone .hmp-card:active .hmp-card-art { transform: scale(0.97); }
+
+.hm-phone .hmp-card-art > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* no picture: the kind of thing it is */
+.hm-phone .hmp-card.noart .hmp-card-art > .material-icons {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 40px;
+    color: rgba(160, 190, 230, 0.3);
+}
+
+.hm-phone .hmp-card-title {
+    display: block;
+    margin-top: 8px;
+    font-size: 15.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hm-phone .hmp-card-sub {
+    display: block;
+    margin-top: 1px;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hm-phone .hmp-card-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.hm-phone .hmp-card-bar b {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--homer-accent), var(--homer-accent-2));
+}
+
+/* live cards: the channel's chip on the picture (or in its place) */
+.hm-phone .hmp-card-live .hmp-card-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(2, 8, 18, 0.55), transparent 45%);
+}
+
+.hm-phone .hmp-card-logo {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    z-index: 1;
+}
+
+.hm-phone .hmp-card-logo .hm-logo-chip {
+    width: 54px;
+    height: 32px;
+    padding: 3px 6px;
+    border-radius: 8px;
+}
+
+.hm-phone .hmp-card-logo .hm-logo-chip img { max-height: 24px; }
+
+.hm-phone .hmp-card-live .hmp-badge {
+    left: auto;
+    right: 8px;
+    top: 8px;
+    z-index: 1;
+    padding: 3px 7px;
+    font-size: 11px;
+}
+
+.hm-phone .hmp-card-live.noart .hmp-card-art::after { display: none; }
+
+.hm-phone .hmp-card-live.noart .hmp-card-logo {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: grid;
+    place-items: center;
+}
+
+.hm-phone .hmp-card-live.noart .hmp-card-logo .hm-logo-chip {
+    width: 96px;
+    height: 54px;
+    padding: 6px 10px;
+    border-radius: 10px;
+}
+
+.hm-phone .hmp-card-live.noart .hmp-card-logo .hm-logo-chip img { max-height: 40px; }
+
+.hm-phone .hmp-empty {
+    margin: 18px var(--hmp-side);
+    font-size: 15px;
+    font-style: italic;
+    color: var(--homer-faint);
+}
+
+/* while it loads */
+.hm-phone .hmp-skel .hmp-row-title {
+    width: 140px;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--homer-cell);
+}
+
+.hm-phone .hmp-skel .hmp-card-art {
+    background: var(--homer-cell);
+    animation: hmp-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes hmp-pulse { 50% { opacity: 0.5; } }
+
+/* ---------- Docked, portrait: the strip says what's on, the rows go under it ---------- */
+
+.hm-phone.hmp-docked .hmp-hero { display: none; }
+.hm-phone.hmp-docked .hmp-rows { padding-top: 0; }
+
+/* ---------- Landscape: the picture (or the video) at the left, as in the guide ---------- */
+
+@media (orientation: landscape) {
+    #hm-root.hm-phone {
+        --hmp-dock-h: calc((100vw - var(--homer-phone-left) - var(--homer-phone-right)) * 0.42 * 9 / 16);
+        --hmp-card-w: 196px;
+        --hmp-head-h: 46px;
+    }
+
+    .hm-phone .hmp-main {
+        left: var(--homer-phone-left);
+        right: var(--homer-phone-right);
+    }
+
+    /* the picture at the left, the date and Settings above what's on beside
+       it, and the rows under both */
+    .hm-phone .hmp-scroll {
+        display: grid;
+        grid-template-columns: 42% minmax(0, 1fr);
+        grid-template-rows: auto 1fr auto;
+        align-content: start;
+    }
+
+    .hm-phone .hmp-hero { display: contents; }
+
+    .hm-phone .hmp-art {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+    }
+
+    .hm-phone .hmp-head {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .hm-phone .hmp-hero-text {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: center;
+    }
+
+    .hm-phone .hmp-rows {
+        grid-column: 1 / -1;
+        grid-row: 3;
+    }
+
+    .hm-phone .hmp-art::after {
+        left: auto;
+        top: 0;
+        width: 30%;
+        height: auto;
+        background: linear-gradient(270deg, #061126, transparent);
+    }
+
+    .hm-phone .hmp-hero-text { padding: 0 20px 10px 16px; }
+    .hm-phone .hmp-hero-ch { margin-top: 6px; }
+    .hm-phone .hm-logo-chip { width: 58px; height: 34px; }
+    .hm-phone .hm-logo-chip img { max-height: 26px; }
+    .hm-phone .hmp-hero-title { margin-top: 6px; font-size: 22px; -webkit-line-clamp: 1; }
+    .hm-phone .hmp-hero-meta { margin-top: 3px; font-size: 14px; }
+    .hm-phone .hmp-bar { margin-top: 7px; }
+    .hm-phone .hmp-acts { margin-top: 12px; }
+    .hm-phone .hmp-act { height: 44px; font-size: 16px; }
+    .hm-phone .hmp-row { margin-top: 14px; }
+
+    /* docked: the video at the top left with what's on under it, the date
+       and Settings, then the rows, down the right */
+    .hm-phone.hmp-docked .hmp-main {
+        display: grid;
+        grid-template-columns: 42% minmax(0, 1fr);
+        grid-template-rows: var(--hmp-head-h) auto minmax(0, 1fr);
+    }
+
+    .hm-phone.hmp-docked .hmp-body,
+    .hm-phone.hmp-docked .hmp-scroll { display: contents; }
+    .hm-phone.hmp-docked .hmp-body::after { display: none; }
+
+    .hm-phone.hmp-docked .hmp-dock {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        width: auto;
+    }
+
+    .hm-phone.hmp-docked .hmp-head {
+        grid-column: 2;
+        grid-row: 1;
+        border-left: 1px solid var(--homer-line);
+        background: #061126;
+    }
+
+    .hm-phone.hmp-docked .hmp-hero {
+        grid-column: 1;
+        grid-row: 3;
+        display: block;
+        min-height: 0;
+        overflow: hidden;
+        background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 100%);
+    }
+
+    .hm-phone.hmp-docked .hmp-art { display: none; }
+    .hm-phone.hmp-docked .hmp-hero-text { padding: 10px 14px; }
+    .hm-phone.hmp-docked .hmp-hero-ch { display: none; } /* the strip has the channel */
+    .hm-phone.hmp-docked .hmp-hero-title { margin-top: 3px; font-size: 17px; -webkit-line-clamp: 2; }
+    .hm-phone.hmp-docked .hmp-hero-meta { display: none; }
+    .hm-phone.hmp-docked .hmp-bar { display: none; }
+
+    .hm-phone.hmp-docked .hmp-hero-desc {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-top: 4px;
+        font-size: 13px;
+    }
+
+    .hm-phone.hmp-docked .hmp-rows {
+        grid-column: 2;
+        grid-row: 2 / span 2;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-top: 0;
+        border-left: 1px solid var(--homer-line);
+        background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+        scrollbar-width: none;
+    }
+
+    .hm-phone.hmp-docked .hmp-rows::-webkit-scrollbar { display: none; }
+    .hm-phone.hmp-docked .hmp-row:first-child { margin-top: 2px; }
+}

@@ -4,6 +4,8 @@ HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. A screen can draw a phone layout of its own. The guide
 and Search have one; the others still draw their TV layout, shrunk to fit.
+and Home have one (`guide/guide-phone.js`, `home/home-phone.js`); a screen
+without one draws its TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -41,7 +43,10 @@ around meanwhile.
    layout (`guide/guide-phone.js`) both draw from one model, and switching
    layouts keeps it, so nothing loads twice. A layout attaches to the model
    (`attach({ window, onChunk, onProbed })`) to say what time it shows and hear
-   when listings arrive.
+   when listings arrive. A screen with little data can do less: Home's
+   `loadData()` returns one promise (its rows and what's on), and both layouts
+   are handed it. (Home has no position worth carrying from one layout to the
+   other, so its phone layout has no `state()`.)
 2. **Write the phone layout** in its own file, `x/x-phone.js`:
    `window.HomerXPhone = { create(ctx) }`, returning `{ phone: true, show(),
    state(), teardown() }`. `state()` is where it is (category, time, the
@@ -67,6 +72,19 @@ around meanwhile.
    must leave the preview transparent once the video is in, so the video shows
    through. Tap it for full screen with `HomerPlayer.fullscreen()`, stop with
    `HomerPlayer.stop()`.
+   - The player only looks for `[data-homer-preview]` inside `#cg-root` or a
+     `.homer-screen` root (plus the TV screens' `.hm-preview`/`.hl-preview`),
+     so a phone root with another id adds `homer-screen` to its classes (phone
+     Home is `#hm-root.hm-phone.homer-screen`).
+   - Outside the guide, the player takes any tap inside the preview as "full
+     screen" (in the capture phase), so buttons drawn on the strip (✕, full
+     screen) must be its siblings, layered over it, not its children.
+   - Nothing between the root and the preview may paint a background: every
+     ancestor of the hole up to the root has to be transparent, or the video
+     is hidden. Put backgrounds on the panels beside the strip instead.
+   - Put the strip where the guide's is (full width under the top bar in
+     portrait; the left 42%, 16:9, in landscape), so the video doesn't move
+     from one screen to the next.
 7. **Touch rules:** 44px targets at least, nothing that only shows on hover, no
    long-press, and a press-again confirm (never a browser dialog) for anything
    that throws something away, like the guide's ● → "Cancel?".
@@ -138,4 +156,8 @@ what it does differently.
 - A hidden (automated) browser tab throttles timers to almost nothing and
   doesn't start video, so drive the iframe's timers yourself and fake the
   docked state (`HomerPlayer.docked`/`nowPlaying`) for screenshots.
+- To see a docked strip with a picture in it without playing anything, pin a
+  stand-in: a `<video>` fed by a `canvas.captureStream()`, inside a
+  `div.videoPlayerContainer.homer-pinned` at z-index 99995 over the preview's
+  rect. The layouts' "the video is in" checks see it as the real thing.
 - Never play live TV from an automated tab: the provider allows two streams.

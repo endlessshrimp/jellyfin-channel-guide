@@ -43,6 +43,7 @@
     js('guide/guide.js');
     js('guide/guide-phone.js'); // the guide's phone layout
     js('home/home.js');
+    js('home/home-phone.js'); // Home's phone layout
     js('library/library.js');
     js('settings/settings.js');
     js('search/search.js');

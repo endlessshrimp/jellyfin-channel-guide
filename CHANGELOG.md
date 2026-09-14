@@ -50,6 +50,23 @@
   a timer and a series, deleting, cancelling and playing) is in
   recordings/recordings-model.js, which the TV and phone layouts share. The TV
   screen looks and works exactly as before.
+- Home on a phone is a phone screen, not the TV one shrunk: **On Now** on
+  top (the program's picture, or its channel's logo, then the channel, the
+  title, its time with how long is left and a progress bar, and big
+  **Watch** and **Guide** buttons), then the same rows as on TV (Continue
+  watching, Up next, On now, Recently added), each a strip of finger-sized
+  cards you scroll sideways. A tap on a card opens its page; a tap on a live
+  card watches it, as on TV. The TV menu is gone: the tab bar has the
+  screens, the top bar the weather and Search, and **Settings** is a button at
+  the top of Home, beside the date.
+- Watch plays the channel in the same strip as the phone guide's, under the
+  top bar, so the video stays put going between Home and the guide. The rows
+  keep scrolling under it; tap it for full screen, **✕** to stop. In
+  landscape the picture (and the video) sits at the left, with what's on
+  beside it or under it, and the rows down the right.
+- Under the hood: Home's rows and what's on are loaded once for both
+  layouts, so switching between them (a window resized across the line)
+  doesn't load them again. TV Home looks and works exactly as before.
 
 ## v0.3.12
 
