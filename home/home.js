@@ -10,6 +10,10 @@
  * Watch plays the channel inside the On Now preview window so you can keep
  * browsing; shared/player.js does the playing, docking and Full screen.
  *
+ * On a phone (shared/layout.js) Home draws home/home-phone.js instead: the On
+ * Now card on top and the same rows, scrolled sideways. Both layouts draw from
+ * the same data (loadData), and switching layouts keeps it.
+ *
  * window.HomerHome = { open, close, fullscreen, goHome, destroy, version }
  */
 (() => {
@@ -106,6 +110,7 @@
         return chip;
     };
 
+    // (Both layouts' stylesheets: the phone one is scoped to #hm-root.hm-phone.)
     let cssReady = null;
     const ensureCss = () => {
         if (cssReady && document.getElementById('hm-css')) return cssReady;
@@ -116,15 +121,19 @@
             t.href = BASE.replace(/home\/$/, '') + 'shared/tokens.css' + QUERY;
             document.head.appendChild(t);
         }
-        const css = document.createElement('link');
-        css.id = 'hm-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'home.css' + QUERY;
-        cssReady = new Promise((resolve) => {
-            css.onload = css.onerror = resolve;
-            setTimeout(resolve, 2000);
-        });
-        document.head.appendChild(css);
+        const link = (id, file) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
+            document.head.appendChild(css);
+            return new Promise((resolve) => {
+                css.onload = css.onerror = resolve;
+                setTimeout(resolve, 2000);
+            });
+        };
+        cssReady = Promise.all([link('hm-css', 'home.css'), link('hm-phone-css', 'home-phone.css')]);
         return cssReady;
     };
 
@@ -140,11 +149,51 @@
     const goFullscreen = () => { if (P()) P().fullscreen(); };
     const stopPreview = () => { if (P()) P().stop(); };
 
+    const openGuide = () => {
+        if (window.ChannelGuide && window.ChannelGuide.open) window.ChannelGuide.open();
+        else go('#/livetv?tab=1');
+    };
+
+    // ---------- Data (both layouts draw from it) ----------
+    // The library views (for the menu), what's on live now (the first one is
+    // On Now) and the rows under it, fetched once each time Home opens.
+    const loadData = async (server) => {
+        const uid = server.UserId;
+        const fields = 'Fields=Overview,PrimaryImageAspectRatio&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1';
+        const safe = (p) => p.catch((err) => { console.warn('[HOMER Home]', err); return null; });
+        const [viewsRes, resume, nextUp, onNow] = await Promise.all([
+            safe(api(`/Users/${uid}/Views`)),
+            safe(api(`/Users/${uid}/Items/Resume?Limit=16&MediaTypes=Video&${fields}`)),
+            safe(api(`/Shows/NextUp?UserId=${uid}&Limit=16&${fields}`)),
+            safe(api(`/LiveTv/Programs/Recommended?UserId=${uid}&IsAiring=true&Limit=40&EnableImages=true&ImageTypeLimit=1&Fields=ChannelInfo,Overview`))
+        ]);
+        const views = (viewsRes && viewsRes.Items) || [];
+        const movieView = views.find((v) => v.CollectionType === 'movies');
+        const tvView = views.find((v) => v.CollectionType === 'tvshows');
+        const [latestMovies, latestTv] = await Promise.all([
+            movieView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${movieView.Id}&Limit=16&${fields}`)) : null,
+            tvView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${tvView.Id}&Limit=16&${fields}`)) : null
+        ]);
+
+        const live = ((onNow && onNow.Items) || []).filter((p) => !PLACEHOLDER.test(p.Name || ''));
+        // { title, items, live }: live rows are programs on now, the rest library items
+        const rows = [];
+        const resumeItems = (resume && resume.Items) || [];
+        const nextItems = (nextUp && nextUp.Items) || [];
+        if (resumeItems.length) rows.push({ title: 'Continue watching', items: resumeItems });
+        if (nextItems.length) rows.push({ title: 'Up next', items: nextItems });
+        if (live.length > 1) rows.push({ title: 'On now', items: live.slice(1, 17), live: true });
+        if (latestMovies && latestMovies.length) rows.push({ title: 'Recently added movies', items: latestMovies });
+        if (latestTv && latestTv.length) rows.push({ title: 'Recently added TV', items: latestTv });
+        return { views, live, rows };
+    };
+
     // ---------- Home ----------
 
-    let home = null;
+    let home = null; // the open Home (its TV or its phone layout), or null
+    let data = null; // what it shows (a promise); a change of layout keeps it
 
-    const createHome = (server) => {
+    const createHome = (server, data) => {
         const root = el('div');
         root.id = 'hm-root';
         root.style.visibility = 'hidden';
@@ -323,10 +372,6 @@
             return type === 'movies'
                 ? `#/movies?topParentId=${v.Id}&collectionType=movies`
                 : `#/tv?topParentId=${v.Id}&collectionType=tvshows`;
-        };
-        const openGuide = () => {
-            if (window.ChannelGuide && window.ChannelGuide.open) window.ChannelGuide.open();
-            else route('#/livetv?tab=1');
         };
         const MENU = [
             { icon: 'live_tv', label: 'Live TV Guide', hint: 'G', act: openGuide },
@@ -592,36 +637,13 @@
 
         // ---------- Data ----------
         (async () => {
-            const uid = server.UserId;
-            const fields = 'Fields=Overview,PrimaryImageAspectRatio&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1';
-            const safe = (p) => p.catch((err) => { console.warn('[HOMER Home]', err); return null; });
-            const [viewsRes, resume, nextUp, onNow] = await Promise.all([
-                safe(api(`/Users/${uid}/Views`)),
-                safe(api(`/Users/${uid}/Items/Resume?Limit=16&MediaTypes=Video&${fields}`)),
-                safe(api(`/Shows/NextUp?UserId=${uid}&Limit=16&${fields}`)),
-                safe(api(`/LiveTv/Programs/Recommended?UserId=${uid}&IsAiring=true&Limit=40&EnableImages=true&ImageTypeLimit=1&Fields=ChannelInfo,Overview`))
-            ]);
+            const { views: v, live, rows } = await data;
             if (home !== self) return;
-            views = (viewsRes && viewsRes.Items) || [];
-            const movieView = views.find((v) => v.CollectionType === 'movies');
-            const tvView = views.find((v) => v.CollectionType === 'tvshows');
-            const [latestMovies, latestTv] = await Promise.all([
-                movieView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${movieView.Id}&Limit=16&${fields}`)) : null,
-                tvView ? safe(api(`/Users/${uid}/Items/Latest?ParentId=${tvView.Id}&Limit=16&${fields}`)) : null
-            ]);
-            if (home !== self) return;
-
-            const live = ((onNow && onNow.Items) || []).filter((p) => !PLACEHOLDER.test(p.Name || ''));
+            views = v;
             hero = live.length ? { program: live[0] } : null;
             showHero();
 
-            const resumeItems = (resume && resume.Items) || [];
-            const nextItems = (nextUp && nextUp.Items) || [];
-            if (resumeItems.length) addRow('Continue watching', resumeItems, mediaCard);
-            if (nextItems.length) addRow('Up next', nextItems, mediaCard);
-            if (live.length > 1) addRow('On now', live.slice(1, 17), liveCard);
-            if (latestMovies && latestMovies.length) addRow('Recently added movies', latestMovies, mediaCard);
-            if (latestTv && latestTv.length) addRow('Recently added TV', latestTv, mediaCard);
+            rows.forEach((row) => addRow(row.title, row.items, row.live ? liveCard : mediaCard));
             if (!rowCount) rowsBox.appendChild(el('div', 'hm-row-empty', 'Nothing to show yet.'));
 
             setFocus(menu.firstChild, { scroll: false });
@@ -633,11 +655,31 @@
         return self;
     };
 
+    // The phone layout: shared/layout.js says when; home/home-phone.js draws
+    // it (and registers it with the layout once it has loaded).
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerHomePhone && window.HomerLayout.usePhone('home'));
+    const draw = (server) => (phoneLayout()
+        ? window.HomerHomePhone.create({
+            server,
+            data,
+            logoChip,
+            cardArt,
+            img,
+            fmtTime,
+            openGuide,
+            go,
+            watch: startPreview,
+            isOpen: (v) => home === v
+        })
+        : createHome(server, data));
+
     const open = () => {
         if (home) return;
         const server = getServer();
         if (!server) return;
-        home = createHome(server);
+        data = loadData(server);
+        data.catch(() => {}); // each layout says so itself
+        home = draw(server);
         const h = home;
         ensureCss().then(() => h.show());
     };
@@ -646,8 +688,23 @@
         if (!home) return;
         const h = home;
         home = null;
+        data = null;
         h.teardown();
     };
+
+    // The phone and TV layouts switch places (a window resized across the
+    // line, or the phone layout arriving): draw the other one from the same data.
+    const onLayout = () => {
+        if (!home || !!home.phone === phoneLayout()) return;
+        const server = getServer();
+        home.teardown();
+        home = null;
+        if (!server || !data) return;
+        home = draw(server);
+        const h = home;
+        ensureCss().then(() => { if (home === h) h.show(); });
+    };
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
 
     // ---------- Take over Jellyfin's home route ----------
     // (the player's route: Home can be the screen on top of a playing video)
@@ -701,7 +758,9 @@
             window.removeEventListener('hashchange', onRoute);
             window.removeEventListener('popstate', onRoute);
             if (offPlayer) offPlayer();
+            offLayout();
             document.getElementById('hm-css')?.remove();
+            document.getElementById('hm-phone-css')?.remove();
             cssReady = null;
         }
     };
