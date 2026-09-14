@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.14
+
+- A show's page lists its seasons newest first (by when they aired, so a
+  season numbered by year doesn't jump ahead; Specials last), and each
+  season's episodes newest first, so what's new is at the top. A show that's
+  still airing opens on its newest season; one that's ended still opens
+  where you left off. TV and phone layouts both.
+
 ## v0.3.13
 
 - Phone guide: in landscape, a docked video shows through its strip (the

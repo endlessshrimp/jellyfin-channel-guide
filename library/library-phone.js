@@ -681,11 +681,10 @@
                     let seasonId = saved.seasonId;
                     if (item.Type === 'Episode') seasonId = item.SeasonId;
                     else if (item.Type === 'Season') seasonId = item.Id;
-                    else if (!seasonId && next) seasonId = next.SeasonId;
-                    else if (!seasonId) {
-                        const firstUnplayed = seasons.find((x) => x.UserData && x.UserData.UnplayedItemCount && x.IndexNumber !== 0);
-                        seasonId = (firstUnplayed || seasons.find((x) => x.IndexNumber !== 0) || seasons[0]).Id;
-                    }
+                    // a show that's still airing opens on its newest season (what's
+                    // new); one that's ended opens where you are
+                    else if (!seasonId && next && series.Status !== 'Continuing') seasonId = next.SeasonId;
+                    else if (!seasonId) seasonId = (seasons.find((x) => x.IndexNumber !== 0) || seasons[0]).Id;
                     seasonIdx = Math.max(0, seasons.findIndex((x) => x.Id === seasonId));
                     drawSeasons();
                     await selectSeason(seasonIdx, true);
