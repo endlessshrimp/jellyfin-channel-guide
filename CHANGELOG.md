@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- Search on a phone has a layout of its own. The search box is at the top,
+  where the keyboard can't cover it, and on an empty search it has the focus,
+  so the keyboard comes up with it (the keyboard's key says Search, and
+  pressing it puts the keyboard away to show the results). The kinds of
+  result are a row of chips under it (All, Movies, TV Shows, Episodes,
+  Channels, On TV, with counts) that you swipe sideways. The results are one
+  list, grouped by kind under headings that stay put while you scroll:
+  posters with the title, year, running time and rating for movies and
+  shows, stills with the episode number and show for episodes, and channel
+  logos (on the dark chip) with what's on for Channels and On TV.
+- Tapping a result does what OK does on the TV: a movie, show or episode
+  opens its details, and Back comes back to the same search at the same
+  result. A channel, or a program that's on now, plays in a strip under the
+  top bar, as in the phone guide (tap it for full screen, **✕** to stop). A
+  program that hasn't started records instead, with a toast; **●** on any
+  program records it too, and on one that's set to record the first tap arms
+  it (**Cancel?**) and a second tap cancels.
+- The top bar's Search opens it from any screen with the keyboard already
+  coming up (iPhones only raise the keyboard for a focus inside the tap), and
+  anything typed while it opens lands in the box. On Search itself, it goes
+  back to the box, keeping what's there.
+- Landscape phones get the box and chips on one line and the results two
+  across; with a video playing, the video sits at the left with the box
+  under it and the results down the right.
+- A window resized across the phone line swaps layouts at the same search,
+  kind and result. The TV layout looks and works exactly as before.
+
 ## v0.3.12
 
 - Guide on touch screens (tablets, and any screen that can't hover): the

@@ -3,7 +3,7 @@
 HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. A screen can draw a phone layout of its own. The guide
-has one; the others still draw their TV layout, shrunk to fit.
+and Search have one; the others still draw their TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -74,6 +74,32 @@ around meanwhile.
    channel logos on the dark chip through `HomerLogos.watch(img, chip)` (it
    knocks out a dark logo). The approved frames are the phone guide's list and
    its docked strip with the record sheet.
+
+## Search's phone layout (`search/search-phone.js`)
+
+- **No model file.** Search's data is one request per kind and a minute's
+  cache, so `search/search.js` hands its search, cache, Back memory,
+  navigation and formatting to the phone layout through `ctx`
+  (`createPhone`). Both layouts write the same Back memory, so a change of
+  layout (`remember()` on the one going away) starts the other at the same
+  query, kind and result.
+- **Recording** borrows the guide's model: `HomerGuideModel.create(server)`
+  costs nothing until asked, and its `schedule`/`cancel` keep the
+  one-request-at-a-time and never-twice guards.
+- **The keyboard.** An iPhone only raises it for a focus inside a tap, and a
+  screen opens a moment after the tap that routed to it. The top bar's Search
+  calls `HomerSearch.phoneTap()` inside the tap: on Search it focuses the box;
+  elsewhere a hidden stand-in `<input>` takes the focus (keyboard up) and the
+  box takes it over, with anything typed, once it's showing. The keyboard
+  covers the page without shrinking it (iPhones, Android's Chrome), so the
+  list gets `--sp-kb` (from `visualViewport`) of room at its end; a finger
+  moving on the list puts the keyboard away. The box is `type="search"`,
+  `enterkeyhint="search"`, 17px (an iPhone zooms in on anything under 16px).
+- **Docked video controls.** HomerPlayer turns a tap inside
+  `[data-homer-preview]` into full screen (except in the guide), so buttons
+  over the video (✕, full screen) are siblings of the preview element, not
+  children. The root sits at 99997 like the phone guide's, above the video,
+  with the strip left transparent once the video is in.
 
 ## The shared TV shell: `shared/shell.css`
 

@@ -16,7 +16,10 @@
  * Remote/keyboard: arrows move, OK/Enter acts, / edits the search, Esc/Back
  * goes back, H goes Home.
  *
- * window.HomerSearch = { open(route), close, destroy, version }
+ * On a phone (shared/layout.js) the screen is search/search-phone.js instead,
+ * drawn from the same search, cache and Back memory (see createPhone).
+ *
+ * window.HomerSearch = { open(route), close, phoneTap, destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -192,17 +195,30 @@
             document.head.appendChild(s);
         }
         if (cssReady && document.getElementById('hs-css')) return cssReady;
-        const css = document.createElement('link');
-        css.id = 'hs-css';
-        css.rel = 'stylesheet';
-        css.href = BASE + 'search.css' + QUERY;
-        cssReady = new Promise((resolve) => {
+        // both layouts' stylesheets (the phone one is scoped to .hs-phone)
+        const link = (id, file) => new Promise((resolve) => {
+            document.getElementById(id)?.remove();
+            const css = document.createElement('link');
+            css.id = id;
+            css.rel = 'stylesheet';
+            css.href = BASE + file + QUERY;
             css.onload = css.onerror = resolve;
             setTimeout(resolve, 2000);
+            document.head.appendChild(css);
         });
-        document.head.appendChild(css);
+        cssReady = Promise.all([link('hs-css', 'search.css'), link('hs-phone-css', 'search-phone.css')]);
         return cssReady;
     };
+
+    // The phone layout comes from homer.js, just after this file; used on its
+    // own, Search loads it itself. It registers with shared/layout.js when it
+    // has loaded, and a search that's already up switches over then.
+    if (!window.HomerSearchPhone && !document.querySelector('script[src*="search/search-phone.js"]')) {
+        const s = document.createElement('script');
+        s.src = BASE + 'search-phone.js' + QUERY;
+        document.head.appendChild(s);
+    }
+    const phoneLayout = () => !!(window.HomerLayout && window.HomerSearchPhone && window.HomerLayout.usePhone('search'));
 
     // ---------- Navigation and playback (through HomerPlayer when it's loaded) ----------
     // While a video plays docked in a preview window, HOMER screens sit on top of
@@ -1250,6 +1266,10 @@
                 routeQuery = next.query;
                 start(routeQuery);
             },
+            // where this search is, for the phone layout to start from
+            remember() {
+                memory.set(memKey(), { query: input.value.trim() || query || '', key: rowKey(current()), filter, at: Date.now() });
+            },
             teardown() {
                 alive = false;
                 clearTimeout(debounceTimer);
@@ -1266,6 +1286,77 @@
             }
         };
     };
+
+    // ---------- The phone layout (search/search-phone.js) ----------
+
+    // iPhones bring the keyboard up only for a focus inside the tap itself, and
+    // the phone search opens a moment after the top bar's Search is tapped. So
+    // a stand-in box takes the focus in the tap, and hands it (and anything
+    // typed into it) to the search box once that's showing.
+    let kbProxy = null; // { el, timer }
+    const dropKeyboard = () => {
+        if (!kbProxy) return;
+        clearTimeout(kbProxy.timer);
+        kbProxy.el.remove();
+        kbProxy = null;
+    };
+    const holdKeyboard = () => {
+        dropKeyboard();
+        const i = document.createElement('input');
+        i.type = 'search';
+        i.className = 'hs-kb-proxy';
+        i.tabIndex = -1;
+        i.setAttribute('enterkeyhint', 'search');
+        i.setAttribute('autocomplete', 'off');
+        i.setAttribute('autocorrect', 'off');
+        i.setAttribute('autocapitalize', 'off');
+        i.setAttribute('aria-hidden', 'true');
+        // 16px: an iPhone zooms the page into a smaller box
+        i.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;margin:0;padding:0;border:0;opacity:0;font-size:16px;pointer-events:none;z-index:-1';
+        document.body.appendChild(i);
+        try { i.focus({ preventScroll: true }); } catch { i.focus(); }
+        kbProxy = { el: i, timer: setTimeout(dropKeyboard, 4000) };
+    };
+
+    const createPhone = (server, route) => window.HomerSearchPhone.create({
+        server,
+        route,
+        // a search, from the minute's cache when it's there
+        cached: (q) => cacheGet(`${route.key}|${q.toLowerCase()}`),
+        search: async (q, { force = false, signal } = {}) => {
+            const ckey = `${route.key}|${q.toLowerCase()}`;
+            const hit = force ? null : cacheGet(ckey);
+            if (hit) return hit;
+            const list = await fetchResults(server, route, q, signal);
+            cachePut(ckey, list);
+            return list;
+        },
+        // where Back lands (shared with the TV layout, so a change of layout keeps it too)
+        recall: (routeQuery) => {
+            const k = route.key + '|' + routeQuery;
+            const saved = memory.get(k);
+            memory.delete(k);
+            return saved && Date.now() - saved.at <= MEMORY_MS ? saved : null;
+        },
+        remember: (routeQuery, entry) => memory.set(route.key + '|' + routeQuery, entry),
+        heldKeyboard: () => (kbProxy ? kbProxy.el.value : null),
+        refocusKeyboard: () => {
+            if (!kbProxy) return false;
+            try { kbProxy.el.focus({ preventScroll: true }); } catch { kbProxy.el.focus(); }
+            return true;
+        },
+        dropKeyboard,
+        isTyping,
+        go,
+        goBack,
+        goHome,
+        detailsHash,
+        watchChannel,
+        util: {
+            esc, fmtTime, fmtMins, plural, runtime, posOf, played, pctOf, minsLeft, epCode, yearsOf,
+            startOf, endOf, airing, elapsedPct, chNum, posterUrl, stillUrl, logoUrl, PLACEHOLDER
+        }
+    });
 
     // ---------- Route takeover ----------
 
@@ -1303,10 +1394,22 @@
             return;
         }
         closeScreen();
-        const s = createScreen(server, route);
+        const s = phoneLayout() ? createPhone(server, route) : createScreen(server, route);
         screen = s;
         ensureCss().then(() => { if (screen === s) s.show(); });
     };
+
+    // The phone and TV layouts switch places (a rotation or resize across the
+    // line, or the phone layout arriving): draw the other one, from where
+    // this one was.
+    const onLayout = () => {
+        if (destroyed || !screen || !!screen.phone === phoneLayout()) return;
+        if (typeof screen.remember === 'function') screen.remember();
+        closeScreen();
+        lastSig = '';
+        sync();
+    };
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(onLayout) : () => {};
 
     // Follow HomerPlayer's virtual navigation when it's loaded (it may load
     // after this script, or be replaced by a reload).
@@ -1387,9 +1490,24 @@
             suppressedKey = screen.key;
             closeScreen();
         },
+        // The phone's top bar Search (shared/layout.js), inside the tap: true
+        // when the phone search is up and has taken it (back to its box);
+        // false to go to #/search, with the keyboard already coming up.
+        phoneTap() {
+            if (destroyed || !phoneLayout()) return false;
+            if (screen && screen.phone) {
+                screen.focusInput();
+                return true;
+            }
+            holdKeyboard();
+            return false;
+        },
         destroy() {
             destroyed = true;
             closeScreen();
+            offLayout();
+            dropKeyboard();
+            document.getElementById('hs-phone-css')?.remove();
             observer && observer.disconnect();
             if (playerSub) {
                 try { playerSub(); } catch { /* already gone */ }
