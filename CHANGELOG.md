@@ -28,6 +28,28 @@
   under it and the results down the right.
 - A window resized across the phone line swaps layouts at the same search,
   kind and result. The TV layout looks and works exactly as before.
+- Recordings on a phone has a layout of its own instead of the TV screen
+  shrunk to fit. **Recorded / Scheduled / Series** sit in a segmented control
+  at the top, with a list under it: recordings newest first (a show with
+  several recordings is one row, as on TV, and a tap opens its episodes, with
+  **All recordings** to go back), scheduled recordings under a heading for each
+  day, and series recordings with when the next one is. Channel logos are on
+  the dark chip, as in the phone guide.
+- A tap on a recording, a scheduled recording or a series opens a sheet with
+  what it is (channel, when, how long, the description; for a series, what's
+  coming up) and big buttons: **Play**, or **Resume** and **Restart**, and
+  **Delete** for a recording; **Cancel recording** (**Stop recording** while
+  it's recording) for a scheduled one; **Cancel series** for a series. Delete
+  and the cancels take a second tap on the same button (**Tap again to
+  delete**) within a few seconds; a tap anywhere else puts it back. No browser
+  dialogs, no long-presses, nothing that needs a hover.
+- A video playing in a preview window keeps playing in a strip at the top of
+  Recordings on a phone (at the left in landscape), as in the phone guide.
+  Landscape puts the rows in two columns.
+- Under the hood: Recordings' data (loading the DVR, the shape of a recording,
+  a timer and a series, deleting, cancelling and playing) is in
+  recordings/recordings-model.js, which the TV and phone layouts share. The TV
+  screen looks and works exactly as before.
 
 ## v0.3.12
 

@@ -47,6 +47,8 @@
     js('settings/settings.js');
     js('search/search.js');
     js('search/search-phone.js'); // Search's phone layout
+    js('recordings/recordings-model.js'); // the DVR's recordings and timers
     js('recordings/recordings.js');
+    js('recordings/recordings-phone.js'); // Recordings' phone layout
     js('forecast/forecast.js');
 })();

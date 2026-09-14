@@ -100,6 +100,25 @@ around meanwhile.
   over the video (✕, full screen) are siblings of the preview element, not
   children. The root sits at 99997 like the phone guide's, above the video,
   with the strip left transparent once the video is in.
+### Recordings, the same way
+
+`recordings/recordings-phone.js` follows the guide, with a few differences
+worth copying for a small screen:
+
+- Its model, `recordings/recordings-model.js`, keeps no state: `load(server)`
+  returns every tab's list (and a signature, so a quiet refresh that changed
+  nothing redraws nothing), and `remove()` / `play()` do the rest. Each layout
+  holds what it loaded. Where you are (the tab, an open folder) lives in a
+  `memory` object that `recordings.js` hands both layouts, so a change of
+  layout lands on the same tab.
+- The root is still `#hr-root`, with `.homer-screen` (so the phone chrome and
+  HomerPlayer see a HOMER screen) and `.hr-phone`. `.homer-screen` is what
+  `shared/phone.css` squeezes between the bars, so the phone stylesheet puts
+  it back to full height (`html.homer-chrome #hr-root.hr-phone`) and places
+  its own panels between the bars, like the guide.
+- A tap opens a sheet; anything that throws something away is a sheet button
+  that arms on the first tap ("Tap again to delete") and ignores a second tap
+  within 400ms (a double tap isn't a decision).
 
 ## The shared TV shell: `shared/shell.css`
 
