@@ -44,7 +44,9 @@
     js('guide/guide-phone.js'); // the guide's phone layout
     js('home/home.js');
     js('home/home-phone.js'); // Home's phone layout
+    js('library/library-model.js'); // the library screens' data
     js('library/library.js');
+    js('library/library-phone.js'); // the library screens' phone layout
     js('settings/settings.js');
     js('search/search.js');
     js('search/search-phone.js'); // Search's phone layout
