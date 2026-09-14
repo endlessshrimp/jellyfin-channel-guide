@@ -936,6 +936,12 @@
         display: grid;
         grid-template-columns: 42% minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    /* the backdrop goes on the panels, not on .gp-main behind the strip, so
+       the video pinned under the strip shows through */
+    .cg-phone.gp-docked .gp-head,
+    .cg-phone.gp-docked .gp-list {
         background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
     }
 
