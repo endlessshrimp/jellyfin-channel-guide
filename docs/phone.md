@@ -39,7 +39,10 @@ around meanwhile.
    (with its one-request-at-a-time and never-twice guards) and watching live in
    `guide/guide-model.js`. The TV layout (`guide/guide.js`) and the phone
    layout (`guide/guide-phone.js`) both draw from one model, and switching
-   layouts keeps it, so nothing loads twice. A layout attaches to the model
+   layouts keeps it, so nothing loads twice. (The library screens do the
+   same with `library/library-model.js`; there, where each screen was, the
+   title or the season, is in the model's `memory`, which both layouts read
+   and write, so a switch lands in the same place.) A layout attaches to the model
    (`attach({ window, onChunk, onProbed })`) to say what time it shows and hear
    when listings arrive.
 2. **Write the phone layout** in its own file, `x/x-phone.js`:
@@ -65,7 +68,9 @@ around meanwhile.
    HomerPlayer pins the real video over it (z-index 99995). A root that sits
    above that (the phone guide is at 99997, so its sheet can cover the tab bar)
    must leave the preview transparent once the video is in, so the video shows
-   through. Tap it for full screen with `HomerPlayer.fullscreen()`, stop with
+   through. A phone root that keeps a TV root's id (the library's `#hl-root`)
+   also gets the `homer-screen` class, so HomerPlayer finds its
+   `[data-homer-preview]` rather than looking for the TV layout's preview. Tap it for full screen with `HomerPlayer.fullscreen()`, stop with
    `HomerPlayer.stop()`.
 7. **Touch rules:** 44px targets at least, nothing that only shows on hover, no
    long-press, and a press-again confirm (never a browser dialog) for anything

@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- Movies and TV Shows on a phone are a poster grid, three across (more in
+  landscape), under a filter field and the A–Z / Recently added chips with
+  the count. Posters show where you are with each title: a blue dot for
+  unwatched, a progress bar (and the time left) for one you're partway
+  through, a check for watched, and a show's unwatched count. A tap opens the
+  title's page. Coming back lands where you were in the grid.
+- A movie's page on a phone: its art, then the title, year, rating, runtime,
+  score and genres, when it would end, full-width **Resume** and **Restart**
+  (or **Play**), the overview (four lines, **More** for the rest) and the
+  About rows (director, writers, cast, studio, video, audio, subtitles).
+- A show's page on a phone has the same top, with **Resume S1 E4** /
+  **Restart** (or **Play**) for the next episode, then the seasons as chips
+  that stay at the top while you scroll, and the season's episodes: still,
+  number, title, runtime and progress, with the next one marked. A tap on an
+  episode plays it, or resumes it if you're partway through; **↺** on one in
+  progress starts it over. A season's or an episode's page is its show's, at
+  that season (and that episode).
+- Playing from those pages goes full screen, as on TV; Back from there docks
+  the video in a strip at the top of the Movies, TV Shows or title page you
+  land on (beside it in landscape), like the phone guide. A tap on the strip
+  goes full screen, **✕** stops it. Library videos aren't stopped when the
+  phone is pocketed; only live TV is.
+- Under the hood: the library screens' data (lists, seasons, episodes, cast
+  and media details, watched state, playback) is in library/library-model.js,
+  shared by the TV layout and the phone one (library/library-phone.js). The
+  TV screens look and work exactly as before.
+
 ## v0.3.12
 
 - Guide on touch screens (tablets, and any screen that can't hover): the

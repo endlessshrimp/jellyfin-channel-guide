@@ -161,10 +161,10 @@
             desc.classList.add('clamp');
             more.hidden = true;
             more.textContent = 'More';
-            // measured once it's laid out (a hidden page measures 0)
-            setTimeout(() => {
-                if (alive && desc.scrollHeight > desc.clientHeight + 2) more.hidden = false;
-            }, 0);
+            // measured once the stylesheet's in and it's laid out
+            shown.then(() => setTimeout(() => {
+                if (alive && desc.classList.contains('clamp') && desc.scrollHeight > desc.clientHeight + 2) more.hidden = false;
+            }, 0));
         };
         const onMore = (page) => {
             const desc = page.querySelector('.lp-desc');
@@ -538,8 +538,10 @@
                     const n = (s.UserData && s.UserData.UnplayedItemCount) || 0;
                     return `<button type="button" class="lp-chip${i === seasonIdx ? ' on' : ''}" role="tab" aria-selected="${i === seasonIdx}" data-i="${i}">${esc(s.Name)}${n ? '<i class="lp-chip-dot" aria-label="unwatched"></i>' : ''}</button>`;
                 }).join('');
-                const on = seasonsEl.querySelector('.lp-chip.on');
-                if (on) seasonsEl.scrollLeft = Math.max(0, on.offsetLeft - 16);
+                shown.then(() => {
+                    const on = seasonsEl.querySelector('.lp-chip.on');
+                    if (on) seasonsEl.scrollLeft = Math.max(0, on.offsetLeft - 16);
+                });
             };
 
             const selectSeason = async (i, first = false) => {

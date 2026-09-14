@@ -11,10 +11,14 @@
  *
  * Remote/keyboard: arrows move, OK/Enter activates, Esc/Back goes back.
  *
+ * This file draws the TV layout. On a phone (shared/layout.js) the same routes
+ * draw library/library-phone.js instead; both take their data from
+ * library/library-model.js.
+ *
  * window.HomerLibrary = { open(route), close, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.1';
+    const VERSION = '0.2.0';
 
     // Loading twice (hot reload, or the loader plus a manual copy) replaces the
     // previous instance.
