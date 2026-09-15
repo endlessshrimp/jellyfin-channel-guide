@@ -41,6 +41,15 @@ sits in it, still playing, as you go from screen to screen.
 - Jellyfin's own pages (the dashboard, sign-in) still stop the video when you
   open them, because Jellyfin stops video whenever you leave its player.
 
+### Skipping commercials
+
+On a recording, or anything else with a timeline, the full-screen player's
+**Skip 30s** button (where Jellyfin's fast-forward was), **S**, or a remote's
+fast-forward jumps ahead 30 seconds: one commercial. Presses add up (+1:30
+shows at the top) and the video jumps once you stop, so a whole break is one
+jump. Jellyfin's ◀ (back 10 seconds) takes back an overshoot. Live TV has no
+timeline, so the button isn't there.
+
 ## Movies and TV Shows
 
 ![Movies](screenshots/library-movies.jpg)
