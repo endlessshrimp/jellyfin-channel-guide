@@ -224,6 +224,12 @@
         const search = location.search.replace(/[?&]homer-ha=return\b/, '').replace(/^&/, '?');
         history.replaceState(history.state, '', location.pathname + search + back);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
+        // Rooms may not be loaded yet, or Jellyfin's router may still be
+        // settling on the new address: open it again once things are up
+        const showRooms = () => {
+            if (window.HomerRooms && /^#\/rooms(\?|$)/.test(location.hash)) window.HomerRooms.open();
+        };
+        [400, 1500, 4000].forEach((ms) => setTimeout(showRooms, ms));
         if (!code || !pending || pending.state !== state || Date.now() - pending.at > 15 * 60000) {
             warn('sign-in answer didn\'t match a sign-in from this device; ignored');
             setStatus(isSetUp() ? status : 'off', 'The sign-in didn\'t finish. Try Connect again.');
@@ -247,6 +253,7 @@
             log('signed in to', pending.url);
             retry = 0;
             open();
+            showRooms();
         } catch (err) {
             warn('sign-in failed', err.message);
             setStatus('off', 'Home Assistant didn\'t accept the sign-in. Try Connect again.');
