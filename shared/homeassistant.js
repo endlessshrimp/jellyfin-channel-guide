@@ -36,7 +36,8 @@
  *                    color, setColor, supports, playPause, mediaCommand,
  *                    setVolume, stepVolume, mute, setSource, power,
  *                    setFanSpeed, setPreset, setOption, setNumber, run,
- *                    extras, device, pictureUrl, destroy, version }
+ *                    extras, device, pictureUrl, remoteFor, sendRemote,
+ *                    destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -515,6 +516,7 @@
     let ownName = new Map(); // entity_id -> its own name, without the device's ("Amplifier")
     let mainOf = new Set(); // entities that are their device (a power strip's "all outlets")
     let platformOf = new Map(); // entity_id -> integration ("hue")
+    let remotesOn = null; // device_id -> { id, platform }: its remote.* (Apple TV, Samsung TV), built when first asked
     let hidden = new Set();
     let states = {}; // entity_id -> state object
     let doorbells = []; // [{ id, camera, name }]
@@ -530,6 +532,7 @@
         ownName = new Map();
         mainOf = new Set();
         platformOf = new Map();
+        remotesOn = null;
         hidden = new Set();
         wallSwitches = new Set();
         states = {};
@@ -583,6 +586,7 @@
         ownName = new Map();
         mainOf = new Set();
         platformOf = new Map();
+        remotesOn = null;
         hidden = new Set();
         for (const e of (registry && registry.entities) || []) {
             if (e.di) deviceOf.set(e.ei, e.di);
@@ -1163,6 +1167,90 @@
         return address() + pic;
     };
 
+    // ---------- A player's remote (Apple TV, Samsung TV) ----------
+    //
+    // A player whose device also has a remote.* entity from the Apple TV or
+    // Samsung TV integration gets a whole remote in Rooms. Matched through the
+    // device registry (same device_id), the integration from the entity
+    // registry. HOMER's key names are the Apple TV's; each integration's own
+    // command names, as its remote.send_command takes them:
+    //
+    //   Apple TV  https://www.home-assistant.io/integrations/apple_tv/#remote
+    //     (up, down, left, right, select, menu, home, top_menu, play, pause,
+    //     skip_forward, skip_backward, volume_up, volume_down, …). A name
+    //     that isn't in the docs' list is looked up on pyatv's RemoteControl
+    //     (homeassistant/components/apple_tv/remote.py), which is how
+    //     play_pause works: https://pyatv.dev/api/interface/#pyatv.interface.RemoteControl
+    //   Samsung TV  https://www.home-assistant.io/integrations/samsungtv/#remote
+    //     KEY_ codes, from https://github.com/jaruba/ha-samsungtv-tizen/blob/master/Key_codes.md
+    //     (KEY_UP … KEY_ENTER, KEY_RETURN, KEY_HOME, KEY_VOLUP, KEY_VOLDOWN,
+    //     KEY_MUTE, KEY_PLAY, KEY_PAUSE, KEY_FF, KEY_REWIND). There's no
+    //     play/pause key: play_pause sends KEY_PAUSE or KEY_PLAY (below).
+    //
+    // delay_secs: 0 on every command. remote.send_command waits delay_secs
+    // (0.4 s unless it's given: remote's DEFAULT_DELAY_SECS) after each
+    // command before it answers (the Apple TV's does), which would hold
+    // every press 0.4 s for nothing.
+    const REMOTE_COMMANDS = {
+        apple_tv: {
+            up: 'up', down: 'down', left: 'left', right: 'right', select: 'select',
+            menu: 'menu', home: 'home', top_menu: 'top_menu', play_pause: 'play_pause',
+            skip_forward: 'skip_forward', skip_backward: 'skip_backward',
+            volume_up: 'volume_up', volume_down: 'volume_down'
+        },
+        samsungtv: {
+            up: 'KEY_UP', down: 'KEY_DOWN', left: 'KEY_LEFT', right: 'KEY_RIGHT', select: 'KEY_ENTER',
+            menu: 'KEY_RETURN', home: 'KEY_HOME', play: 'KEY_PLAY', pause: 'KEY_PAUSE',
+            skip_forward: 'KEY_FF', skip_backward: 'KEY_REWIND',
+            volume_up: 'KEY_VOLUP', volume_down: 'KEY_VOLDOWN', mute: 'KEY_MUTE'
+        }
+    };
+    // the remote on a player's device: { id, platform } or null
+    const remoteFor = (playerId) => {
+        if (!remotesOn) {
+            remotesOn = new Map();
+            for (const [id, dev] of deviceOf) {
+                const p = platformOf.get(id);
+                if (domainOf(id) === 'remote' && REMOTE_COMMANDS[p] && !remotesOn.has(dev)) remotesOn.set(dev, { id, platform: p });
+            }
+        }
+        return remotesOn.get(deviceOf.get(playerId)) || null;
+    };
+    const remoteBusy = new Map(); // remote id -> presses sent, not answered yet
+    const lastPlayKey = new Map(); // a Samsung's remote id -> KEY_PLAY or KEY_PAUSE, whichever went last
+    const remoteLog = []; // the last presses sent (for testing: HomerHA._remoteLog())
+    // A key pressed on a player's remote (a key name above). Sent at once,
+    // straight over the connection: it never waits for an earlier press. A
+    // key held down (repeat: true) is dropped while two presses are still
+    // unanswered, so a held arrow never piles up behind a slow device.
+    // Resolves true when sent, false when dropped.
+    const sendRemote = (playerId, key, opts = {}) => {
+        const R = remoteFor(playerId);
+        if (!R) return Promise.reject(new Error('no remote for ' + playerId));
+        let command = REMOTE_COMMANDS[R.platform][key];
+        if (key === 'play_pause' && !command) {
+            // Samsung: pause what's playing, play what's paused; its player
+            // seldom says which, so otherwise the opposite of the last one
+            const s = entity(playerId);
+            const st = s && s.state;
+            command = st === 'playing' ? 'KEY_PAUSE' : st === 'paused' ? 'KEY_PLAY' : lastPlayKey.get(R.id) === 'KEY_PAUSE' ? 'KEY_PLAY' : 'KEY_PAUSE';
+            lastPlayKey.set(R.id, command);
+        }
+        if (!command && key === 'mute' && supports(playerId, 'mute')) return mute(playerId).then(() => true);
+        if (!command) return Promise.reject(new Error(`${R.platform} has no ${key} key`));
+        const busy = remoteBusy.get(R.id) || 0;
+        if (opts.repeat && busy >= 2) return Promise.resolve(false);
+        remoteBusy.set(R.id, busy + 1);
+        remoteLog.push({ at: Date.now(), remote: R.id, platform: R.platform, key, command });
+        if (remoteLog.length > 50) remoteLog.shift();
+        const done = () => remoteBusy.set(R.id, Math.max(0, (remoteBusy.get(R.id) || 1) - 1));
+        return call('remote', 'send_command', { command, delay_secs: 0 }, R.id).then(() => { done(); return true; }, (err) => {
+            done();
+            warn('remote key failed', R.id, command, err && err.message);
+            throw err;
+        });
+    };
+
     // ---------- Fans, choices, numbers, buttons ----------
 
     // 0–100; the remote's presses are sent as one
@@ -1417,6 +1505,25 @@
         dev('media_player.living_room_tv', 'dev_tv_lr', { name: 'Living Room TV', model: 'QN65Q80', maker: 'Samsung' }, null);
         at('media_player.living_room_tv', 'living_room');
         platformOf.set('media_player.living_room_tv', 'samsungtv');
+        // and its remote (Samsung TV's remote.*, on the same device)
+        put('remote.living_room_tv', 'on', { friendly_name: 'Living Room TV' });
+        dev('remote.living_room_tv', 'dev_tv_lr', null, null);
+        at('remote.living_room_tv', 'living_room');
+        platformOf.set('remote.living_room_tv', 'samsungtv');
+        // an Apple TV in the bedroom, with its remote (like the real one)
+        const atv = { name: 'Apple TV', model: 'Apple TV 4K (gen 3)', maker: 'Apple' };
+        put('media_player.apple_tv', 'playing', {
+            friendly_name: 'Apple TV', supported_features: 22449, app_name: 'Jellyfin', app_id: 'org.jellyfin.swiftfin',
+            media_title: 'Fishes', media_series_title: 'The Bear', media_season: 2, media_episode: 6, media_content_type: 'tvshow',
+            entity_picture: mockArt('#1d4f7a', '#0b1a2e', 'THE BEAR')
+        });
+        dev('media_player.apple_tv', 'dev_atv_bed', atv, null);
+        at('media_player.apple_tv', 'primary_bedroom');
+        platformOf.set('media_player.apple_tv', 'apple_tv');
+        put('remote.apple_tv', 'on', { friendly_name: 'Apple TV' });
+        dev('remote.apple_tv', 'dev_atv_bed', null, null);
+        at('remote.apple_tv', 'primary_bedroom');
+        platformOf.set('remote.apple_tv', 'apple_tv');
         // the same TV again over DLNA: left out
         put('media_player.living_room_tv_dlna', 'unavailable', { friendly_name: 'Living Room TV', supported_features: 0 });
         dev('media_player.living_room_tv_dlna', 'dev_tv_lr_dlna', { name: 'Living Room TV', model: 'QN65Q80', maker: 'Samsung' }, null);
@@ -1473,6 +1580,7 @@
         at('switch.refrigerator_cubed_ice', 'kitchen');
     };
     const mockCall = async (domain, service, data, id) => {
+        if (domain === 'remote') return mockRemote(service, data, id);
         await new Promise((r) => setTimeout(r, 250));
         const s = states[id];
         if (!s) throw new Error('no such entity');
@@ -1514,6 +1622,27 @@
         states[id] = x;
         const o = overlay.get(id);
         if (o && o.settled && o.settled(x)) overlay.delete(id);
+        emit();
+    };
+    // a key on a made-up remote: the player on its device answers
+    // (play/pause, the volume) the way the real one would
+    const mockRemote = async (service, data, id) => {
+        await new Promise((r) => setTimeout(r, 60));
+        if (!states[id] || service !== 'send_command') throw new Error('no such remote');
+        const dev = deviceOf.get(id);
+        const player = Object.keys(states).find((x) => domainOf(x) === 'media_player' && deviceOf.get(x) === dev);
+        const s = player && states[player];
+        if (!s) return;
+        const c = String(data.command).toLowerCase().replace(/^key_/, '');
+        const x = Object.assign({}, s, { attributes: Object.assign({}, s.attributes) });
+        if (c === 'play_pause') x.state = s.state === 'playing' ? 'paused' : 'playing';
+        else if (c === 'play') x.state = 'playing';
+        else if (c === 'pause') x.state = 'paused';
+        else if ((c === 'volup' || c === 'voldown' || c === 'volume_up' || c === 'volume_down') && x.attributes.volume_level != null) {
+            x.attributes.volume_level = Math.max(0, Math.min(1, Math.round((x.attributes.volume_level + (/up/.test(c) ? 0.01 : -0.01)) * 100) / 100));
+        } else if (c === 'mute') x.attributes.is_volume_muted = !x.attributes.is_volume_muted;
+        else return;
+        states[player] = x;
         emit();
     };
     const mockRings = async () => mockRingTimes.slice();
@@ -1610,6 +1739,9 @@
         setSource,
         power,
         pictureUrl,
+        remoteFor,
+        sendRemote,
+        _remoteLog: () => remoteLog.slice(),
         setFanSpeed,
         setPreset,
         setOption,
