@@ -16,7 +16,7 @@
  * listings arrive. Switching layouts keeps the model, so nothing loads twice.
  *
  * window.HomerGuideModel = { create, CATEGORIES, COUNTRIES, categorize,
- *                            countryOf, playChannel, getServer, api, request,
+ *                            countryOf, blockOf, playChannel, getServer, api, request,
  *                            util, version }
  */
 (() => {
@@ -95,8 +95,11 @@
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
 
     // ---------- Channel categories ----------
-    // Worked out from the channel name. A channel can be in more than one:
-    // Sky Sports (UK) is both Sports and International.
+    // The lineup is numbered cable-style: a thousand per country (US 1000s, UK
+    // 3000s, France 5000s, world news 7000s, US regional and team sports 6000s)
+    // and, inside each thousand, a hundred per kind of channel: x000 local, x100
+    // entertainment, x200 news, x300 sports, x400 movies, x500 kids. The number
+    // decides; a channel outside the plan falls back to its name.
     const CATEGORIES = [
         { key: 'all', label: 'All' },
         { key: 'fav', label: 'Favorites' },
@@ -113,9 +116,20 @@
         { key: 'all', label: 'All' },
         { key: 'us', label: 'USA' },
         { key: 'uk', label: 'UK' },
-        { key: 'fr', label: 'France' }
+        { key: 'fr', label: 'France' },
+        { key: 'other', label: 'Other' }
     ];
+    const numberOf = (ch) => parseFloat(ch.Number || ch.ChannelNumber) || 0;
+    const BLOCKS = ['local', 'ent', 'news', 'sports', 'movies', 'kids'];
+    const blockOf = (ch) => {
+        const n = numberOf(ch);
+        if (n >= 6000 && n < 7000) return 'sports'; // US regional and team sports
+        if (n < 1000 || n >= 8000) return null;
+        return BLOCKS[Math.floor((n % 1000) / 100)] || null;
+    };
     const countryOf = (ch) => {
+        const n = numberOf(ch);
+        if (n >= 7000 && n < 8000) return 'other'; // world news
         const name = String(ch.Name || '');
         if (/\((UK|IE)\)/i.test(name)) return 'uk';
         if (/\(FR\)/i.test(name)) return 'fr';
@@ -133,7 +147,11 @@
         const name = String(ch.Name || '');
         const base = name.replace(/\s*\((UK|IE|FR)\)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
         const cats = new Set(['all']);
-        if (RULES.news.test(base)) cats.add('news');
+        const block = blockOf(ch);
+        // a UK or French x000 channel (BBC One, TF1) is broadcast TV, not "Local"
+        if (block && !(block === 'local' && countryOf(ch) !== 'us')) cats.add(block);
+        else if (block === 'local') cats.add('ent');
+        else if (RULES.news.test(base)) cats.add('news');
         else if (RULES.sports.test(base)) cats.add('sports');
         else if (RULES.movies.test(base)) cats.add('movies');
         else if (RULES.kids.test(base)) cats.add('kids');
@@ -481,6 +499,7 @@
         COUNTRIES,
         categorize,
         countryOf,
+        blockOf,
         playChannel,
         getServer,
         api,
