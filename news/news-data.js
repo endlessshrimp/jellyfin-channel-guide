@@ -549,5 +549,9 @@
         };
     };
 
-    window.HomerNewsData = { version: VERSION, SECTIONS, FEEDS, create, feedBase, fmtAge, bigImage };
+    window.HomerNewsData = {
+        version: VERSION, SECTIONS, FEEDS, create, feedBase, fmtAge, bigImage,
+        // for checking the merge: are two headlines the same story?
+        _same: (a, b) => sameStory(tokens(a), tokens(b)),
+    };
 })();
