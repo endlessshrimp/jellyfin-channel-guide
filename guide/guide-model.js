@@ -95,8 +95,9 @@
     const genreLabel = { sports: 'Sports', news: 'News', movie: 'Movie', kids: 'Kids' };
 
     // ---------- Channel categories ----------
-    // The lineup is numbered cable-style: a thousand per country (US 1000s, UK
-    // 3000s, France 5000s, world news 7000s, US regional and team sports 6000s)
+    // The lineup is numbered cable-style: a thousand per country (US 1000s,
+    // Canada 2000s, UK 3000s, France 5000s, world news 7000s, US regional and
+    // team sports 6000s)
     // and, inside each thousand, a hundred per kind of channel: x000 local, x100
     // entertainment, x200 news, x300 sports, x400 movies, x500 kids. The number
     // decides; a channel outside the plan falls back to its name.
@@ -116,6 +117,7 @@
         { key: 'all', label: 'All' },
         { key: 'us', label: 'USA' },
         { key: 'uk', label: 'UK' },
+        { key: 'ca', label: 'Canada' },
         { key: 'fr', label: 'France' },
         { key: 'other', label: 'Other' }
     ];
@@ -130,6 +132,7 @@
     const countryOf = (ch) => {
         const n = numberOf(ch);
         if (n >= 7000 && n < 8000) return 'other'; // world news
+        if (n >= 2000 && n < 3000) return 'ca';
         const name = String(ch.Name || '');
         if (/\((UK|IE)\)/i.test(name)) return 'uk';
         if (/\(FR\)/i.test(name)) return 'fr';
@@ -148,7 +151,7 @@
         const base = name.replace(/\s*\((UK|IE|FR)\)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
         const cats = new Set(['all']);
         const block = blockOf(ch);
-        // a UK or French x000 channel (BBC One, TF1) is broadcast TV, not "Local"
+        // a UK, Canadian or French x000 channel (BBC One, CBC, TF1) is broadcast TV, not "Local"
         if (block && !(block === 'local' && countryOf(ch) !== 'us')) cats.add(block);
         else if (block === 'local') cats.add('ent');
         else if (RULES.news.test(base)) cats.add('news');
