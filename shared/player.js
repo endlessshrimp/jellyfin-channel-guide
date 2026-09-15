@@ -17,9 +17,13 @@
  * Back"). On a phone or tablet, live TV stops after the page has been hidden
  * for a few minutes.
  *
+ * A screen that opens on top of another rather than being one (the TV guide)
+ * starts a video with setBackAction(fn): Back from full screen docks the video
+ * into the screen underneath and then runs fn, which puts that screen back up.
+ *
  * window.HomerPlayer = { route, docked, nowPlaying, onChange, go, leave, back,
- *                        goHome, watch, fullscreen, stop, isHomerHash, isHomeHash,
- *                        destroy, version }
+ *                        goHome, watch, fullscreen, stop, setBackAction,
+ *                        isHomerHash, isHomeHash, destroy, version }
  */
 (() => {
     const VERSION = '0.3.0';
@@ -113,6 +117,7 @@
     let pendingFullscreen = false; // Full screen pressed while still tuning
     let playItemId = null; // what watch() asked Jellyfin to play
     let tuneHref = ''; // the address when watch() started tuning
+    let backAction = null; // { fn, at, seen }: what Back from full screen reopens (the TV guide)
 
     const listeners = new Set();
     const emit = () => listeners.forEach((fn) => {
@@ -137,6 +142,20 @@
         const s = trail.filter(isHomerHash).slice(-12);
         if (!s.length || !isHomeHash(s[0])) s.unshift(HOME);
         return s;
+    };
+    // Back from full screen: into the screen it came from, and a guide it was
+    // tuned from back up on top of that screen
+    const dockBack = () => {
+        const then = backAction && backAction.fn;
+        backAction = null;
+        if (!dock(backStack())) return false;
+        if (then) {
+            try { then(); } catch (err) { console.error('[HOMER Player]', err); }
+        }
+        return true;
+    };
+    const setBackAction = (fn) => {
+        backAction = typeof fn === 'function' ? { fn, at: Date.now(), seen: isVideoRoute() } : null;
     };
 
     // ---------- Pinning the real video over a preview window ----------
@@ -346,6 +365,7 @@
     // the video ended or was stopped somewhere we didn't ask: stay on the screen
     // you're looking at, for real this time
     const endDock = () => {
+        backAction = null;
         if (!docked) return;
         const top = stack[stack.length - 1];
         docked = false;
@@ -367,6 +387,7 @@
     // Home's Watch: play in the preview window of the screen you're on
     const watch = (itemId, info) => {
         if (!getServer()) return;
+        backAction = null;
         if (!docked) {
             stack = [isHomerHash(location.hash) ? location.hash : HOME];
             docked = true;
@@ -386,6 +407,7 @@
     const fullscreen = () => {
         if (!docked) return;
         if (!isVideoRoute()) { pendingFullscreen = true; return; } // still tuning
+        backAction = null; // Back returns to the screen it was docked in
         lastStack = stack.slice();
         docked = false;
         stack = [];
@@ -397,6 +419,7 @@
     const stop = () => {
         const top = route();
         const wasDocked = docked;
+        backAction = null;
         docked = false;
         stack = [];
         lastStack = null;
@@ -412,6 +435,7 @@
     // Go to a Jellyfin page while docked: leaving the player stops the video
     // (Jellyfin does that itself; a channel that's still tuning needs cancelling)
     const leave = (hash) => {
+        backAction = null;
         if (!docked) { location.hash = hash; return; }
         if (!sawPlayer) cancelTuning(playItemId);
         docked = false;
@@ -454,7 +478,7 @@
             emit();
             return;
         }
-        if (isVideoRoute() && playerBox()) { dock([HOME]); return; }
+        if (isVideoRoute() && playerBox()) { backAction = null; dock([HOME]); return; }
         closeGuide();
         if (isHomeHash(location.hash)) {
             if (window.HomerHome && window.HomerHome.open) window.HomerHome.open();
@@ -527,7 +551,7 @@
             if (canGoBack()) back();
             else stop();
         } else if (playerBox() && !overlayOpen()) {
-            dock(backStack());
+            dockBack();
         }
     };
 
@@ -592,6 +616,10 @@
         checkCancel();
         const href = location.href;
         const video = isVideoRoute();
+        if (backAction) {
+            if (video) backAction.seen = true;
+            else if (backAction.seen || Date.now() - backAction.at > 60000) backAction = null; // over, or never started
+        }
         if (href !== lastHref) {
             lastHref = href;
             recordTrail(location.hash || HOME);
@@ -665,7 +693,7 @@
         if (BACK_KEYS.includes(k) && !docked && isVideoRoute() && !overlayOpen() && !typing && !dialogOpen() && playerBox()) {
             ev.preventDefault();
             ev.stopImmediatePropagation();
-            dock(backStack());
+            dockBack();
         }
     };
     // bubble phase, registered before Jellyfin's player page adds its own: while
@@ -695,7 +723,7 @@
         if (!docked && isVideoRoute() && !overlayOpen() && ev.target.closest && ev.target.closest('.headerBackButton') && playerBox()) {
             ev.preventDefault();
             ev.stopImmediatePropagation();
-            dock(backStack());
+            dockBack();
             return;
         }
         if (docked && !document.getElementById('cg-root')) {
@@ -784,6 +812,7 @@
         watch,
         fullscreen,
         stop,
+        setBackAction,
         isHomerHash,
         isStockOk,
         isHomeHash,
@@ -800,6 +829,7 @@
             document.removeEventListener('visibilitychange', onVisibility);
             clearTimeout(idleTimer);
             clearTimeout(dropTimer);
+            backAction = null;
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             clearPin(playerBox());
             style.remove();

@@ -184,6 +184,7 @@
     let guide = null; // the open guide (its TV or its phone layout), or null
     let model = null; // the open guide's data; a change of layout keeps it
     let nowWatching = null; // channel last started from the guide
+    let reopenState = null; // where the TV guide was when it tuned a channel, for Back
     let openedFromTab = false; // opened in place of Jellyfin's Live TV → Guide tab
     let tabSuppressed = false; // closed from that tab; don't reopen until it's left
     const LIVETV_HOME = '#/home'; // Jellyfin's Live TV pages don't show under HOMER
@@ -232,7 +233,9 @@
         } else {
             forget();
             model = M().create(server);
+            if (!phoneLayout() && reopenState) state = reopenState;
         }
+        reopenState = null;
         guide = draw(server, state);
         const g = guide;
         ensureCss().then(() => g.show());
@@ -774,8 +777,16 @@
             nowWatching = cur.row.ch;
             // watching from the guide is always full screen, even if Home had the
             // channel playing in its preview window
+            const here = self.state();
             if (window.HomerPlayer && window.HomerPlayer.docked()) window.HomerPlayer.fullscreen();
             close({ returnToLiveTv: false });
+            // Back from full screen brings the guide back up, where it was
+            if (window.HomerPlayer && window.HomerPlayer.setBackAction) {
+                window.HomerPlayer.setBackAction(() => {
+                    reopenState = here;
+                    open();
+                });
+            }
             M().playChannel(cur.row.ch).catch((err) => console.error('[Channel Guide] Playback failed:', err));
         };
 
@@ -1201,6 +1212,9 @@
             searchInput.select();
         };
 
+        // Keys the guide takes stop here: a screen under it that registered its
+        // keys after the guide opened (one drawn as Back docks a video) must
+        // not act on them too.
         const onKey = (ev) => {
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             const k = ev.key;
@@ -1209,52 +1223,52 @@
             if (ev.target === searchInput) {
                 if (k === 'Escape') {
                     ev.preventDefault();
-                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
                     if (searchInput.value) clearFilter();
                     else searchInput.blur();
                 } else if (k === 'Enter' || k === 'ArrowDown' || k === 'Tab') {
                     ev.preventDefault();
-                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
                     searchInput.blur();
                 } else {
-                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
                 }
                 return;
             }
             if (k === '[' || k === ']') {
                 ev.preventDefault();
-                ev.stopPropagation();
+                ev.stopImmediatePropagation();
                 cycleCategory(k === ']' ? 1 : -1);
                 return;
             }
             if (k === 'c' || k === 'C') {
                 ev.preventDefault();
-                ev.stopPropagation();
+                ev.stopImmediatePropagation();
                 cycleCountry();
                 return;
             }
             if (/^[1-9]$/.test(k) && CATEGORIES[+k - 1]) {
                 ev.preventDefault();
-                ev.stopPropagation();
+                ev.stopImmediatePropagation();
                 setCategory(CATEGORIES[+k - 1].key);
                 return;
             }
             if (k === '/') {
                 ev.preventDefault();
-                ev.stopPropagation();
+                ev.stopImmediatePropagation();
                 focusSearch();
                 return;
             }
             if ((k === 'Escape' || k === 'Backspace' || k === 'GoBack' || k === 'BrowserBack') && query) {
                 ev.preventDefault();
-                ev.stopPropagation();
+                ev.stopImmediatePropagation();
                 clearFilter();
                 return;
             }
             const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G', 'n', 'N'];
             if (!handled.includes(k)) return;
             ev.preventDefault();
-            ev.stopPropagation();
+            ev.stopImmediatePropagation();
             if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R' || k === 'n' || k === 'N')) return;
             if (!rows.length && !['Escape', 'Backspace', 'GoBack', 'BrowserBack', 'g', 'G'].includes(k)) return;
             touched = true;
