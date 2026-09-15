@@ -713,8 +713,9 @@
     // any case): a place for things that aren't in use.
     const HIDDEN_ROOMS = ['unused'];
 
-    // house(): the rooms as HOMER shows them, each with its lights,
-    // thermostats, cameras and scenes (only rooms with any of those), then
+    // house(): the rooms as HOMER shows them, each with its lights, cameras
+    // and scenes (only rooms with any of those; the thermostats are the
+    // house's, in house.climates), then
     // "Other" for what has no room. Floors order the rooms when there are any.
     const house = () => {
         if (built) return built;
@@ -739,7 +740,7 @@
             const room = rooms.get(placeOf.get(id)) || other;
             room[kind].push(id);
         }
-        const list = [...rooms.values(), other].filter((r) => r.lights.length + r.climates.length + r.cameras.length + r.scenes.length > 0);
+        let list = [...rooms.values(), other].filter((r) => r.lights.length + r.climates.length + r.cameras.length + r.scenes.length > 0);
         for (const r of list) {
             const nm = (id) => nameOf(id, r.name);
             // light groups (a room's "all lights") first, then by name
@@ -749,9 +750,19 @@
             r.cameras.sort((a, b) => nm(a).localeCompare(nm(b)));
             r.climates.sort((a, b) => nm(a).localeCompare(nm(b)));
         }
+        // Thermostats are the house's, not a room's: they move to house.climates
+        // (Rooms' own Climate item). A room keeps them only for its temperature.
+        const climates = [];
+        for (const r of list) {
+            climates.push(...r.climates);
+            r.climateTemp = r.climates;
+            r.climates = [];
+        }
+        climates.sort((a, b) => nameOf(a, '').localeCompare(nameOf(b, '')));
+        list = list.filter((r) => r.lights.length + r.cameras.length + r.scenes.length > 0);
         list.sort((a, b) => a.level - b.level || (a.id === '_other' ? 1 : b.id === '_other' ? -1 : byName(a, b)));
         const cameras = list.flatMap((r) => r.cameras);
-        built = { name: houseName, version: haVersion, user: userName, url: address(), unit: tempUnit, rooms: list, cameras, doorbells: doorbells.slice() };
+        built = { name: houseName, version: haVersion, user: userName, url: address(), unit: tempUnit, rooms: list, cameras, climates, doorbells: doorbells.slice() };
         return built;
     };
     // registries don't change often; the states do, so the house is rebuilt

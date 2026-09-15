@@ -49,6 +49,7 @@
     const BIG_STILL_MS = 1000; // the camera view's still, until (or instead of) live video
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
     const CAMERAS = '__cameras'; // the Cameras item's id
+    const CLIMATE = '__climate'; // the Climate item's id (the house's thermostats)
     const MEMORY_KEY = 'homer-rooms-last'; // the room you were last in, per device
 
     // ---------- Jellyfin session (only to know someone is signed in) ----------
@@ -144,6 +145,7 @@
     ];
     const roomIcon = (room) => {
         if (room.id === CAMERAS) return 'videocam';
+        if (room.id === CLIMATE) return 'thermostat';
         const hit = ROOM_ICONS.find(([re]) => re.test(room.name));
         return hit ? hit[1] : 'meeting_room';
     };
@@ -162,7 +164,7 @@
             const s = h.entity(room.temperature);
             if (s && isFinite(parseFloat(s.state))) return parseFloat(s.state);
         }
-        for (const id of room.climates) {
+        for (const id of [...room.climates, ...(room.climateTemp || [])]) {
             const s = h.entity(id);
             if (s && s.attributes.current_temperature != null) return s.attributes.current_temperature;
         }
@@ -174,6 +176,8 @@
         const parts = [];
         if (room.id === CAMERAS) {
             parts.push(`${room.cameras.length} camera${room.cameras.length === 1 ? '' : 's'}`);
+        } else if (room.id === CLIMATE) {
+            parts.push(room.climates.length === 1 ? climateLine(climateInfo(room.climates[0], room)) : `${room.climates.length} thermostats`);
         } else if (room.lights.length) {
             // bulbs, not the groups they're in (unless groups are all there is)
             const single = room.lights.filter((id) => { const s = h.entity(id); return !(s && (Array.isArray(s.attributes.entity_id) || s.attributes.is_hue_group)); });
@@ -324,19 +328,24 @@
 
     // Where Rooms opens when you haven't been in one yet: the living room
     // (or the family room, the den), else the first room
-    const firstRoom = (list) => (list.find((r) => r.id !== CAMERAS && /living|family|den|lounge/i.test(r.name))
-        || list.find((r) => r.id !== CAMERAS) || list[0] || null);
+    const special = (r) => r.id === CAMERAS || r.id === CLIMATE;
+    const firstRoom = (list) => (list.find((r) => !special(r) && /living|family|den|lounge/i.test(r.name))
+        || list.find((r) => !special(r)) || list[0] || null);
 
-    // The Cameras item, then the rooms (with Other last)
+    // The Cameras and Climate items, then the rooms (with Other last)
     const roomList = () => {
         const h = HA();
         if (!h || h.status() !== 'ready') return [];
         const house = h.house();
         const list = house.rooms.slice();
+        const top = [];
         if (house.cameras.length) {
-            list.unshift({ id: CAMERAS, name: 'Cameras', floor: '', temperature: null, lights: [], climates: [], scenes: [], cameras: house.cameras.slice() });
+            top.push({ id: CAMERAS, name: 'Cameras', floor: '', temperature: null, lights: [], climates: [], scenes: [], cameras: house.cameras.slice() });
         }
-        return list;
+        if ((house.climates || []).length) {
+            top.push({ id: CLIMATE, name: 'Climate', floor: '', temperature: null, lights: [], climates: house.climates.slice(), scenes: [], cameras: [] });
+        }
+        return top.concat(list);
     };
 
     // What the screen says while there's nothing to show: { title, text, ok }
@@ -1118,7 +1127,7 @@
     // draws it (and registers it with the layout once it has loaded).
     const phoneLayout = () => !!(window.HomerLayout && window.HomerRoomsPhone && window.HomerLayout.usePhone('rooms'));
     const PHONE_CTX = {
-        CAMERAS, roomList, firstRoom, roomIcon, roomSummary, lightInfo, lightText, climateInfo, climateLine, deg, MODE_LABELS, MODE_ICONS,
+        CAMERAS, CLIMATE, roomList, firstRoom, roomIcon, roomSummary, lightInfo, lightText, climateInfo, climateLine, deg, MODE_LABELS, MODE_ICONS,
         doorbellFor, agoText, ringText, noRings, lastRingText, keepStill, statusMessage, esc, icon, clamp, remember, recalled,
         goHome, goBack, goSettings, docked,
     };

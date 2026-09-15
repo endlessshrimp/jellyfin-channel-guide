@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.17
+
+- Rooms: the thermostat is the house's, not a room's. It has its own
+  **Climate** item under Cameras at the top of the list (a chip on a phone),
+  showing the temperature and humidity inside, the set point with − / + and
+  the modes; the rooms show only their lights, scenes and cameras (a room
+  still shows the temperature in its summary). The quick controls over a
+  video keep the thermostat at the bottom.
+
 ## v0.3.16
 
 - Rooms leaves out a Home Assistant room named "Unused" and what's in it.

@@ -130,7 +130,7 @@
     const thermostats = () => {
         const h = HA();
         if (!h || h.status() !== 'ready') return [];
-        return h.house().rooms.flatMap((r) => r.climates.map((id) => ({ id, room: r }))).slice(0, 2);
+        return (h.house().climates || []).map((id) => ({ id, room: null })).slice(0, 2);
     };
 
     const rowsFor = (r) => {
