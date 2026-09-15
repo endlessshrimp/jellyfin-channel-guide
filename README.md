@@ -25,7 +25,10 @@ Movies, TV Shows, show and movie pages) has a preview window, and the video
 sits in it, still playing, as you go from screen to screen.
 
 - **Back** from full screen (the player's ← button, **Esc** or **Backspace**)
-  shrinks the video into the screen you came from, and it keeps playing there.
+  shrinks the video into the screen you came from, and it keeps playing there:
+  the show or movie page you pressed Play on, or the guide you tuned the
+  channel from (back where you were in it, with the screen you opened it over
+  underneath).
 - **Full screen**, **F**, or a click on the preview window takes it back to
   full screen. **Play** on something else also goes full screen.
 - **H** or the player's **Home** button takes the video to Home's preview.
