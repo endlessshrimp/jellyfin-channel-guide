@@ -11,7 +11,10 @@
  * for its colors), its cameras, its outlets, its players (play, skip, a
  * volume bar, the inputs), its fans and its automations. A tap on a camera
  * opens it full width, live when the camera streams, with ‹ › for the others
- * and, for a doorbell, the last day's rings. Nothing nests deeper than that.
+ * and, for a doorbell, the last day's rings. An Apple TV or a Samsung TV has
+ * a Remote button: a round pad (the arrows around OK) and Back, Home,
+ * Play/Pause and the volume under it, a light buzz on each press. Nothing
+ * nests deeper than that.
  *
  * A video playing in a preview window docks at the top (HomerPlayer pins it
  * there); a tap on it goes full screen, ✕ stops it.
@@ -21,6 +24,8 @@
 (() => {
     const VERSION = '0.2.0';
     const BIG_STILL_MS = 1000;
+    const REPEAT_WAIT_MS = 450; // a finger held on an arrow or the volume: repeats after this,
+    const REPEAT_MS = 170; // then about 6 presses a second
 
     const el = (tag, cls, html) => {
         const e = document.createElement(tag);
@@ -37,6 +42,7 @@
         let rooms = [];
         let roomId = (from && from.room) || ctx.recalled() || '';
         let wantCamera = (from && from.camera) || null;
+        let wantRemote = (from && from.remote) || null;
         let stills = [];
         let alive = true;
         let builtSig = '';
@@ -78,6 +84,22 @@
                     <div class="op-cam-rings"></div>
                 </div>
                 <div class="op-picker"><div class="op-picker-sheet" role="dialog" aria-label="Color"></div></div>
+                <div class="op-rmview">
+                    <div class="op-cam-top">
+                        <button type="button" class="op-cam-close op-rm-close" aria-label="Back">${icon('arrow_back')}</button>
+                        <div class="op-art op-rm-art">${icon('tv', 'op-art-icon')}<img alt="" draggable="false"></div>
+                        <div class="op-cam-title"><div class="op-cam-name op-rm-name"></div><div class="op-rm-line"></div></div>
+                    </div>
+                    <div class="op-rm-body">
+                        <div class="op-rm-pad">
+                            ${['up', 'right', 'down', 'left'].map((k) => `<button type="button" class="op-rm-dir ${k}" data-rk="${k}" aria-label="${ctx.REMOTE_KEYS[k].label}">${icon(ctx.REMOTE_KEYS[k].icon)}</button>`).join('')}
+                            <button type="button" class="op-rm-ok" data-rk="select">OK</button>
+                        </div>
+                        <div class="op-rm-keys">
+                            ${['menu', 'home', 'play_pause', 'volume_down', 'volume_up'].map((k) => `<button type="button" class="op-rm-key" data-rk="${k}"><span class="op-rm-key-btn">${icon(ctx.REMOTE_KEYS[k].icon)}</span><span class="op-rm-key-label"></span></button>`).join('')}
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="op-toast" role="status" aria-live="polite"></div>`;
         document.body.appendChild(root);
@@ -150,7 +172,7 @@
         }).join('');
         const mediaCard = (id, r) => {
             const M = ctx.mediaInfo(id, r);
-            const buttons = ctx.mediaButtons(M).filter((b) => b !== 'power');
+            const buttons = ctx.mediaButtons(M).filter((b) => b !== 'power' && b !== 'remote');
             const power = M.canOn || M.canOff;
             return `
                 <div class="op-media" data-media="${esc(id)}">
@@ -163,6 +185,7 @@
                         ${buttons.map((b) => `<button type="button" class="op-mb" data-b="${b}" aria-label="${esc(ctx.MEDIA_BUTTONS[b].label)}">${icon(ctx.MEDIA_BUTTONS[b].icon)}</button>`).join('')}
                         ${M.canVolume ? '<div class="op-bar op-vol"><i></i></div><span class="op-vol-v"></span>' : ''}
                     </div>` : ''}
+                    ${M.remote ? `<button type="button" class="op-remote-btn" data-remote="${esc(id)}">${icon('settings_remote')}<span>Remote</span></button>` : ''}
                     ${M.sources.length ? `<div class="op-choice"><div class="op-choice-label">Input</div><div class="op-choice-chips op-sources">${M.sources.map((s) => `<button type="button" class="op-mode op-src" data-v="${esc(s)}"><span>${esc(s)}</span></button>`).join('')}</div></div>` : ''}
                     ${M.unavailable ? '' : extrasHtml(id)}
                 </div>`;
@@ -366,6 +389,7 @@
                 ring.textContent = ctx.lastRingText(ring.closest('.op-camtile').dataset.cam);
             });
             if (pick) paintPicker();
+            if (rmId) paintRemote();
         };
 
         const choose = (id) => {
@@ -436,6 +460,90 @@
                 HA().setColor(pick.id, { hs: [pick.hue, 100] });
             }
         };
+
+        // ---------- A player's remote ----------
+        // A round pad (the arrows around OK), and a row of Back, Home,
+        // Play/Pause, Vol− and Vol+. A press goes at once (on the finger
+        // down, not the lift), lights its button and buzzes lightly; a finger
+        // held on an arrow or the volume repeats.
+        const rmView = $('.op-rmview');
+        let rmId = null;
+        const rmInfo = () => (rmId ? ctx.mediaInfo(rmId, room()) : null);
+        const paintRemote = () => {
+            const M = rmInfo();
+            if (!M) return;
+            if (!M.remote) { closeRemote(); return; }
+            $('.op-rm-name').textContent = M.name;
+            $('.op-rm-line').textContent = [M.stateText, ctx.remoteNowLine(M)].filter(Boolean).join(' · ');
+            rmView.classList.toggle('playing', M.playing);
+            const art = $('.op-rm-art');
+            const img = art.querySelector('img');
+            if (img.dataset.src !== M.art) {
+                img.dataset.src = M.art;
+                art.classList.remove('has-art');
+                if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
+            }
+            rmView.querySelectorAll('.op-rm-key').forEach((b) => {
+                b.querySelector('.material-icons').textContent = ctx.remoteKeyIcon(M, b.dataset.rk);
+                b.querySelector('.op-rm-key-label').textContent = { volume_down: 'Vol −', volume_up: 'Vol +', play_pause: M.playing ? 'Pause' : 'Play' }[b.dataset.rk] || ctx.remoteKeyLabel(M, b.dataset.rk);
+                b.setAttribute('aria-label', ctx.remoteKeyLabel(M, b.dataset.rk));
+            });
+        };
+        const openRemote = (id) => {
+            if (!HA() || !HA().remoteFor(id)) return;
+            closePicker();
+            rmId = id;
+            rmView.classList.add('show');
+            root.classList.add('op-cam-open');
+            paintRemote();
+        };
+        const closeRemote = () => {
+            stopRepeat();
+            rmId = null;
+            rmView.classList.remove('show');
+            if (!cam) root.classList.remove('op-cam-open');
+        };
+        const lit = new Map();
+        const flash = (key) => {
+            const n = rmView.querySelector(`[data-rk="${key}"]`);
+            if (!n) return;
+            n.classList.add('hit');
+            clearTimeout(lit.get(key));
+            lit.set(key, setTimeout(() => n.classList.remove('hit'), 200));
+        };
+        let failedAt = 0;
+        const press = (key, repeat) => {
+            if (!rmId) return;
+            flash(key);
+            try { if (navigator.vibrate) navigator.vibrate(10); } catch { /* no buzz here */ }
+            HA().sendRemote(rmId, key, { repeat: !!repeat }).catch(() => {
+                if (Date.now() - failedAt < 3000) return;
+                failedAt = Date.now();
+                const M = rmInfo();
+                toast(`The ${M ? ctx.remoteName(M) : 'TV'} didn't answer`, 'err');
+            });
+        };
+        const REPEATS = ['up', 'down', 'left', 'right', 'volume_up', 'volume_down'];
+        let held = null; // { wait, every }
+        const stopRepeat = () => {
+            if (!held) return;
+            clearTimeout(held.wait);
+            clearInterval(held.every);
+            held = null;
+        };
+        const onRemoteDown = (ev) => {
+            const b = ev.target.closest('[data-rk]');
+            if (!b || !rmView.contains(b)) return;
+            ev.preventDefault(); // no text selection, no double-tap zoom
+            stopRepeat();
+            const key = b.dataset.rk;
+            press(key);
+            if (REPEATS.includes(key)) {
+                held = { wait: setTimeout(() => { held.every = setInterval(() => press(key, true), REPEAT_MS); }, REPEAT_WAIT_MS) };
+            }
+        };
+        rmView.addEventListener('pointerdown', onRemoteDown);
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => rmView.addEventListener(t, stopRepeat));
 
         // ---------- A camera, full width ----------
         const camView = $('.op-camview');
@@ -512,6 +620,8 @@
                 else if (h) h.reconnect();
                 return;
             }
+            if (t.closest('.op-rm-close')) { closeRemote(); return; }
+            if (rmView.contains(t)) return; // the remote's keys go on the finger down (onRemoteDown)
             if (t.closest('.op-cam-close')) { closeCamera(); return; }
             if (t.closest('.op-cam-step')) { stepCamera(t.closest('.op-cam-step').classList.contains('prev') ? -1 : 1); return; }
             if (!h || h.status() !== 'ready') return;
@@ -543,6 +653,8 @@
             }
             const r = room();
             // a player's buttons, inputs and settings
+            const rb = t.closest('.op-remote-btn');
+            if (rb) { openRemote(rb.dataset.remote); return; }
             const card = t.closest('.op-media');
             if (card) {
                 const M = ctx.mediaInfo(card.dataset.media, r);
@@ -660,6 +772,7 @@
             ev.preventDefault();
             ev.stopPropagation();
             if (pick) closePicker();
+            else if (rmId) closeRemote();
             else if (cam) closeCamera();
             else ctx.goBack();
         };
@@ -732,7 +845,19 @@
                 wantCamera = null;
                 if (HA().house().cameras.includes(id)) openCamera(id);
             }
+            if (wantRemote && rooms.length) {
+                const id = wantRemote;
+                wantRemote = null;
+                remoteFromRoute(id);
+            }
         };
+        // #/rooms?remote=… (the quick panel's Remote): its room, and its remote
+        function remoteFromRoute(id) {
+            const r = rooms.find((x) => x.id !== ctx.CAMERAS && x.id !== ctx.CLIMATE && x.media.includes(id));
+            if (!r) return;
+            choose(r.id);
+            openRemote(id);
+        }
         const offHA = HA() ? HA().onChange(sync) : () => {};
         sync();
 
@@ -743,13 +868,16 @@
                 revealChip(); // measured again now the stylesheet is in
             },
             sync: syncDock,
-            state: () => ({ room: room() ? room().id : null, camera: cam }),
+            state: () => ({ room: room() ? room().id : null, camera: cam, remote: rmId }),
             openCamera: (id) => { if (rooms.length) openCamera(id); else wantCamera = id; },
+            openRemote: (id) => { if (rooms.length) remoteFromRoute(id); else wantRemote = id; },
             teardown() {
                 alive = false;
                 offHA();
                 stopStills();
                 stopCam();
+                stopRepeat();
+                lit.forEach((t) => clearTimeout(t));
                 clearTimeout(toastTimer);
                 clearInterval(dockTimer);
                 offPlayer();
