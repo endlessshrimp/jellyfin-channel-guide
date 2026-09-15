@@ -277,6 +277,23 @@
     color: var(--dim);
 }
 
+/* a narrow card (a 1600-wide screen): smaller logos and the teams'
+   abbreviations, so nothing's cut off */
+.hb-sports .sp-match { container: match / inline-size; }
+.hb-sports .sp-match-team .ab { display: none; }
+
+@container match (max-width: 480px) {
+    .hb-sports .sp-match-team .nm { display: none; }
+    .hb-sports .sp-match-team .ab { display: inline; }
+    .hb-sports .sp-match-logo,
+    .hb-sports .sp-match-logo img { width: 84px; height: 84px; max-width: 84px; max-height: 84px; }
+    .hb-sports .sp-match-center { min-width: 0; }
+    .hb-sports .sp-match-time { font-size: 40px; }
+    .hb-sports .sp-match-score { font-size: 54px; }
+    .hb-sports .sp-match-standing { display: none; }
+    .hb-sports .sp-match-tv.on .net { display: none; } /* the channel number says it */
+}
+
 /* ---------- Tables ---------- */
 
 /* a Premier League row's zone (Champions League, Europa, the drop): a stripe at the left */
@@ -312,3 +329,6 @@
 .hb-phone.hb-sports .sp-match-last small { font-size: 12px; }
 .hb-phone.hb-sports .sp-match-tv { font-size: 12px; padding: 2px 7px; }
 .hb-phone.hb-sports .sp-match-tv .material-icons { font-size: 14px; }
+/* (a phone's card has room for the names at its size) */
+.hb-phone.hb-sports .sp-match-team .nm { display: inline; }
+.hb-phone.hb-sports .sp-match-team .ab { display: none; }

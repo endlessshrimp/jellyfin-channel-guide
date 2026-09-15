@@ -130,7 +130,7 @@
                 if (live) liveAny = true;
                 const shown = games.slice(0, limit);
                 const nlive = games.filter((g) => g.state === 'in').length;
-                setNote(s, [nlive ? `${nlive} live` : '', note || (games.length ? `${games.length} games` : '')].filter(Boolean).join(' · '));
+                setNote(s, [nlive ? `${nlive} live` : '', note || (games.length ? `${games.length} game${games.length === 1 ? '' : 's'}` : '')].filter(Boolean).join(' · '));
                 const k = sig(shown);
                 if (k === last) return;
                 last = k;
@@ -251,7 +251,7 @@
             const side = (t) => `
                 <div class="sp-match-team${t.fav ? ' mine' : ''}">
                     <span class="sp-match-logo">${ui.img(t.logo, '', t.abbr, t.logoFb)}</span>
-                    <b>${t.rank ? `<small>${t.rank}</small>` : ''}${esc(t.short || t.abbr)}</b>
+                    <b>${t.rank ? `<small>${t.rank}</small>` : ''}<span class="nm">${esc(t.short || t.abbr)}</span><span class="ab">${esc(t.abbr || t.short)}</span></b>
                 </div>`;
             let mid;
             if (g.state === 'pre') {
@@ -264,7 +264,7 @@
                        <div class="sp-match-status ${g.state}">${g.state === 'in' ? '<i></i>' : ''}${esc(g.status)}</div>`;
             }
             const tv = g.channel
-                ? `<span class="sp-match-tv on">${ui.icon('live_tv')}${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
+                ? `<span class="sp-match-tv on">${ui.icon('live_tv')}<span class="net">${esc(g.network || g.channel.name)}</span> <b>${esc(g.channel.number)}</b></span>`
                 : g.network ? `<span class="sp-match-tv">${esc(g.network)}</span>` : '';
             // under it: the last result (when the card shows the next game)
             let lastLine = '';
