@@ -18,6 +18,9 @@
  * Jellyfin's stream in an <audio> element, so the resume position lands in
  * Jellyfin as you listen. Leaving Books pauses the book.
  *
+ * #/books?id=<Jellyfin item id> opens that book's page (for links from
+ * Search and elsewhere).
+ *
  * Remote/keyboard: arrows move, OK selects, Esc/Backspace goes back a view
  * (then back a screen), H goes Home. Play/Pause (or P) pauses and resumes
  * anywhere on the screen; the media keys skip.
@@ -295,11 +298,15 @@
             }
             const col = e.closest('.bk-scroll-y');
             if (col) {
-                const top = e.offsetTop - col.offsetTop;
+                // in stage pixels (the stage is scaled): a shelf's whole row, or the tile
+                const unit = e.closest('.bk-row') || e;
+                const k = stage.getBoundingClientRect().height / 1080 || 1;
+                const top = (unit.getBoundingClientRect().top - col.getBoundingClientRect().top) / k + col.scrollTop;
+                const h = unit.offsetHeight;
                 const pad = 16;
                 if (top - pad < col.scrollTop) col.scrollTo({ top: Math.max(0, top - pad), behavior: instant ? 'auto' : 'smooth' });
-                else if (top + e.offsetHeight + pad > col.scrollTop + col.clientHeight) {
-                    col.scrollTo({ top: top + e.offsetHeight + pad - col.clientHeight, behavior: instant ? 'auto' : 'smooth' });
+                else if (top + h + pad > col.scrollTop + col.clientHeight) {
+                    col.scrollTo({ top: top + h + pad - col.clientHeight, behavior: instant ? 'auto' : 'smooth' });
                 }
             }
         };
@@ -404,7 +411,7 @@
                 </section>
                 <section class="bk-shelf">
                     <div class="bk-shelf-head"><span class="bk-shelf-title">Your shelf</span><span class="bk-shelf-count"></span></div>
-                    <div class="bk-shelf-rows"></div>
+                    <div class="bk-shelf-rows bk-scroll-y"></div>
                 </section>`;
             drawShelfRows();
             drawHero();
@@ -612,7 +619,11 @@
             });
             // the chapter you're in, in view (a row above it showing)
             const here = box.querySelector('.bk-ch.here');
-            if (here) box.scrollTop = Math.max(0, here.offsetTop - box.offsetTop - here.offsetHeight - 24);
+            if (here) {
+                const k = stage.getBoundingClientRect().height / 1080 || 1;
+                const top = (here.getBoundingClientRect().top - box.getBoundingClientRect().top) / k;
+                box.scrollTop = Math.max(0, top - here.offsetHeight - 24);
+            }
         };
 
         // ============ Listening ============
@@ -788,6 +799,14 @@
                 return;
             }
             setState(null);
+            // #/books?id=…: that book's page, once it's in the list
+            if (openId && M().book(openId)) {
+                bookId = heroId = openId;
+                openId = null;
+                viewFrom = ['shelf'];
+                view = 'book';
+                remembered.book = 'a:main';
+            }
             if (view === 'book' && !M().book(bookId)) view = 'shelf';
             const k = focused ? keyOf(focused) : null;
             if (view === 'shelf') { drawShelf(); }
@@ -828,9 +847,30 @@
             updateLegend();
         };
 
+        // ----- idle: a book playing on a TV for hours ----- after two minutes
+        // without a key, the top bar and legend dim and Listening drifts a few
+        // pixels a minute, so nothing sits still on the screen
+        let lastInput = Date.now();
+        const IDLE_MS = 120000;
+        const idleTimer = setInterval(() => {
+            const idle = view === 'listen' && player().state().playing && Date.now() - lastInput > IDLE_MS;
+            root.classList.toggle('bk-idle', idle);
+            const lv = viewEl('listen');
+            if (idle) lv.style.transform = `translate(${Math.round(Math.random() * 40 - 20)}px, ${Math.round(Math.random() * 30 - 15)}px)`;
+            else if (lv.style.transform) lv.style.transform = '';
+        }, 60000);
+        const wake = () => {
+            lastInput = Date.now();
+            if (root.classList.contains('bk-idle')) {
+                root.classList.remove('bk-idle');
+                viewEl('listen').style.transform = '';
+            }
+        };
+
         // ----- input -----
         const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
         const onKey = (ev) => {
+            wake();
             if (document.getElementById('cg-root')) return; // the guide is on top
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
@@ -890,6 +930,7 @@
             }
         };
         const onMouse = (ev) => {
+            wake();
             const f = ev.target.closest && ev.target.closest('.bk-focusable');
             if (f && f !== focused && root.contains(f) && !window.HomerLayout?.isTouch?.()) setFocus(f);
         };
@@ -915,7 +956,8 @@
         stage.addEventListener('load', onImgLoad, true);
         stage.addEventListener('mouseover', onMouse);
 
-        // open on the book you're listening to, if any
+        // open on the book you're listening to, if any (or the one the address names)
+        let openId = (/[?&]id=([^&]+)/.exec(currentRoute()) || [])[1] || null;
         const startView = () => {
             const s = player().state();
             view = 'shelf';
@@ -941,6 +983,7 @@
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
+                clearInterval(idleTimer);
                 clearTimeout(toastTimer);
                 wxDetach();
                 root.remove();

@@ -569,7 +569,7 @@
 
 .bk-row {
     position: relative;
-    height: 282px;
+    height: 290px; /* the shelf's room: one row at a time when there are several */
 }
 
 .bk-row-label {
@@ -875,6 +875,14 @@
 }
 
 /* ============ Listening ============ */
+
+.bk-listen-view { transition: transform 8s ease-in-out; }
+
+/* idle (books.js): the chrome dims while a book plays untouched */
+.bk-topbar,
+.bk-legend { transition: opacity 1.2s ease; }
+.bk-idle .bk-topbar,
+.bk-idle .bk-legend { opacity: 0.3; }
 
 .bk-listen-view.on {
     display: flex;
