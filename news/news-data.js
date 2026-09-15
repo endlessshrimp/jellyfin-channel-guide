@@ -104,7 +104,7 @@
         { id: 'nyt-biz', section: 'business', name: 'NYT', url: NYT('Business'), weight: 0.5 },
         { id: 'cnbc', section: 'business', name: 'CNBC', url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114' },
         { id: 'ft', section: 'business', name: 'FT', url: 'https://www.ft.com/rss/home', weight: 0.5 },
-        { id: 'bbc-biz', section: 'business', name: 'BBC', url: BBC('business') },
+        { id: 'bbc-biz', section: 'business', name: 'BBC', url: BBC('business'), weight: -1 }, // UK-centric
         { id: 'npr-biz', section: 'business', name: 'NPR', url: NPR(1006) },
         { id: 'cbs-money', section: 'business', name: 'CBS News', url: 'https://www.cbsnews.com/latest/rss/moneywatch' },
         { id: 'wapo-biz', section: 'business', name: 'WaPo', url: 'https://feeds.washingtonpost.com/rss/business' },

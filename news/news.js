@@ -474,7 +474,16 @@
                 pageMs: 6500,
                 refreshMs: 0, // pushed as the news comes in (pushTicker)
                 priorityLabel: 'Breaking',
+                stepLabel: 'Headlines',
+                okLabel: 'Read',
                 empty: 'Getting the headlines…',
+            },
+            // Back with a story open closes the story (the reader's own key
+            // listener normally gets there first)
+            onBack() {
+                if (!reader) return false;
+                closeReader();
+                return true;
             },
             onOpen(api) {
                 hub = api;
