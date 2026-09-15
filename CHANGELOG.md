@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.1
+
+- News has a phone layout: the sections in a row you swipe, a **Watch CNN**
+  button (CNN never starts on its own), the lead story, then one row per
+  story. Tapping a story opens it with a button to read the article in a new
+  tab. The headline ticker stays as a slim strip.
+- News' Local section leaves out national stories already in Top or US.
+
 ## v0.4.0
 
 - **Sports** (Home → Sports, `#/sports`): ESPN plays in the TV window, every
