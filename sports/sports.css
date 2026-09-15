@@ -287,3 +287,28 @@
 
 .hb-sports .sp-grid { gap: 16px; }
 .hb-sports .sp-two { gap: 16px; }
+
+/* ---------- Phone ---------- */
+
+.hb-phone.hb-sports .sp-match { height: 196px; padding: 10px 12px; border-radius: 14px; }
+.hb-phone.hb-sports .sp-match-top { height: 26px; gap: 8px; }
+.hb-phone.hb-sports .sp-fav { font-size: 12px; padding: 2px 7px; }
+.hb-phone.hb-sports .sp-match-kind,
+.hb-phone.hb-sports .sp-match-standing { font-size: 12px; }
+.hb-phone.hb-sports .sp-match-logo,
+.hb-phone.hb-sports .sp-match-logo img { width: 60px; height: 60px; max-width: 60px; max-height: 60px; }
+.hb-phone.hb-sports .sp-match-team b { font-size: 16px; }
+.hb-phone.hb-sports .sp-match-team b small { font-size: 12px; }
+.hb-phone.hb-sports .sp-match-center { min-width: 96px; }
+.hb-phone.hb-sports .sp-match-day { font-size: 13px; }
+.hb-phone.hb-sports .sp-match-time { font-size: 28px; }
+.hb-phone.hb-sports .sp-match-score { font-size: 38px; gap: 6px; }
+.hb-phone.hb-sports .sp-match-score i { font-size: 24px; }
+.hb-phone.hb-sports .sp-match-status,
+.hb-phone.hb-sports .sp-match-at { font-size: 12px; }
+.hb-phone.hb-sports .sp-match-foot { height: 28px; gap: 8px; }
+.hb-phone.hb-sports .sp-match-last { font-size: 13px; }
+.hb-phone.hb-sports .sp-match-last b { width: 20px; height: 20px; font-size: 12px; }
+.hb-phone.hb-sports .sp-match-last small { font-size: 12px; }
+.hb-phone.hb-sports .sp-match-tv { font-size: 12px; padding: 2px 7px; }
+.hb-phone.hb-sports .sp-match-tv .material-icons { font-size: 14px; }

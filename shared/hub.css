@@ -1154,3 +1154,197 @@ img.hb-broken { visibility: hidden; }
 }
 
 .hb-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Phone (shared/layout.js): a column between HOMER's bars ----------
+   hub.js marks the root .hb-phone and doesn't scale the stage. Top to
+   bottom: the video strip (only while something plays; the real video is
+   pinned over .hb-tv, and ✕ sits under it, clear of it), the tabs (Channels
+   last), the content scrolling by finger, and a slimmer ticker. */
+
+.hb-root.hb-phone { background: var(--homer-bg0, #02050a); }
+
+.hb-phone .hb-stage {
+    position: absolute;
+    inset: 0;
+    left: 0;
+    top: 0;
+    width: auto !important;
+    height: auto;
+    transform: none !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.hb-phone .hb-stage::after { display: none; }
+
+.hb-phone .hb-topbar,
+.hb-phone .hb-legend { display: none; }
+
+.hb-phone .hb-left {
+    position: static;
+    flex: none;
+    width: auto;
+    display: block;
+}
+
+.hb-phone:not(.hb-docked) .hb-left { display: none; }
+.hb-phone .hb-left .hb-guide { display: none; }
+
+.hb-phone .hb-tv {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.hb-phone .hb-tv.hb-focus { box-shadow: none; }
+
+.hb-phone .hb-now {
+    height: 44px;
+    margin: 0;
+    padding: 0 4px 0 14px;
+    gap: 8px;
+    font-size: 15px;
+    background: #061126;
+    border-bottom: 1px solid var(--line);
+}
+
+.hb-phone .hb-now-live { font-size: 11px; padding: 3px 7px; }
+.hb-phone .hb-now-left { font-size: 13px; }
+.hb-phone .hb-now-bar { width: 40px; height: 4px; }
+
+.hb-now-stop {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: none;
+    color: var(--dim);
+    cursor: pointer;
+}
+
+.hb-phone .hb-main {
+    position: static;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.hb-phone .hb-tabs {
+    height: 50px;
+    gap: 2px;
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: #061126;
+    border-bottom: 1px solid var(--line);
+}
+
+.hb-phone .hb-tabs::-webkit-scrollbar { display: none; }
+
+.hb-phone .hb-tab {
+    flex: none;
+    height: 36px;
+    padding: 0 12px;
+    font-size: 15px;
+    border-radius: 18px;
+}
+
+.hb-phone .hb-tab.on { background: rgba(47, 140, 255, 0.2); }
+.hb-phone .hb-tab.on::after { display: none; }
+.hb-phone .hb-tab.hb-focus { box-shadow: none; }
+
+.hb-phone .hb-panel {
+    margin: 0;
+    padding: 14px 12px 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hb-phone .hb-panel-in { gap: 20px; }
+
+/* one card a row */
+.hb-phone .hb-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 10px; }
+.hb-phone .hb-rail { overflow-x: auto; }
+
+.hb-phone .hb-sec-head { margin-bottom: 8px; }
+.hb-phone .hb-sec-head h2 { font-size: 14px; }
+.hb-phone .hb-sec-note { font-size: 13px; }
+.hb-phone .hb-empty { padding: 16px; }
+.hb-phone .hb-empty b { font-size: 16px; }
+.hb-phone .hb-empty span { font-size: 14px; }
+
+/* no remote here: no highlight growing out of place */
+.hb-phone .hb-focus { transform: none !important; box-shadow: 0 0 0 1px var(--line-strong) !important; }
+
+.hb-phone .hb-score { padding: 8px 12px; }
+.hb-phone .hb-score-top { height: 22px; font-size: 13px; margin-bottom: 2px; }
+.hb-phone .hb-score-ch .material-icons { font-size: 14px; }
+.hb-phone .hb-score-team { height: 34px; gap: 8px; }
+.hb-phone .hb-score-logo,
+.hb-phone .hb-score-logo img { width: 26px; height: 26px; max-width: 26px; max-height: 26px; }
+.hb-phone .hb-score-name { font-size: 17px; }
+.hb-phone .hb-score-rec { font-size: 13px; }
+.hb-phone .hb-score-rank { font-size: 13px; }
+.hb-phone .hb-score-pts { font-size: 24px; }
+.hb-phone .hb-score-note { font-size: 13px; }
+
+.hb-phone .hb-story.wide { flex-direction: column; }
+.hb-phone .hb-story.wide .hb-story-pic { width: auto; aspect-ratio: 16 / 9; }
+.hb-phone .hb-story-text { padding: 10px 12px 12px; gap: 4px; }
+.hb-phone .hb-story-title,
+.hb-phone .hb-story.wide .hb-story-title { font-size: 17px; }
+.hb-phone .hb-story-sum { font-size: 14px; }
+.hb-phone .hb-story-meta { font-size: 13px; }
+.hb-phone .hb-story-tag { font-size: 12px; left: 8px; top: 8px; }
+
+.hb-phone .hb-table { padding: 6px 8px; }
+.hb-phone .hb-table-title { font-size: 14px; padding-bottom: 4px; }
+.hb-phone .hb-table-title small { font-size: 12px; }
+.hb-phone .hb-th { font-size: 11px; padding: 0 5px 4px; }
+.hb-phone .hb-td,
+.hb-phone .hb-table.dense .hb-td { height: 32px; font-size: 15px; padding: 0 5px; }
+.hb-phone .hb-td.team { gap: 8px; }
+.hb-phone .hb-td-logo,
+.hb-phone .hb-td-logo img { width: 20px; height: 20px; max-width: 20px; max-height: 20px; }
+
+/* the guide, in its Channels tab */
+.hb-phone .hb-panel .hb-guide { display: flex; margin: 0; background: none; box-shadow: none; }
+.hb-phone .hb-guide-head { height: 34px; padding: 0 4px; font-size: 13px; }
+.hb-phone .hb-guide-head small { font-size: 12px; }
+.hb-phone .hb-guide-list { padding: 0; overflow: visible; }
+.hb-phone .hb-guide-group { height: 28px; padding: 8px 4px 0; font-size: 12px; }
+.hb-phone .hb-row { height: 58px; gap: 10px; padding: 0 4px 4px; }
+.hb-phone .hb-row.hb-focus { background: none; }
+.hb-phone .hb-row-logo { width: 60px; height: 36px; }
+.hb-phone .hb-row-logo img { max-width: 50px; max-height: 26px; }
+.hb-phone .hb-row-num { width: 38px; font-size: 14px; }
+.hb-phone .hb-row-title { font-size: 16px; }
+.hb-phone .hb-row-next { font-size: 13px; }
+.hb-phone .hb-row-bar { left: 74px; right: 4px; bottom: 4px; }
+.hb-phone .hb-row.hb-focus .hb-row-num,
+.hb-phone .hb-row.hb-focus .hb-row-next { color: var(--dim); }
+
+/* the ticker, slimmer */
+.hb-phone .hb-ticker { position: static; flex: none; --tk-h: 44px; height: 44px; }
+.hb-phone .hb-tk-label { width: 86px; padding-left: 12px; }
+.hb-phone .hb-tk-label-in { left: 12px; right: 18px; gap: 6px; }
+.hb-phone .hb-tk-label-in img { width: 22px; height: 22px; }
+.hb-phone .hb-tk-label-in b { font-size: 14px; }
+.hb-phone .hb-tk-label-in small { display: none; }
+.hb-phone .hb-tk-view { margin: 0 10px 0 12px; }
+.hb-phone .hb-tk-page { gap: 26px; }
+.hb-phone .hb-tk-game { gap: 8px; }
+.hb-phone .hb-tk-team { font-size: 16px; gap: 5px; }
+.hb-phone .hb-tk-logo { width: 20px; height: 20px; }
+.hb-phone .hb-tk-num { font-size: 17px; min-width: 0; }
+.hb-phone .hb-tk-status { font-size: 12px; }
+.hb-phone .hb-tk-net { font-size: 12px; padding: 2px 5px; }
+.hb-phone .hb-tk-text { font-size: 15px; }
+.hb-phone .hb-tk-tag { font-size: 12px; margin-right: 8px; }
+.hb-phone .hb-tk-at { font-size: 13px; }
+.hb-phone .hb-tk-paused { display: none !important; }
+
+.hb-phone .hb-toast { top: 12px; font-size: 15px; max-width: 90%; white-space: normal; }

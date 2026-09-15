@@ -23,6 +23,9 @@
  *   window; F goes full screen.
  * - Tabs switch the content area; each tab's render(ctx) fills it.
  * - The ticker (shared/ticker.js) runs along the bottom.
+ * - On a phone: a column between HOMER's bars (the video strip on top while
+ *   something plays, with ✕; the tabs, with Channels last for the guide; the
+ *   content, scrolled by finger; a slimmer ticker). No default channel.
  * - Keys: arrows move (spatially, like Home), OK selects, [ ] / Page Up/Down
  *   switch tabs (1–9 too), F full screen, Esc/Backspace back, H Home. The
  *   ticker pauses while it has the focus (◀▶ step through it).
@@ -139,6 +142,7 @@
         if (p && typeof p.fullscreen === 'function') p.fullscreen();
     };
     const isVideoRoute = () => /^#\/video/.test(location.hash);
+    const isPhone = () => !!(window.HomerLayout && window.HomerLayout.isPhone());
 
     // ---------- Small helpers ----------
 
@@ -163,13 +167,13 @@
     const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
     const fmt = {
         time: (d) => new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        // "Today", "Tomorrow", "Yesterday", "Wed", or "Sat, Sep 19" (a week or more away)
+        // "Today", "Tomorrow", "Yesterday", "Wed", or "Sat, Sep 19" (a weekday within a week either way, else the date)
         day(d) {
             const days = Math.round((startOfDay(d) - startOfDay(Date.now())) / 86400000);
             if (days === 0) return 'Today';
             if (days === 1) return 'Tomorrow';
             if (days === -1) return 'Yesterday';
-            if (days > 1 && days < 7) return new Date(d).toLocaleDateString([], { weekday: 'short' });
+            if (Math.abs(days) > 1 && Math.abs(days) < 7) return new Date(d).toLocaleDateString([], { weekday: 'short' });
             return new Date(d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
         },
         // "7:05 PM" today, "Tonight 7:05 PM" after 5, "Wed 7:05 PM", "Sat, Sep 19 · 2:30 PM"
@@ -535,7 +539,11 @@
     // ---------- A hub's screen ----------
 
     const createScreen = (def) => {
-        const root = el('div', `homer-screen hb-root hb-${def.id}`);
+        // On a phone (shared/layout.js) the same screen is a column between
+        // HOMER's bars: the video strip on top while something plays, the tabs
+        // (plus Channels, the guide), the tab's content scrolling, the ticker.
+        const phone = isPhone();
+        const root = el('div', `homer-screen hb-root hb-${def.id}${phone ? ' hb-phone' : ''}`);
         root.id = `hb-${def.id}-root`;
         root.style.visibility = 'hidden'; // until the stylesheets are in
         root.style.zIndex = Z;
@@ -572,6 +580,7 @@
 
         // ----- fit: 1080 tall, as wide as the window allows (min 1600) -----
         const fit = () => {
+            if (phone) { stage.style.width = ''; stage.style.transform = ''; return; }
             const box = window.HomerLayout ? window.HomerLayout.stageBox() : { width: window.innerWidth, height: window.innerHeight };
             let s = box.height / 1080;
             let w = box.width / s;
@@ -740,6 +749,7 @@
             } else {
                 html = '<span class="hb-now-hint">Pick a channel below and press OK to watch it here</span>';
             }
+            if (phone && d) html += `<button type="button" class="hb-now-stop" aria-label="Stop">${icon('close')}</button>`;
             if (nowEl.innerHTML !== html) nowEl.innerHTML = html;
             tvEl.dataset.okLabel = d ? 'Full screen' : ch ? 'Full screen' : defaultCh ? `Watch ${defaultCh.Name}` : 'Watch';
         };
@@ -896,7 +906,16 @@
         const tabsEl = $('.hb-tabs');
         const panel = $('.hb-panel');
         const panelIn = $('.hb-panel-in');
-        const tabs = def.tabs || [];
+        const guideBox = $('.hb-guide');
+        // on a phone the guide is a tab of its own, at the end
+        const tabs = (def.tabs || []).concat(phone && def.guide !== false ? [{
+            key: '__channels',
+            label: 'Channels',
+            render(ctx) {
+                ctx.panel.appendChild(guideBox);
+                return () => $('.hb-left').appendChild(guideBox);
+            }
+        }] : []);
         let tabIndex = -1;
         let tabCleanup = [];
         let tabTimer = 0;
@@ -961,6 +980,7 @@
             tabCleanup = [];
             tabIndex = k;
             tabEls.forEach((b, i) => b.classList.toggle('on', i === k));
+            if (tabs[k]) lastTabs.set(def.id, tabs[k].key);
             panelIn.innerHTML = '';
             panel.scrollTop = 0;
             const t = tabs[k];
@@ -1052,6 +1072,7 @@
         };
         const onWheel = (ev) => {
             if (document.getElementById('cg-root')) return;
+            if (phone) { if (root.contains(ev.target)) ev.stopImmediatePropagation(); return; } // native scrolling
             // scroll the box under the pointer ourselves; nothing reaches the page underneath
             ev.preventDefault();
             ev.stopImmediatePropagation();
@@ -1062,6 +1083,7 @@
         };
         const onClick = (ev) => {
             if (ev.target.closest('.hb-brand')) { goHome(); return; }
+            if (ev.target.closest('.hb-now-stop')) { const p = HP(); if (p && p.stop) p.stop(); return; }
             const leg = ev.target.closest('.hb-legend [data-action]');
             if (leg) {
                 const a = leg.dataset.action;
@@ -1079,6 +1101,7 @@
             }
         };
         const onMouse = (ev) => {
+            if (phone) return;
             const f = ev.target.closest && ev.target.closest('.hb-focusable');
             if (f && stage.contains(f) && f !== focused && f !== tickerEl) setFocus(f, { scroll: false, hover: true });
         };
@@ -1150,14 +1173,16 @@
             if (defaultCh) watch(defaultCh);
         };
 
-        showTab(0);
-        setFocus(tabEls[0] || tvEl, { scroll: false });
+        const startTab = Math.max(0, tabs.findIndex((t) => t.key === lastTabs.get(def.id)));
+        showTab(startTab);
+        setFocus(tabEls[startTab] || tvEl, { scroll: false });
         paintTv();
         updateLegend();
         if (def.onOpen) safe(() => def.onOpen(api_));
 
         return {
             def,
+            phone,
             api: api_,
             show() { root.style.visibility = ''; fit(); },
             sync() {
@@ -1190,6 +1215,7 @@
     // ---------- Routes: each hub claims its own ----------
 
     const defs = new Map(); // id -> def
+    const lastTabs = new Map(); // hub id -> the tab it was on (a change of layout keeps it)
     let screen = null; // the open hub's screen
     let suppressed = null; // a hub closed with close(): stays out of the way until the route changes
     let destroyed = false;
@@ -1256,7 +1282,13 @@
 
     // A hub's screen while the phone layout is up: the TV layout, shrunk
     // between the bars (stageBox), until a hub brings its own.
-    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(() => { if (screen) window.dispatchEvent(new Event('resize')); }) : () => {};
+    // A phone and a TV draw it differently: a change (a rotation across the
+    // line, a resized window) draws it again, on the same tab.
+    const offLayout = window.HomerLayout ? window.HomerLayout.onChange(() => {
+        if (!screen) return;
+        if (screen.phone !== isPhone()) { closeScreen(); onRouteChange(); }
+        else window.dispatchEvent(new Event('resize'));
+    }) : () => {};
 
     const HomerHub = {
         version: VERSION,
