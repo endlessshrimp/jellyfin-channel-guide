@@ -5,7 +5,8 @@
  * HOMER's own page at #/rooms (Home's Rooms item goes there once Home
  * Assistant is connected in Settings; Jellyfin has nothing at that address).
  * #/rooms?camera=camera.front_door opens straight onto a camera (the
- * doorbell's picture-in-picture does that). The connection, the rooms and the
+ * doorbell's picture-in-picture does that), #/rooms?remote=media_player.x
+ * onto a player's remote (the quick panel's Remote). The connection, the rooms and the
  * controls are shared/homeassistant.js.
  *
  *   Rooms list   Cameras (every camera), then each room with what's on and
@@ -17,6 +18,10 @@
  *                with a dozen lights doesn't bury them
  *   A camera     large and live, with the other cameras beside it (◀▶ or
  *                ▲▼ switches); for a doorbell, the last day's rings
+ *   A remote     an Apple TV's or a Samsung TV's (Remote on its card):
+ *                HOMER's keys go to the device (arrows, OK, Back, Space,
+ *                + and −) and light up the on-screen remote; H, or Back
+ *                held down, comes out of it
  *
  * Remote/keyboard: ▲▼ move, OK/▶ opens a room, Esc/Backspace goes back a
  * step (camera → room → rooms list → the previous screen), H goes Home.
@@ -24,7 +29,7 @@
  * On a phone (shared/layout.js) Rooms draws rooms/rooms-phone.js instead,
  * from the same helpers (PHONE_CTX).
  *
- * window.HomerRooms = { open, openCamera, close, destroy, version }
+ * window.HomerRooms = { open, openCamera, openRemote, close, destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -51,6 +56,8 @@
     const CAMERAS = '__cameras'; // the Cameras item's id
     const CLIMATE = '__climate'; // the Climate item's id (the house's thermostats)
     const MEMORY_KEY = 'homer-rooms-last'; // the room you were last in, per device
+    const HOLD_BACK_MS = 600; // Back held this long comes out of the remote
+    const REPEAT_MS = 170; // a held arrow or volume key: at most ~6 presses a second
 
     // ---------- Jellyfin session (only to know someone is signed in) ----------
 
@@ -412,7 +419,9 @@
             canNext: active && canT('next'),
             canOn: off && can('turnOn'),
             canOff: active && can('turnOff'),
-            group: others.length ? `With ${others.join(', ')}` : ''
+            group: others.length ? `With ${others.join(', ')}` : '',
+            // an Apple TV's or a Samsung TV's remote: { id, platform } or null
+            remote: !unavailable && h.remoteFor ? h.remoteFor(id) : null
         };
     };
     // the players a room shows as cards: a group once, under the player
@@ -423,16 +432,19 @@
     });
     // a card's buttons, from what the player can do
     const MEDIA_BUTTONS = {
+        remote: { icon: 'settings_remote', label: 'Remote' },
         prev: { icon: 'skip_previous', label: 'Previous' },
         play: { icon: 'play_arrow', label: 'Play' },
         next: { icon: 'skip_next', label: 'Next' },
         mute: { icon: 'volume_off', label: 'Mute' },
         power: { icon: 'power_settings_new', label: 'Turn off' }
     };
+    // (Remote first: it's the one an Apple TV is for)
     const mediaButtons = (M) => {
         if (M.unavailable) return [];
-        if (M.off) return M.canOn ? ['power'] : [];
-        return [M.canPrev && 'prev', M.canPlay && 'play', M.canNext && 'next', M.canMute && 'mute', M.canOff && 'power'].filter(Boolean);
+        const remote = M.remote ? ['remote'] : [];
+        if (M.off) return remote.concat(M.canOn ? ['power'] : []);
+        return remote.concat([M.canPrev && 'prev', M.canPlay && 'play', M.canNext && 'next', M.canMute && 'mute', M.canOff && 'power'].filter(Boolean));
     };
     const mediaButtonLabel = (M, key) => (key === 'play' ? (M.playing ? 'Pause' : 'Play') : key === 'mute' ? (M.muted ? 'Unmute' : 'Mute') : key === 'power' ? (M.off ? 'Turn on' : 'Turn off') : MEDIA_BUTTONS[key].label);
     const mediaButtonIcon = (M, key) => (key === 'play' ? (M.playing ? 'pause' : 'play_arrow') : key === 'mute' ? (M.muted ? 'volume_off' : 'volume_up') : MEDIA_BUTTONS[key].icon);
@@ -446,12 +458,41 @@
     };
     const mediaButton = (M, key) => {
         const h = HA();
+        if (key === 'remote') return Promise.resolve(); // each layout opens its own remote
         if (key === 'prev') return h.mediaCommand(M.target, 'media_previous_track');
         if (key === 'next') return h.mediaCommand(M.target, 'media_next_track');
         if (key === 'play') return h.playPause(M.target);
         if (key === 'mute') return h.mute(M.id);
         return h.power(M.id);
     };
+
+    // ---------- A player's remote (both layouts) ----------
+    // The remote's keys, as HomerHA.sendRemote names them: what each is
+    // called on screen and its icon. An Apple TV's Home is its TV button.
+    const REMOTE_KEYS = {
+        up: { label: 'Up', icon: 'keyboard_arrow_up' },
+        down: { label: 'Down', icon: 'keyboard_arrow_down' },
+        left: { label: 'Left', icon: 'keyboard_arrow_left' },
+        right: { label: 'Right', icon: 'keyboard_arrow_right' },
+        select: { label: 'OK', icon: '' },
+        menu: { label: 'Back', icon: 'arrow_back' },
+        home: { label: 'Home', icon: 'home' },
+        play_pause: { label: 'Play / Pause', icon: 'play_arrow' },
+        volume_down: { label: 'Volume down', icon: 'volume_down' },
+        volume_up: { label: 'Volume up', icon: 'volume_up' }
+    };
+    const remoteKeyLabel = (M, key) => (key === 'home' && M.remote && M.remote.platform === 'apple_tv' ? 'TV / Home' : REMOTE_KEYS[key].label);
+    const remoteKeyIcon = (M, key) => (key === 'home' && M.remote && M.remote.platform === 'apple_tv' ? 'tv' : key === 'play_pause' ? (M.playing ? 'pause' : 'play_arrow') : REMOTE_KEYS[key].icon);
+    // what the remote is controlling, for "Your remote is controlling the
+    // Apple TV": the player's name when it says what it is ("Apple TV",
+    // "Bedroom TV"), else what it is (an Apple TV named "Bedroom")
+    const REMOTE_KIND = { apple_tv: 'Apple TV', samsungtv: 'Samsung TV' };
+    const remoteName = (M) => {
+        const kind = (M.remote && REMOTE_KIND[M.remote.platform]) || 'TV';
+        return /\btv\b|apple/i.test(M.name) ? M.name : kind;
+    };
+    // what's on it: the title, and the show or the app
+    const remoteNowLine = (M) => [M.title, M.artist].filter(Boolean).join(' · ');
 
     // A fan (the purifier): { id, name, on, pct (null: no speeds), step,
     // presets, preset, unavailable }
@@ -729,6 +770,27 @@
                     <div class="ho-cam-list"></div>
                 </div>
             </div>
+            <div class="ho-rm">
+                <div class="ho-rm-info">
+                    <div class="ho-rm-art"><img alt="" draggable="false">${icon('tv', 'ho-rm-art-icon')}</div>
+                    <div class="ho-rm-kind"></div>
+                    <div class="ho-rm-name"></div>
+                    <div class="ho-rm-state"></div>
+                    <div class="ho-rm-title"></div>
+                    <div class="ho-rm-vol">${icon('volume_up', 'ho-rm-vol-icon')}<div class="ho-bar"><i></i></div><span class="ho-rm-vol-v"></span></div>
+                    <div class="ho-rm-preview">${icon('live_tv')}</div>
+                </div>
+                <div class="ho-rm-pad">
+                    <div class="ho-rm-ring">
+                        ${['up', 'right', 'down', 'left'].map((k) => `<div class="ho-rm-dir ${k}" data-rk="${k}" role="button" aria-label="${k}">${icon(REMOTE_KEYS[k].icon)}</div>`).join('')}
+                        <div class="ho-rm-ok" data-rk="select" role="button">OK</div>
+                    </div>
+                </div>
+                <div class="ho-rm-keys">
+                    ${[['menu', 'ESC'], ['home', 'T'], ['play_pause', 'SPACE'], ['volume_up', '+'], ['volume_down', '−']].map(([k, cap]) => `
+                        <div class="ho-rm-key" data-rk="${k}" role="button">${icon(REMOTE_KEYS[k].icon, 'ho-rm-key-icon')}<span class="ho-rm-key-label"></span><span class="ho-key">${cap}</span></div>`).join('')}
+                </div>
+            </div>
             <div class="ho-legend"></div>`;
         document.body.appendChild(root);
         const $ = (s) => stage.querySelector(s);
@@ -781,6 +843,8 @@
         let stills = []; // stop() for each still being refreshed
         let bigStill = () => {};
         let live = null; // { stop } for the camera view's video
+        let remoteId = null; // the remote view's player
+        let remoteFrom = 'room'; // where H goes from the remote view
         let alive = true;
 
         const room = () => rooms[sel] || null;
@@ -1115,6 +1179,7 @@
                 }
             });
             if (picker) paintPicker();
+            if (zone === 'remote') paintRemote();
         };
 
         const revealRow = () => {
@@ -1344,6 +1409,133 @@
             openCamera(list[(i + d + list.length) % list.length], camFrom);
         };
 
+        // ----- a player's remote -----
+        // The player's picture and what's on at the left, the remote itself
+        // (a ring of arrows around OK) and its keys at the right. HOMER's
+        // keys go to the device, each lighting its part of the remote. H, or
+        // Back held down, comes out.
+        const rmEl = $('.ho-rm');
+        const remoteInfo = () => (remoteId ? mediaInfo(remoteId, room()) : null);
+        const paintRemote = () => {
+            const M = remoteInfo();
+            if (!M) return;
+            if (!M.remote) { closeRemote(); return; }
+            const h = HA();
+            const d = h.device(M.id);
+            const r = room();
+            $('.ho-rm-kind').textContent = [d && d.model, r && r.id !== '_other' ? r.name : ''].filter(Boolean).join(' · ');
+            $('.ho-rm-name').textContent = M.name;
+            $('.ho-rm-state').textContent = [M.stateText, M.source && !M.title ? M.source : ''].filter(Boolean).join(' · ');
+            $('.ho-rm-title').textContent = remoteNowLine(M);
+            rmEl.classList.toggle('playing', M.playing);
+            rmEl.classList.toggle('has-vol', M.canVolume);
+            $('.ho-rm-vol .ho-bar i').style.width = (M.canVolume ? M.volume : 0) + '%';
+            $('.ho-rm-vol-v').textContent = M.canVolume ? (M.muted ? 'Muted' : M.volume + '%') : '';
+            $('.ho-rm-art-icon').textContent = M.icon === 'tv' || M.remote ? 'tv' : 'speaker';
+            const art = $('.ho-rm-art');
+            const img = art.querySelector('img');
+            if (img.dataset.src !== M.art) {
+                img.dataset.src = M.art;
+                art.classList.remove('has-art');
+                if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
+            }
+            rmEl.querySelectorAll('.ho-rm-key').forEach((n) => {
+                n.querySelector('.ho-rm-key-icon').textContent = remoteKeyIcon(M, n.dataset.rk);
+                n.querySelector('.ho-rm-key-label').textContent = remoteKeyLabel(M, n.dataset.rk);
+            });
+        };
+        const openRemote = (id, fromZone) => {
+            const h = HA();
+            if (!h || !h.remoteFor(id)) return;
+            if (picker) closePicker();
+            remoteId = id;
+            remoteFrom = fromZone || (zone === 'remote' ? remoteFrom : zone);
+            setZone('remote');
+            paintRemote();
+        };
+        let backHeld = null; // { timer }: Back is down; let go soon and it's the device's Back
+        const cancelBack = () => {
+            if (!backHeld) return;
+            clearTimeout(backHeld.timer);
+            backHeld = null;
+            rmEl.querySelectorAll('.holding').forEach((n) => n.classList.remove('holding'));
+        };
+        const closeRemote = () => {
+            cancelBack();
+            if (!remoteId) return;
+            remoteId = null;
+            setZone(remoteFrom === 'room' && rows.length ? 'room' : 'list');
+        };
+        // a press lights its part of the remote; a held key keeps it lit
+        const lit = new Map(); // key -> timer
+        const flash = (key) => {
+            const parts = rmEl.querySelectorAll(`[data-rk="${key}"]`);
+            parts.forEach((n) => { n.classList.remove('hit'); void n.offsetWidth; n.classList.add('hit'); });
+            clearTimeout(lit.get(key));
+            lit.set(key, setTimeout(() => parts.forEach((n) => n.classList.remove('hit')), 220));
+        };
+        let failedAt = 0;
+        const remoteFailed = () => {
+            if (Date.now() - failedAt < 3000) return;
+            failedAt = Date.now();
+            const M = remoteInfo();
+            toast(`The ${M ? remoteName(M) : 'TV'} didn't answer. Try again.`, 'err');
+        };
+        const sentAt = {}; // key -> when it was last sent
+        const press = (key, repeat) => {
+            if (!remoteId) return;
+            flash(key);
+            sentAt[key] = Date.now();
+            HA().sendRemote(remoteId, key, { repeat: !!repeat }).catch(remoteFailed);
+        };
+        // HOMER's keys → the remote's
+        const REMOTE_BY_KEY = {
+            ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'select',
+            ' ': 'play_pause', MediaPlayPause: 'play_pause', MediaPlay: 'play_pause', MediaPause: 'play_pause',
+            '+': 'volume_up', '=': 'volume_up', PageUp: 'volume_up', AudioVolumeUp: 'volume_up',
+            '-': 'volume_down', '_': 'volume_down', '−': 'volume_down', PageDown: 'volume_down', AudioVolumeDown: 'volume_down',
+            t: 'home', T: 'home', Home: 'home',
+            MediaTrackNext: 'skip_forward', MediaFastForward: 'skip_forward', MediaTrackPrevious: 'skip_backward', MediaRewind: 'skip_backward'
+        };
+        const REPEATS = ['up', 'down', 'left', 'right', 'volume_up', 'volume_down'];
+        const remoteKeyDown = (ev) => {
+            const k = ev.key;
+            if (k === 'h' || k === 'H') { eat(ev); if (!ev.repeat) closeRemote(); return; }
+            if (BACK_KEYS.includes(k)) {
+                // a tap is the device's Back (sent when it's let go); held, it
+                // comes out of the remote
+                eat(ev);
+                if (ev.repeat || backHeld) return;
+                const back = rmEl.querySelector('[data-rk="menu"]');
+                back.classList.add('holding');
+                backHeld = { key: k, timer: setTimeout(() => { backHeld = null; back.classList.remove('holding'); closeRemote(); }, HOLD_BACK_MS) };
+                return;
+            }
+            const key = REMOTE_BY_KEY[k];
+            if (!key) return; // F (full screen), G (the guide), L (the quick panel) and the rest pass through
+            eat(ev);
+            if (ev.repeat) {
+                if (!REPEATS.includes(key)) return;
+                if (Date.now() - (sentAt[key] || 0) < REPEAT_MS) return;
+            }
+            press(key, ev.repeat);
+        };
+        const remoteKeyUp = (ev) => {
+            if (backHeld && BACK_KEYS.includes(ev.key)) {
+                cancelBack();
+                press('menu');
+            }
+        };
+        // keyups too (Jellyfin's player acts on some), and Back let go
+        const onKeyUp = (ev) => {
+            if (zone !== 'remote') return;
+            if (document.getElementById('cg-root') || document.querySelector('.hq-panel.show')) return;
+            if (!BACK_KEYS.includes(ev.key) && !REMOTE_BY_KEY[ev.key] && ev.key !== 'h' && ev.key !== 'H') return;
+            eat(ev);
+            remoteKeyUp(ev);
+        };
+        const onBlur = () => cancelBack(); // Back held while the window lost focus: nothing
+
         // ----- legend -----
         // what the focused row does: ◀▶ adjusts or picks, OK switches or runs
         const rowLegend = (row, items) => {
@@ -1396,6 +1588,12 @@
             } else if (!msg && zone === 'camera') {
                 if (camList().length > 1) items.push({ key: '◀▶', label: 'Next camera' });
                 items.push({ key: 'ESC', label: 'Back', action: 'back' });
+            } else if (!msg && zone === 'remote' && remoteInfo()) {
+                // the one thing to know: where the keys go, and the way out
+                const html = `<span class="ho-rm-legend">${icon('settings_remote')}<span>Your remote is controlling the ${esc(remoteName(remoteInfo()))} · Hold <span class="ho-key">Back</span>or press <span class="ho-key" data-action="exit">H</span>to exit</span></span>`;
+                const leg = $('.ho-legend');
+                if (leg.dataset.html !== html) { leg.dataset.html = html; leg.innerHTML = html; }
+                return;
             }
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' });
@@ -1412,6 +1610,11 @@
             stage.classList.toggle('ho-zone-list', z === 'list');
             stage.classList.toggle('ho-zone-room', z === 'room');
             stage.classList.toggle('ho-zone-camera', z === 'camera');
+            stage.classList.toggle('ho-zone-remote', z === 'remote');
+            // a docked video moves into the remote view (HomerPlayer pins it
+            // over whichever window has the attribute)
+            $('.ho-preview').toggleAttribute('data-homer-preview', z !== 'remote');
+            $('.ho-rm-preview').toggleAttribute('data-homer-preview', z === 'remote');
             paintRoom();
             updateLegend();
             if (z === 'room') revealRow();
@@ -1450,7 +1653,8 @@
                 if (M.off && M.canOn) h.power(row.id).catch(failed);
                 else if (M.canPlay) h.playPause(M.target).catch(failed);
             } else if (row.kind === 'mbtns') {
-                mediaButton(mediaInfo(row.id, r), row.ids[k]).catch(failed);
+                if (row.ids[k] === 'remote') openRemote(row.id, 'room');
+                else mediaButton(mediaInfo(row.id, r), row.ids[k]).catch(failed);
             } else if (row.kind === 'sources') {
                 h.setSource(row.id, row.ids[k]).catch(failed);
             } else if (row.kind === 'presets') {
@@ -1544,6 +1748,7 @@
             if (document.querySelector('.hq-panel.show')) return; // the quick panel has them
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
+            if (zone === 'remote' && !statusMessage()) { remoteKeyDown(ev); return; }
             const k = ev.key;
             if (k === 'h' || k === 'H') {
                 eat(ev);
@@ -1561,6 +1766,7 @@
                 eat(ev);
                 if (ev.repeat) return;
                 if (zone === 'camera') closeCamera();
+                else if (zone === 'remote') closeRemote();
                 else if (zone === 'room') setZone('list');
                 else goBack();
                 return;
@@ -1617,6 +1823,7 @@
             if (leg) {
                 const a = leg.dataset.action;
                 if (a === 'home') goHome();
+                else if (a === 'exit') closeRemote();
                 else if (a === 'fullscreen') fullscreen();
                 else if (a === 'back') onKey({ key: 'Escape', preventDefault() {}, stopPropagation() {}, target: document.body });
                 else if (a === 'ok') onKey({ key: 'Enter', preventDefault() {}, stopPropagation() {}, target: document.body });
@@ -1640,6 +1847,12 @@
                     paintPicker();
                 }
                 updateLegend();
+                return;
+            }
+            // the remote view: a click is that key
+            if (zone === 'remote') {
+                const rk = t.closest('[data-rk]');
+                if (rk) press(rk.dataset.rk);
                 return;
             }
             const pick = t.closest('.ho-cam-pick');
@@ -1681,6 +1894,8 @@
         };
 
         window.addEventListener('keydown', onKey, true);
+        window.addEventListener('keyup', onKeyUp, true);
+        window.addEventListener('blur', onBlur);
         window.addEventListener('wheel', onWheel, { capture: true, passive: false });
         window.addEventListener('resize', fit);
         stage.addEventListener('click', onClick);
@@ -1721,9 +1936,20 @@
                 const w = wanted;
                 wanted = null;
                 if (w.camera && camList().includes(w.camera)) openCamera(w.camera, 'list');
+                else if (w.remote) remoteFromRoute(w.remote);
             }
             if (!rooms.length && zone !== 'list') setZone('list');
             updateLegend();
+        };
+        // #/rooms?remote=… (the quick panel's Remote): the player's room, on
+        // its Remote button, and its remote
+        const remoteFromRoute = (id) => {
+            const i = rooms.findIndex((r) => !special(r) && r.media.includes(id));
+            if (i < 0 || !HA().remoteFor(id)) return;
+            selectRoom(i);
+            const n = rows.findIndex((x) => x.kind === 'mbtns' && x.id === id && x.ids.includes('remote'));
+            if (n >= 0) { ri = n; ci[n] = rows[n].ids.indexOf('remote'); }
+            openRemote(id, 'room');
         };
         const offHA = HA() ? HA().onChange(sync) : () => {};
 
@@ -1747,17 +1973,23 @@
             },
             sync: syncDocked,
             // where Rooms is, for the phone layout
-            state: () => ({ room: room() ? room().id : null, camera: cam }),
+            state: () => ({ room: room() ? room().id : null, camera: cam, remote: remoteId }),
             // #/rooms?camera=… while Rooms is already up
             openCamera: (id) => { if (rooms.length) openCamera(id, zone === 'camera' ? camFrom : zone); else wanted = { camera: id }; },
+            // #/rooms?remote=…
+            openRemote: (id) => { if (rooms.length) remoteFromRoute(id); else wanted = { remote: id }; },
             teardown() {
                 alive = false;
                 offHA();
                 stopStills();
                 stopLive();
                 window.removeEventListener('keydown', onKey, true);
+                window.removeEventListener('keyup', onKeyUp, true);
+                window.removeEventListener('blur', onBlur);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
+                cancelBack();
+                lit.forEach((t) => clearTimeout(t));
                 clearInterval(clockTimer);
                 clearTimeout(toastTimer);
                 wxDetach();
@@ -1774,11 +2006,14 @@
 
     const isOurRoute = () => /^#!?\/rooms(\?|$)/i.test(currentRoute());
     // #/rooms?camera=camera.front_door
-    const routeCamera = () => {
+    const routeParam = (name) => {
         const h = currentRoute();
         const q = h.indexOf('?');
-        return q < 0 ? null : new URLSearchParams(h.slice(q + 1)).get('camera');
+        return q < 0 ? null : new URLSearchParams(h.slice(q + 1)).get(name);
     };
+    const routeCamera = () => routeParam('camera');
+    // #/rooms?remote=media_player.apple_tv
+    const routeRemote = () => routeParam('remote');
 
     const closeScreen = () => {
         if (!screen) return;
@@ -1788,6 +2023,7 @@
     };
 
     let shownCamera = null;
+    let shownRemote = null;
     const sync = () => {
         if (destroyed) return;
         const ours = isOurRoute() && !/homer-ha=signin/.test(currentRoute());
@@ -1797,13 +2033,17 @@
             return;
         }
         const camId = routeCamera();
+        const remote = routeRemote();
         if (screen) {
             screen.sync();
             if (camId && camId !== shownCamera) { shownCamera = camId; screen.openCamera(camId); }
+            if (remote && remote !== shownRemote) { shownRemote = remote; screen.openRemote(remote); }
+            if (!remote) shownRemote = null;
             return;
         }
         shownCamera = camId;
-        const s = draw(camId ? { camera: camId } : null);
+        shownRemote = remote;
+        const s = draw(camId ? { camera: camId } : remote ? { remote } : null);
         screen = s;
         ensureCss().then(() => { if (screen === s) s.show(); });
     };
@@ -1819,6 +2059,8 @@
         domainOf, pretty, rgbCss, lightParts, bulbsLabel, SWATCHES, swatchesFor, swatchRgb, swatchNow, whiteGradient, hueGradient,
         ENT_ICONS, entIcon, entInfo, entVerb, mediaInfo, mediaCards, mediaButtons, mediaButtonLabel, mediaButtonIcon, MEDIA_BUTTONS, mediaLine, mediaTitle,
         stepMedia, mediaButton, fanInfo, fanText, optionInfo, numberInfo, numberText, glance, glanceHtml,
+        // the remote (Apple TV, Samsung TV)
+        REMOTE_KEYS, remoteKeyLabel, remoteKeyIcon, remoteName, remoteNowLine,
     };
     const draw = (from) => (phoneLayout() ? window.HomerRoomsPhone.create(PHONE_CTX, from) : createScreen(from));
 
@@ -1892,6 +2134,12 @@
         openCamera(id) {
             suppressed = false;
             go('#/rooms?camera=' + encodeURIComponent(id));
+        },
+        // openRemote(id): Rooms, on that player's remote (the quick panel's Remote)
+        openRemote(id) {
+            suppressed = false;
+            if (isOurRoute() && screen && routeRemote() === id) { screen.openRemote(id); return; }
+            go('#/rooms?remote=' + encodeURIComponent(id));
         },
         // close(): reveal what's underneath until the route changes
         close() {
