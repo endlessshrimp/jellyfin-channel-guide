@@ -406,7 +406,8 @@
                     const W = wx();
                     if (!W) return '';
                     const z = W.zip();
-                    return W.mode() === 'device' ? 'This device\'s location' : `${z.zip} · ${z.name}`;
+                    const here = W.mode() === 'device' && W.place() && W.place().mode === 'device' ? W.place().name : '';
+                    return W.mode() === 'device' ? (here && here !== 'This device\'s location' ? `This device · ${here}` : 'This device\'s location') : `${z.zip} · ${z.name}`;
                 },
                 save: async (value) => { if (value === 'device') await wx().useDevice(); }
             },

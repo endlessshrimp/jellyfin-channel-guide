@@ -15,7 +15,8 @@
  *           (or localhost), so on plain http this falls back to the ZIP.
  *   zip     a US ZIP code, looked up once through Open-Meteo's geocoder.
  * With nothing saved, a browser that can share its location uses it, and
- * anything else uses 75142 (Kaufman, TX).
+ * anything else uses 75142 (Kaufman, TX). A device location is named by its
+ * nearest town (placeName).
  */
 (() => {
     if (window.HomerWeather) return;
@@ -85,12 +86,47 @@
         );
     });
 
+    // A device location's town name. The NWS names the nearest place for any
+    // US point (keyless, open to browsers); elsewhere BigDataCloud's free
+    // lookup for browsers does. Both get the point rounded to about 1 km, and
+    // the answer is kept per point, so it's asked once.
+    const NAMES = 'homer-weather-place-names';
+    const placeName = async (lat, lon) => {
+        const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+        let names = {};
+        try { names = JSON.parse(localStorage.getItem(NAMES) || '{}') || {}; } catch { /* ask again */ }
+        if (names[key]) return names[key];
+        let name = '';
+        try {
+            const r = await fetch(`https://api.weather.gov/points/${key}`);
+            const rl = r.ok ? ((await r.json()).properties || {}).relativeLocation : null;
+            const p = rl && rl.properties;
+            if (p && p.city) name = p.state ? `${p.city}, ${p.state}` : p.city;
+        } catch { /* outside the US, or the NWS is down */ }
+        if (!name) {
+            try {
+                const r = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client'
+                    + `?latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&localityLanguage=en`);
+                const j = r.ok ? await r.json() : {};
+                const town = j.city || j.locality;
+                const region = (j.principalSubdivisionCode || '').split('-')[1] || j.principalSubdivision;
+                // "Plano, TX" at home; "London, England" elsewhere
+                if (town) name = [town, j.countryCode === 'US' ? region : (j.principalSubdivision || j.countryName)].filter(Boolean).join(', ');
+            } catch { /* no name; the caller says "This device's location" */ }
+        }
+        if (name) {
+            names[key] = name;
+            try { localStorage.setItem(NAMES, JSON.stringify(names)); } catch { /* memory only */ }
+        }
+        return name;
+    };
+
     // where the weather actually comes from right now
     let place = null; // { mode, lat, lon, name, zip? }
     const resolvePlace = async () => {
         if (wantedMode() === 'device' && canUseDevice()) {
             const pos = await devicePosition();
-            if (pos) return { mode: 'device', name: 'This device\'s location', ...pos };
+            if (pos) return { mode: 'device', name: (await placeName(pos.lat, pos.lon)) || 'This device\'s location', ...pos };
         }
         const z = savedZip();
         return { mode: 'zip', zip: z.zip, name: z.name, lat: z.lat, lon: z.lon };

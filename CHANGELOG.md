@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.15
+
+- Weather: a device's own location is named by its nearest town ("Plano,
+  TX") instead of "This device's location", on the Weather screen, the
+  clock's weather and Settings. The name comes from the National Weather
+  Service in the US and BigDataCloud elsewhere, asked once per spot (rounded
+  to about 1 km) and remembered.
+
 ## v0.3.14
 
 - A show's page lists its seasons newest first (by when they aired, so a
