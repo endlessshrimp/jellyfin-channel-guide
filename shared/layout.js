@@ -192,6 +192,7 @@
         if (/^#\/rooms(\?|$)/.test(h)) return { tab: null, name: 'Rooms' };
         if (/^#\/sports(\?|$)/.test(h)) return { tab: null, name: 'Sports' };
         if (/^#\/news(\?|$)/.test(h)) return { tab: null, name: 'News' };
+        if (/^#\/books(\?|$)/.test(h)) return { tab: null, name: 'Books' };
         return { tab: 'home', name: 'Home' };
     };
 

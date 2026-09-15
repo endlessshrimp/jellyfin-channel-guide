@@ -70,4 +70,7 @@
     js('sports/sports.js'); // the Sports hub (#/sports)
     js('news/news-data.js'); // the News hub's feeds
     js('news/news.js'); // the News hub (#/news)
+    js('books/books-model.js'); // the audiobooks (Jellyfin's Books library) and their player
+    js('books/books.js'); // Books (#/books)
+    js('books/books-phone.js'); // Books' phone layout
 })();

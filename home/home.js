@@ -377,6 +377,8 @@
             { icon: 'live_tv', label: 'Live TV Guide', hint: 'G', act: openGuide },
             { icon: 'movie', label: 'Movies', act: () => { const r = viewRoute('movies'); if (r) route(r); } },
             { icon: 'tv', label: 'TV Shows', act: () => { const r = viewRoute('tvshows'); if (r) route(r); } },
+            // the audiobooks (books/books.js)
+            { icon: 'auto_stories', label: 'Books', act: () => route('#/books') },
             { icon: 'fiber_smart_record', label: 'Recordings', act: () => route('#/livetv?tab=3') },
             { icon: 'wb_sunny', label: 'Weather', act: () => route('#/weather') },
             // the hubs: a TV window, their channels, scores or headlines, a ticker
@@ -390,7 +392,8 @@
         ].filter((m) => !m.when || m.when());
         const menu = $('.hm-menu');
         menu.classList.toggle('hm-menu-8', MENU.length === 8);
-        menu.classList.toggle('hm-menu-9', MENU.length >= 9);
+        menu.classList.toggle('hm-menu-9', MENU.length === 9);
+        menu.classList.toggle('hm-menu-10', MENU.length >= 10);
         MENU.forEach((m) => {
             const item = el('div', 'hm-menu-item hm-focusable',
                 `<span class="material-icons" aria-hidden="true">${m.icon}</span>${esc(m.label)}${m.hint ? `<span class="hm-menu-hint">${m.hint}</span>` : ''}`);

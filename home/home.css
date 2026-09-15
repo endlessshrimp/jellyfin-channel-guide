@@ -173,6 +173,11 @@
 .hm-menu.hm-menu-9 .hm-menu-item { height: 40px; font-size: 25px; }
 .hm-menu.hm-menu-9 .hm-menu-item .material-icons { font-size: 28px; }
 
+/* ten (Books too, with Rooms): 10 × 36 + 9 × 4.44 = 400 */
+.hm-menu.hm-menu-10 { gap: calc(40px / 9); }
+.hm-menu.hm-menu-10 .hm-menu-item { height: 36px; font-size: 24px; }
+.hm-menu.hm-menu-10 .hm-menu-item .material-icons { font-size: 27px; }
+
 .hm-menu-item {
     height: 52px;
     display: flex;
