@@ -8,9 +8,9 @@ Jellyfin page matches. On a phone, HOMER has a phone layout (see
 ## Home
 
 Home replaces Jellyfin's home page: a main menu (Live TV Guide, Movies, TV
-Shows, Recordings, Weather, Search, Settings, and Rooms once Home Assistant is
-connected), an On Now panel, and rows of Continue Watching, Up Next, On Now
-and Recently Added.
+Shows, Books, Recordings, Weather, Sports, News, Settings, and Rooms once Home
+Assistant is connected), an On Now panel, and rows of Continue Watching, Up
+Next, On Now and Recently Added. The search box sits above the menu (▲ or `/`).
 
 - **Watch** plays the channel in the On Now preview window, and Home stays up
   so you can keep browsing. The panel shows what you're watching, with
@@ -195,6 +195,41 @@ http:
 Restart Home Assistant after changing it. The same two lines cover a reverse
 proxy like Caddy on the same NAS.
 
+## Sports and News
+
+Two hub screens, each built the same way: a TV window that plays a channel
+while you browse, the channels for that subject under it with what's on now,
+tabs of content on the right, and a ticker along the bottom.
+
+- **Sports** opens on ESPN. Tabs: My Teams (Rangers, Cowboys, Longhorns,
+  Arsenal), MLB, NFL, College FB (AP Top 25, SEC, Big 12), Soccer (Premier
+  League, Champions League), NBA, NHL, College Hoops. Scores, standings and
+  rankings come from ESPN's public API. A game's card shows our channel for
+  it, and OK watches it.
+- **News** opens on CNN. Tabs: Top, US, World, UK, France, Business, Local,
+  Tech, from publishers' RSS feeds through HOMER's feed helper on the NAS
+  (`/homer-feeds`). OK opens a story with a QR code to read it on your phone.
+- Keys: arrows and OK; `[` `]` or 1–9 switch tabs; **F** full screen; focus
+  the ticker to pause it, ◀▶ to step through it.
+- A new hub is a `HomerHub.define({...})` call; see `docs/hubs-notes.md`.
+
+## Books
+
+Audiobooks from Jellyfin's Books library: the book you're listening to up
+top with its chapter ruler, your shelf below, a book page with every chapter,
+and a listening screen (chapter and 30-second skips, speed, sleep timer).
+Progress is saved in Jellyfin. **P** or Play/Pause pauses anywhere.
+
+## Getting shows and movies (Sonarr and Radarr)
+
+- Search's **Get it** group lists shows and movies you don't have. OK on one
+  asks once, and a second OK adds it to Sonarr or Radarr, which starts
+  searching.
+- **E** on a series (in Search or the guide) gets all its new episodes.
+  Shows already in Sonarr say so ("Getting new episodes").
+- Talks to Sonarr and Radarr through HOMER's helper on the NAS, so no API
+  keys are stored in the browser.
+
 ## Channel Guide
 
 A full-screen, set-top-box style TV guide for Jellyfin Live TV. It runs inside
@@ -299,7 +334,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **R** | Record the selected program. On a program that's set to record, press **R** twice to cancel it (or stop it if it's recording) |
 | **/** | Filter by channel name/number or show title (Esc clears) |
 | **[ ] / 1–8** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment |
-| **C** | Switch country: All, USA, UK, France (combines with the category) |
+| **C** | Switch country: All, USA, UK, Canada, France, Other (combines with the category) |
 | **Page Up / Page Down** | Jump a screen of channels |
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
 | **L** | Quick controls for Home Assistant's lights, scenes, players and thermostat, over whatever's playing (once Home Assistant is connected) |

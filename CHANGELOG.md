@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.4.0
+
+- **Sports** (Home → Sports, `#/sports`): ESPN plays in the TV window, every
+  sports channel is listed under it with what's on, and an ESPN-style ticker
+  runs along the bottom. Tabs:
+  - **My Teams**: the Rangers, Cowboys, Longhorns and Arsenal, each with its
+    next or live game and our channel for it.
+  - **MLB**, **NFL**, **College FB** (AP Top 25, SEC, Big 12), **Soccer**
+    (Premier League table, Champions League), **NBA**, **NHL** and **College
+    Hoops**.
+  - Scores come from ESPN and refresh every 15 seconds while a game is live.
+- **News** (`#/news`): CNN in the TV window and every news channel under it.
+  - Tabs: Top, US, World, UK, France, Business, Local and Tech. Each shows
+    stories from about 50 publishers' feeds (NYT, WaPo, NPR, BBC, the
+    Guardian, Al Jazeera, DFW stations…), merged when several papers carry
+    the same story.
+  - OK opens a story with a QR code, so you can read it on your phone.
+  - A headline ticker runs along the bottom.
+- **Books** (`#/books`): the audiobooks in Jellyfin's Books library on a
+  shelf. Each has a chapter ruler, a book page, and a listening screen with
+  speed and a sleep timer. Where you left off is saved in Jellyfin.
+- **Get it** (Sonarr and Radarr):
+  - Search has a **Get it** group for shows and movies you don't have yet;
+    OK adds one, then asks once more to confirm.
+  - On a series in the guide or Search, **E** gets all its new episodes.
+- The guide has **Canada** (the 2000s) and **Other** (world news, the 7000s)
+  country buttons. Categories follow the lineup's number blocks.
+- Sports and News are built on one shared hub screen (`shared/hub.js`, TV
+  window + channel list + tabs) and ticker (`shared/ticker.js`), so the next
+  hub is configuration, not a new screen.
+- Home's menu: Sports, News and Books are in; Search moved out of the list,
+  since the search box sits right above it (▲ or `/`).
+
 ## v0.3.19
 
 - Rooms controls most of what Home Assistant can. Each room now shows, after
