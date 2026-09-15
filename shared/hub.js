@@ -724,18 +724,18 @@
             const idleLogo = $('.hb-tv-logo');
             const msg = $('.hb-tv-msg');
             const ch = tuning && tuning.ch;
-            // while tuning (not docked yet: the video isn't pinned) and when idle
-            if (!d || !np) {
-                const show = ch || defaultCh;
-                const url = show ? logoUrl(show, 160) : '';
-                if (idleLogo.dataset.src !== url) {
-                    idleLogo.dataset.src = url;
-                    idleLogo.innerHTML = url ? `<img src="${esc(url)}" alt="" draggable="false">` : '';
-                    const i = idleLogo.querySelector('img');
-                    if (i && window.HomerLogos) window.HomerLogos.watch(i, idleLogo);
-                }
-                msg.textContent = d || ch ? `Tuning ${ch ? ch.Name : ''}…` : show ? `OK to watch ${show.Name}` : '';
+            // Under the video (it's pinned over this once it starts): what's
+            // coming while it tunes, or what OK would watch.
+            const playing = d && np && np.program && np.program.ChannelId ? { Id: np.program.ChannelId, Name: np.program.ChannelName || '' } : null;
+            const show = playing || ch || (d ? null : defaultCh);
+            const url = show ? logoUrl(show, 160) : '';
+            if (idleLogo.dataset.src !== url) {
+                idleLogo.dataset.src = url;
+                idleLogo.innerHTML = url ? `<img src="${esc(url)}" alt="" draggable="false">` : '';
+                const i = idleLogo.querySelector('img');
+                if (i && window.HomerLogos) window.HomerLogos.watch(i, idleLogo);
             }
+            msg.textContent = d ? (show ? `Tuning ${show.Name}…` : 'Loading…') : ch ? `Tuning ${ch.Name}…` : show ? `OK to watch ${show.Name}` : '';
             // under it: what's on
             let html = '';
             if (np && np.program && d) {
@@ -896,8 +896,9 @@
             // progress bars every 30s; programs again when one ends (or every 10 min)
             const tick = () => {
                 const t = Date.now();
-                const ended = rows.some((r) => { const n = nowFor(r.ch.Id); return !n && (progs.get(r.ch.Id) || []).length; })
-                    || [...progs.values()].some((l) => l[0] && l[0]._e < t && l.length < 2);
+                // a channel whose listings have run out from under it (its first
+                // program is over and nothing's on): time for fresh ones
+                const ended = [...progs.values()].some((l) => l.length && l[0]._e < t && !l.some((p) => p._s <= t && p._e > t));
                 if (loadedAt && (t - loadedAt > 10 * MIN || ended) && t - loadedAt > MIN) loadPrograms().catch(() => {});
                 else rows.forEach(paintRow);
                 paintWatching();
@@ -1187,7 +1188,12 @@
             def,
             phone,
             api: api_,
-            show() { root.style.visibility = ''; fit(); },
+            show() {
+                root.style.visibility = '';
+                fit();
+                // Jellyfin titles an address it doesn't know "Page not found"
+                if (def.title) document.title = def.title;
+            },
             sync() {
                 if (docked()) tuning = null; // it's in: the player knows what's on
                 else if (tuning && Date.now() - tuning.at > 45000) tuning = null; // never started
