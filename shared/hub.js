@@ -23,7 +23,7 @@
  *   window; F goes full screen.
  * - Tabs switch the content area; each tab's render(ctx) fills it.
  * - The ticker (shared/ticker.js) runs along the bottom.
- * - On a phone: a column between HOMER's bars (the video strip on top while
+ * - On a phone (for a hub with phone: true): a column between HOMER's bars (the video strip on top while
  *   something plays, with ✕; the tabs, with Channels last for the guide; the
  *   content, scrolled by finger; a slimmer ticker). No default channel.
  * - Keys: arrows move (spatially, like Home), OK selects, [ ] / Page Up/Down
@@ -38,6 +38,7 @@
  *     guide: { title, include(ch, info), groups: [{ key, label, test(ch, info), order? }] },
  *     tabs: [{ key, label, render(ctx) }],   // render may return a teardown fn
  *     ticker: { source(), refreshMs, mode, priorityLabel, stepLabel, okLabel },
+ *     phone: true,                           // draw the phone layout on a phone
  *     onOpen(hub), onClose(hub), onBack(hub) -> true when it handled Back
  *   });
  *
@@ -542,7 +543,9 @@
         // On a phone (shared/layout.js) the same screen is a column between
         // HOMER's bars: the video strip on top while something plays, the tabs
         // (plus Channels, the guide), the tab's content scrolling, the ticker.
-        const phone = isPhone();
+        // (a hub opts in with phone: true; without it a phone gets the TV
+        // layout, shrunk between the bars)
+        const phone = isPhone() && !!def.phone;
         const root = el('div', `homer-screen hb-root hb-${def.id}${phone ? ' hb-phone' : ''}`);
         root.id = `hb-${def.id}-root`;
         root.style.visibility = 'hidden'; // until the stylesheets are in
@@ -1286,7 +1289,7 @@
     // line, a resized window) draws it again, on the same tab.
     const offLayout = window.HomerLayout ? window.HomerLayout.onChange(() => {
         if (!screen) return;
-        if (screen.phone !== isPhone()) { closeScreen(); onRouteChange(); }
+        if (screen.phone !== (isPhone() && !!screen.def.phone)) { closeScreen(); onRouteChange(); }
         else window.dispatchEvent(new Event('resize'));
     }) : () => {};
 

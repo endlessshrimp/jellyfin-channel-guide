@@ -549,6 +549,7 @@
             title: 'Sports',
             css: 'sports/sports.css',
             tv: { channel: '1300' }, // ESPN
+            phone: true, // its phone layout (shared/hub.js)
             guide,
             tabs: [
                 { key: 'my', label: 'My Teams', render: renderMyTeams },
