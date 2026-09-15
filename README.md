@@ -109,10 +109,10 @@ HOMER's code or the injector config except, if you like, its address.
   - **Switches & outlets**: plugs and power strips (a strip's own switch is
     **All outlets**).
   - **Media**: a card per player: what's playing and its art, ◀▶ for the
-    volume and OK to play or pause on the card, then its buttons (skip, mute,
-    power) and its inputs. A speaker group shows once, under the speaker
-    leading it; the same speaker or TV coming in through two integrations
-    (itself, DLNA, Cast) shows once.
+    volume and OK to play or pause on the card, then its buttons (**Remote**,
+    skip, mute, power) and its inputs. A speaker group shows once, under the
+    speaker leading it; the same speaker or TV coming in through two
+    integrations (itself, DLNA, Cast) shows once.
   - **Fans** (an air purifier): on and off, its speed or modes, and the
     device's own settings under it (a child lock, a favorite level).
   - **Automations & helpers**: automations (on is enabled), toggles, and
@@ -125,6 +125,21 @@ HOMER's code or the injector config except, if you like, its address.
   controls. Esc goes back a step. On a phone the rooms are chips along the
   top, with the same sections; tap a bulb to switch it, drag its bar to dim,
   tap its color dot for its colors.
+- **The remote.** A player that's an Apple TV or a Samsung TV (Home
+  Assistant has a `remote` for it on the same device) has a **Remote**
+  button on its card, and one in the quick controls. It opens the whole
+  remote: a ring of arrows around OK, then Back, Home (an Apple TV's TV
+  button), Play/Pause and the volume, next to the device and what's on it.
+  Your remote goes straight to the device — arrows, **OK**, **Esc** or
+  **Backspace** for Back, **Space** for play/pause, **+** and **−** (or
+  **Page Up/Down**) for the volume, **T** for Home — and each press lights
+  its key on screen; a held arrow repeats about six times a second. **H**,
+  or **Back** held down, hands the keys back to HOMER. On a phone it's a
+  round pad you tap, with Back, Home, Play/Pause and the volume under it,
+  and a light buzz on each press. A video playing docks beside the remote.
+
+  ![The remote on a TV](docs/screenshots/remote-tv.jpg)
+
 - **A camera** opens large, live when the camera streams (Home Assistant's HLS,
   played with hls.js, or the browser's own on an iPhone), otherwise a still
   that refreshes every second. ◀▶ goes to the next camera. A doorbell shows

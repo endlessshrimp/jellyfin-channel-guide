@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **A real remote for an Apple TV or a Samsung TV** (Rooms → the player's
+  card → **Remote**, or **Remote** in the **L** quick controls). A ring of
+  arrows around OK, then Back, Home, Play/Pause and the volume, beside the
+  device and what's on it. HOMER's own keys go to the device (arrows, OK,
+  Esc/Backspace, Space, + and −, Page Up/Down, T for Home) and light the
+  remote as they go; a held arrow repeats about six times a second. **H**, or
+  **Back** held for about half a second, comes out of it. On a phone it's a round
+  pad with big buttons and a light buzz on each press.
+  - Home Assistant does the sending: `remote.send_command` on the `remote`
+    entity that shares the player's device, with the Apple TV's command names
+    or the Samsung's `KEY_` codes.
+
 ## v0.4.1
 
 - News has a phone layout: the sections in a row you swipe, a **Watch CNN**

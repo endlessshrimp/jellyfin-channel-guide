@@ -186,6 +186,18 @@ through `ctx`, as Weather's do. Two things worth copying:
   when the finger lifts or rests, like dimming). A tap beside the sheet, ✕ or
   Esc closes it. Everything else in a room stays one level deep: a player's
   buttons, inputs and a device's settings sit on its card, not behind it.
+- **A TV's remote** (an Apple TV, a Samsung TV: `Remote` on the player's
+  card) is a view over the room like a camera: a round pad (the arrows as
+  wedges around OK, `clip-path`) and a row of Back, Home, Play/Pause, Vol−
+  and Vol+, all 60px targets with `touch-action: none`. A press goes on
+  `pointerdown`, not the tap, so it feels like a remote; it lights its button
+  and buzzes (`navigator.vibrate(10)`, where the browser has it). A finger
+  held on an arrow or the volume repeats after 450ms, then about six times a
+  second, and the commands are dropped rather than queued when the device is
+  slow (`HomerHA.sendRemote`). In landscape the keys move beside the pad.
+
+  ![The remote on a phone](screenshots/remote-phone.jpg)
+
 - **The quick controls and the doorbell** (`rooms/quick.js`) are drawn once for
   both layouts: a sheet from the bottom and a card at the top on a phone
   (`.phone`), a panel at the right and a card at the top right, scaled from
