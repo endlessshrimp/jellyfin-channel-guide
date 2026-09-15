@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.3.19
+
+- Rooms controls most of what Home Assistant can. Each room now shows, after
+  its scenes, lights and cameras:
+  - **Switches & outlets**: plugs and power strips (a Kasa strip's outlets,
+    with the strip's own switch as **All outlets**), on/off.
+  - **Media**: a card per player with what's playing and its art; ◀▶ sets the
+    volume and OK plays or pauses on the card, and the rows under it have the
+    player's buttons (skip, mute, power) and its inputs, only what the player
+    supports. A Sonos or WiiM group shows once, under the speaker leading it
+    (one in another room says "With Living Room"); the same speaker or TV
+    coming in through two integrations (itself, DLNA, Cast) shows once.
+  - **Fans**: the air purifier on/off, its speed or modes, and its own
+    settings under it (child lock, favorite level).
+  - **Automations & helpers**: automations on/off (enabled), toggles, and
+    scripts and buttons to run.
+  - **At a glance**, under the room's name: its temperature and humidity, a
+    door or window left open, motion now, the air, smoke or a leak.
+- The thermostat (Climate) has its own settings under it: the ecobee's
+  **Current mode** (home, sleep, away) and **Clear hold**.
+- Lights: wall switches first, then the bulbs, under their own headings. A
+  bulb that does color has a dot in its color; **C** (or a click on the dot,
+  or a tap on a phone) opens its colors: eight colors and three whites, a
+  warm-to-cool white strip and a color strip. The room's **All lights** takes
+  a color too.
+- The quick controls over a video list wall switches, then bulbs, and add
+  **Now playing** for the room's players that are on (◀▶ volume, OK
+  play/pause).
+- Left out: sirens and anything that sets one off, alarm panels, buttons that
+  restart or reset a device, and devices whose integration isn't running
+  (Home Assistant only remembers them: the disconnected fridge and oven, the
+  sync box). Anything else that's unavailable is dimmed, with no controls.
+
 ## v0.3.18
 
 - Rooms: TP-Link wall switches (Kasa HS200/HS210/KS200 in-wall switches,

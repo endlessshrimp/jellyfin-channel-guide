@@ -33,7 +33,10 @@
  *                    addressProblem, signIn, disconnect, onChange, house,
  *                    entity, lightOn, toggle, setBrightness, setTemperature,
  *                    setMode, scene, snapshotUrl, playCamera, rings, onRing,
- *                    destroy, version }
+ *                    color, setColor, supports, playPause, mediaCommand,
+ *                    setVolume, stepVolume, mute, setSource, power,
+ *                    setFanSpeed, setPreset, setOption, setNumber, run,
+ *                    extras, device, pictureUrl, destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -49,6 +52,21 @@
     const MOCK_KEY = 'homer-ha-mock'; // DEV ONLY: '1' draws a made-up house, no Home Assistant needed
     const CALLBACK = '#/rooms?homer-ha=signin';
     const DOMAINS = ['light', 'climate', 'camera', 'scene'];
+    // and what else a room can have: outlets, players, fans, automations and
+    // helpers, and the settings (selects, numbers) of a device already shown
+    const MORE = ['switch', 'media_player', 'fan', 'automation', 'input_boolean', 'script', 'button', 'select', 'number'];
+    // the few sensors a room's "at a glance" line shows, by device class
+    const GLANCE_SENSOR = { temperature: 'temps', humidity: 'hums', pm25: 'air', aqi: 'air', carbon_dioxide: 'air' };
+    const GLANCE_BINARY = {
+        door: 'doors', window: 'doors', opening: 'doors', garage_door: 'doors',
+        motion: 'motion', occupancy: 'motion',
+        smoke: 'alerts', carbon_monoxide: 'alerts', gas: 'alerts', moisture: 'alerts'
+    };
+    // never shown: anything that sounds a siren or an alarm
+    const ALARMING = /\bsiren|\balarm/i;
+    // buttons left out: the ones that restart, reset or identify a device
+    const RISKY_BUTTON = /restart|reboot|reset|factory|shut ?down|power ?off|format|erase|delete|unpair|identify|update|firmware/i;
+    const RISKY_BUTTON_CLASS = ['restart', 'identify', 'update'];
     const RETRY_MS = [1000, 2000, 5000, 10000, 30000];
     const PING_MS = 30000;
     const HLS_JS = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js';
@@ -492,6 +510,10 @@
     let floors = [];
     let placeOf = new Map(); // entity_id -> area_id
     let deviceOf = new Map(); // entity_id -> device_id
+    let devInfo = new Map(); // device_id -> { name, model, maker }
+    let ownName = new Map(); // entity_id -> its own name, without the device's ("Amplifier")
+    let mainOf = new Set(); // entities that are their device (a power strip's "all outlets")
+    let platformOf = new Map(); // entity_id -> integration ("hue")
     let hidden = new Set();
     let states = {}; // entity_id -> state object
     let doorbells = []; // [{ id, camera, name }]
@@ -503,6 +525,10 @@
         floors = [];
         placeOf = new Map();
         deviceOf = new Map();
+        devInfo = new Map();
+        ownName = new Map();
+        mainOf = new Set();
+        platformOf = new Map();
         hidden = new Set();
         wallSwitches = new Set();
         states = {};
@@ -549,26 +575,41 @@
         floors = floorList || [];
         const devArea = new Map((devices || []).map((d) => [d.id, d.area_id]));
         const wallDevice = new Set((devices || []).filter(isWallSwitchDevice).map((d) => d.id));
+        devInfo = new Map((devices || []).map((d) => [d.id, { name: d.name_by_user || d.name || '', model: d.model || '', maker: d.manufacturer || '' }]));
         wallSwitches = new Set();
         placeOf = new Map();
         deviceOf = new Map();
+        ownName = new Map();
+        mainOf = new Set();
+        platformOf = new Map();
         hidden = new Set();
         for (const e of (registry && registry.entities) || []) {
             if (e.di) deviceOf.set(e.ei, e.di);
+            if (e.pl) platformOf.set(e.ei, e.pl);
+            // has_entity_name: its own name is en, or none when it's the device itself
+            if (e.hn && e.en) ownName.set(e.ei, e.en);
+            else if (e.hn && e.di) mainOf.add(e.ei);
             const area = e.ai || (e.di && devArea.get(e.di)) || null;
             if (area) placeOf.set(e.ei, area);
             if (e.hb || e.ec != null) hidden.add(e.ei); // hidden, or a config/diagnostic entity
             else if (domainOf(e.ei) === 'switch' && e.di && wallDevice.has(e.di)) wallSwitches.add(e.ei);
         }
-        // what HOMER shows: lights, thermostats, cameras, scenes, the rooms'
-        // temperatures, and anything that says the doorbell rang
+        // what HOMER shows: lights, thermostats, cameras, scenes, outlets,
+        // players, fans, automations and helpers, the few sensors a room's
+        // "at a glance" line uses, and anything that says the doorbell rang
         const wanted = new Set();
         states = {};
         for (const s of all || []) {
-            const d = domainOf(s.entity_id);
-            if ((DOMAINS.includes(d) && !hidden.has(s.entity_id)) || wallSwitches.has(s.entity_id) || isDoorbellSensor(s)) wanted.add(s.entity_id);
+            const id = s.entity_id;
+            const d = domainOf(id);
+            const dc = (s.attributes && s.attributes.device_class) || '';
+            const glance = (d === 'sensor' && GLANCE_SENSOR[dc]) || (d === 'binary_sensor' && GLANCE_BINARY[dc]);
+            if (((DOMAINS.includes(d) || MORE.includes(d) || glance) && !hidden.has(id)) || wallSwitches.has(id) || isDoorbellSensor(s)) wanted.add(id);
         }
-        areas.forEach((a) => { if (a.temperature_entity_id) wanted.add(a.temperature_entity_id); });
+        areas.forEach((a) => {
+            if (a.temperature_entity_id) wanted.add(a.temperature_entity_id);
+            if (a.humidity_entity_id) wanted.add(a.humidity_entity_id);
+        });
         built = null;
         // then keep them current (initial states come first, then changes)
         let first = true;
@@ -725,10 +766,73 @@
     // any case): a place for things that aren't in use.
     const HIDDEN_ROOMS = ['unused'];
 
-    // house(): the rooms as HOMER shows them, each with its lights, cameras
-    // and scenes (only rooms with any of those; the thermostats are the
-    // house's, in house.climates), then
-    // "Other" for what has no room. Floors order the rooms when there are any.
+    // An entity Home Assistant only remembers: its integration isn't running
+    // (a disconnected SmartThings fridge, a sync box whose integration
+    // fails), so it can't come back by itself. Left out, with its device.
+    const gone = (id) => { const s = states[id]; return !s || !!(s.attributes && s.attributes.restored); };
+    const isGroup = (id) => { const a = (states[id] && states[id].attributes) || {}; return Array.isArray(a.entity_id) || !!a.is_hue_group; };
+
+    // Players: one card per real player. The same speaker or TV often comes
+    // in through two or three integrations (a WiiM as itself, as a DLNA
+    // renderer and as a Cast target; a Samsung TV as itself and over DLNA):
+    // when two players share a name or a model, the one from the device's own
+    // integration stays and the generic ones go (DLNA, UPnP and SmartThings
+    // below Cast, Cast below the rest). Two of a kind (two Nest Hubs) stay.
+    const GENERIC_PLAYER = { dlna_dmr: 0, upnp: 0, smartthings: 0, cast: 1 };
+    const playerRank = (id) => { const p = platformOf.get(id); return p in GENERIC_PLAYER ? GENERIC_PLAYER[p] : 2; };
+    const plainName = (id) => String((states[id] && states[id].attributes.friendly_name) || id.split('.')[1]).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const players = () => {
+        const list = Object.keys(states).filter((id) => domainOf(id) === 'media_player' && !hidden.has(id) && !gone(id));
+        const modelOf = (id) => { const d = devInfo.get(deviceOf.get(id)); return d && d.model ? d.model.toLowerCase() : ''; };
+        return new Set(list.filter((id) => !list.some((o) => o !== id && playerRank(o) > playerRank(id)
+            && (plainName(o) === plainName(id) || (modelOf(id) && modelOf(o) === modelOf(id))))));
+    };
+
+    // where an entity goes in a room (or null: not shown). 'extra' is a
+    // device's own setting (a purifier's child lock, a thermostat's mode
+    // select), shown with that device, and 'glance' a sensor.
+    const KIND = { light: 'lights', climate: 'climates', camera: 'cameras', scene: 'scenes', fan: 'fans', automation: 'auto', script: 'auto', input_boolean: 'auto' };
+    const kindOf = (id, shownPlayers, owners) => {
+        const d = domainOf(id);
+        if (hidden.has(id) || gone(id)) return null;
+        if (wallSwitches.has(id)) return 'lights';
+        const s = states[id];
+        const a = s.attributes || {};
+        const label = (a.friendly_name || '') + ' ' + id;
+        if (d === 'media_player') return shownPlayers.has(id) ? 'media' : null;
+        if (d === 'camera') return twin(id) ? null : 'cameras';
+        if (KIND[d]) return d === 'input_boolean' && ALARMING.test(label) ? null : KIND[d];
+        const owner = owners.get(deviceOf.get(id));
+        if (d === 'switch') {
+            if (ALARMING.test(label)) return null;
+            if (owner && owner !== id) {
+                // "Power" on a purifier is the fan's own on/off, already there
+                return /\bpower\b/i.test(ownName.get(id) || a.friendly_name || '') ? null : 'extra';
+            }
+            return 'switches';
+        }
+        if (d === 'button') {
+            if (RISKY_BUTTON.test(label) || ALARMING.test(label) || RISKY_BUTTON_CLASS.includes(a.device_class)) return null;
+            return owner ? 'extra' : 'auto';
+        }
+        if (d === 'select' || d === 'number') return owner && !ALARMING.test(label) ? 'extra' : null;
+        if (d === 'sensor' && GLANCE_SENSOR[a.device_class]) return 'glance';
+        if (d === 'binary_sensor' && GLANCE_BINARY[a.device_class]) return 'glance';
+        return null;
+    };
+    let extrasOf = new Map(); // a fan, player or thermostat -> its device's settings
+
+    const emptyRoom = (props) => Object.assign({
+        lights: [], climates: [], cameras: [], scenes: [], switches: [], media: [], fans: [], auto: [],
+        glance: { temps: [], hums: [], doors: [], motion: [], air: [], alerts: [] }
+    }, props);
+    const controls = (r) => r.lights.length + r.cameras.length + r.scenes.length + r.switches.length + r.media.length + r.fans.length + r.auto.length;
+
+    // house(): the rooms as HOMER shows them, each with its lights, cameras,
+    // scenes, outlets, players, fans, automations and a few sensors (only
+    // rooms with something to control; the thermostats are the house's, in
+    // house.climates), then "Other" for what has no room. Floors order the
+    // rooms when there are any.
     const house = () => {
         if (built) return built;
         const rooms = new Map();
@@ -737,31 +841,70 @@
         const skipped = new Set(areas.filter((a) => HIDDEN_ROOMS.includes(String(a.name || '').trim().toLowerCase())).map((a) => a.area_id));
         for (const a of areas) {
             if (skipped.has(a.area_id)) continue;
-            rooms.set(a.area_id, {
+            rooms.set(a.area_id, emptyRoom({
                 id: a.area_id, name: a.name, icon: a.icon || '', floor: floorName.get(a.floor_id) || '',
                 level: floorLevel.has(a.floor_id) ? floorLevel.get(a.floor_id) : 99,
                 temperature: a.temperature_entity_id || null,
-                lights: [], climates: [], cameras: [], scenes: []
-            });
+                humidity: a.humidity_entity_id || null
+            }));
         }
-        const other = { id: '_other', name: 'Other', icon: '', floor: '', level: 100, temperature: null, lights: [], climates: [], cameras: [], scenes: [] };
-        const KIND = { light: 'lights', climate: 'climates', camera: 'cameras', scene: 'scenes' };
+        const other = emptyRoom({ id: '_other', name: 'Other', icon: '', floor: '', level: 100, temperature: null, humidity: null });
+        const shownPlayers = players();
+        // the devices whose settings are shown with them: a fan's, a player's,
+        // a thermostat's
+        const owners = new Map();
         for (const id of Object.keys(states)) {
-            const kind = wallSwitches.has(id) ? 'lights' : KIND[domainOf(id)];
-            if (!kind || hidden.has(id) || (kind === 'cameras' && twin(id)) || skipped.has(placeOf.get(id))) continue;
-            const room = rooms.get(placeOf.get(id)) || other;
-            room[kind].push(id);
+            const d = domainOf(id);
+            if (hidden.has(id) || gone(id) || !deviceOf.get(id)) continue;
+            if (d === 'fan' || d === 'climate' || shownPlayers.has(id)) {
+                if (!owners.has(deviceOf.get(id))) owners.set(deviceOf.get(id), id);
+            }
         }
-        let list = [...rooms.values(), other].filter((r) => r.lights.length + r.climates.length + r.cameras.length + r.scenes.length > 0);
+        extrasOf = new Map();
+        for (const id of Object.keys(states)) {
+            const kind = kindOf(id, shownPlayers, owners);
+            if (!kind || skipped.has(placeOf.get(id))) continue;
+            if (kind === 'extra') {
+                const owner = owners.get(deviceOf.get(id));
+                if (!extrasOf.has(owner)) extrasOf.set(owner, []);
+                extrasOf.get(owner).push(id);
+                continue;
+            }
+            const room = rooms.get(placeOf.get(id)) || other;
+            if (kind === 'glance') {
+                const a = states[id].attributes;
+                room.glance[(domainOf(id) === 'sensor' ? GLANCE_SENSOR : GLANCE_BINARY)[a.device_class]].push(id);
+            } else room[kind].push(id);
+        }
+        // a room's own temperature and humidity (set in Home Assistant's area) win
+        for (const r of rooms.values()) {
+            if (r.temperature && states[r.temperature]) r.glance.temps = [r.temperature];
+            if (r.humidity && states[r.humidity]) r.glance.hums = [r.humidity];
+        }
+        let list = [...rooms.values(), other].filter((r) => controls(r) + r.climates.length > 0);
         for (const r of list) {
             const nm = (id) => nameOf(id, r.name);
-            // light groups (a room's "all lights") first, then its wall switches,
+            const byNm = (a, b) => nm(a).localeCompare(nm(b));
+            // wall switches first, then the room's light group ("All lights"),
             // then the bulbs, each by name
-            const group = (id) => { const a = states[id].attributes; return Array.isArray(a.entity_id) || a.is_hue_group ? 0 : wallSwitches.has(id) ? 1 : 2; };
-            r.lights.sort((a, b) => group(a) - group(b) || nm(a).localeCompare(nm(b)));
-            r.scenes.sort((a, b) => nm(a).localeCompare(nm(b)));
-            r.cameras.sort((a, b) => nm(a).localeCompare(nm(b)));
-            r.climates.sort((a, b) => nm(a).localeCompare(nm(b)));
+            const group = (id) => (wallSwitches.has(id) ? 0 : isGroup(id) ? 1 : 2);
+            r.lights.sort((a, b) => group(a) - group(b) || byNm(a, b));
+            r.scenes.sort(byNm);
+            r.cameras.sort(byNm);
+            r.climates.sort(byNm);
+            r.media.sort(byNm);
+            r.fans.sort(byNm);
+            // a power strip's outlets together, its "all outlets" first
+            const strip = (id) => (devInfo.get(deviceOf.get(id)) || {}).name || nm(id);
+            r.switches.sort((a, b) => strip(a).localeCompare(strip(b)) || Number(mainOf.has(b)) - Number(mainOf.has(a)) || byNm(a, b));
+            // automations, then helpers, then scripts and buttons
+            const order = { automation: 0, input_boolean: 1, script: 2, button: 2 };
+            r.auto.sort((a, b) => order[domainOf(a)] - order[domainOf(b)] || byNm(a, b));
+        }
+        for (const list2 of extrasOf.values()) {
+            // switches, then choices, then numbers, then buttons
+            const order = { switch: 0, select: 1, number: 2, button: 3 };
+            list2.sort((a, b) => order[domainOf(a)] - order[domainOf(b)] || nameOf(a, '').localeCompare(nameOf(b, '')));
         }
         // Thermostats are the house's, not a room's: they move to house.climates
         // (Rooms' own Climate item). A room keeps them only for its temperature.
@@ -772,21 +915,41 @@
             r.climates = [];
         }
         climates.sort((a, b) => nameOf(a, '').localeCompare(nameOf(b, '')));
-        list = list.filter((r) => r.lights.length + r.cameras.length + r.scenes.length > 0);
+        list = list.filter((r) => controls(r) > 0);
         list.sort((a, b) => a.level - b.level || (a.id === '_other' ? 1 : b.id === '_other' ? -1 : byName(a, b)));
         const cameras = list.flatMap((r) => r.cameras);
         built = { name: houseName, version: haVersion, user: userName, url: address(), unit: tempUnit, rooms: list, cameras, climates, doorbells: doorbells.slice() };
         return built;
     };
     // registries don't change often; the states do, so the house is rebuilt
-    // only when an entity comes or goes
+    // only when an entity comes or goes (or an integration comes back)
+    const countSig = () => {
+        const ids = Object.keys(states);
+        return ids.length + ':' + ids.filter((id) => states[id].attributes && states[id].attributes.restored).length;
+    };
     listeners.add(() => {
-        if (built && Object.keys(states).length !== built._count) built = null;
+        if (built && countSig() !== built._count) built = null;
     });
     const houseWithCount = () => {
         const h = house();
-        h._count = Object.keys(states).length;
+        h._count = countSig();
         return h;
+    };
+    // a fan's, player's or thermostat's own settings (switches, selects,
+    // numbers, buttons on the same device)
+    const extras = (id) => { house(); return (extrasOf.get(id) || []).filter((x) => states[x]); };
+    // { name, model, maker } of an entity's device
+    const device = (id) => devInfo.get(deviceOf.get(id)) || null;
+    // an entity's name next to its device ("Amplifier", "Child lock"): its
+    // own name when it has one, less the room's name
+    const ALIASES = [[/^physical control(s)? lock(ed)?$/i, 'Child lock'], [/^custom[- ]service /i, ''], [/\s+hardware mode$/i, '']];
+    const shortName = (id, areaName) => {
+        let n = ownName.get(id);
+        if (!n) return nameOf(id, areaName);
+        n = n.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+        for (const [re, to] of ALIASES) n = n.replace(re, to).trim();
+        if (areaName && n.toLowerCase().startsWith(areaName.toLowerCase() + ' ') && n.length > areaName.length + 2) n = n.slice(areaName.length + 1);
+        return n.charAt(0).toUpperCase() + n.slice(1);
     };
 
     // an entity's state, with anything just asked for already showing
@@ -873,6 +1036,157 @@
     };
     const scene = (id) => call('scene', 'turn_on', {}, id);
 
+    // ---------- A bulb's color ----------
+
+    const COLOR_MODES = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'];
+    const hsToRgb = ([h, s]) => {
+        const f = (n) => {
+            const k = (n + h / 60) % 6;
+            return Math.round(255 * (1 - (s / 100) * Math.max(0, Math.min(k, 4 - k, 1))));
+        };
+        return [f(5), f(3), f(1)];
+    };
+    // a white's color on screen (Tanner Helland's approximation)
+    const kelvinToRgb = (k) => {
+        const t = k / 100;
+        const r = t <= 66 ? 255 : 329.7 * Math.pow(t - 60, -0.1332);
+        const g = t <= 66 ? 99.47 * Math.log(t) - 161.12 : 288.12 * Math.pow(t - 60, -0.0755);
+        const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.52 * Math.log(t - 10) - 305.04;
+        return [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))));
+    };
+    // what a bulb can do with color, and what it's showing: { color, white,
+    // min, max (kelvin), kelvin, hs, rgb (null when off) }, or null for a
+    // bulb that only dims
+    const color = (id) => {
+        const s = entity(id);
+        if (!s || domainOf(id) !== 'light') return null;
+        const a = s.attributes;
+        const modes = a.supported_color_modes || [];
+        const hasColor = modes.some((m) => COLOR_MODES.includes(m));
+        const white = modes.includes('color_temp');
+        if (!hasColor && !white) return null;
+        const on = s.state === 'on';
+        const kelvin = a.color_mode === 'color_temp' ? a.color_temp_kelvin : null;
+        const rgb = !on ? null : a.rgb_color || (kelvin ? kelvinToRgb(kelvin) : a.hs_color ? hsToRgb(a.hs_color) : null);
+        return {
+            color: hasColor,
+            white,
+            min: a.min_color_temp_kelvin || 2000,
+            max: a.max_color_temp_kelvin || 6500,
+            kelvin: on ? kelvin : null,
+            hs: on && a.color_mode !== 'color_temp' && a.hs_color ? a.hs_color : null,
+            rgb
+        };
+    };
+    // setColor(id, { hs: [h, s] }) or ({ kelvin }): turns the bulb on in that
+    // color (hs_color works for any color bulb; Home Assistant converts it to
+    // the bulb's own xy or rgb). The remote's presses are sent as one.
+    const setColor = (id, { hs, kelvin }) => {
+        const c = color(id);
+        if (!c) return;
+        const hueNear = (a, b) => Math.abs(((a - b + 540) % 360) - 180) < 10;
+        if (hs) {
+            expect(id, 'on', { color_mode: 'hs', hs_color: hs, rgb_color: hsToRgb(hs), color_temp_kelvin: null },
+                (x) => x.state === 'on' && x.attributes.color_mode !== 'color_temp' && !!x.attributes.hs_color && hueNear(x.attributes.hs_color[0], hs[0]), 8000);
+        } else {
+            kelvin = Math.round(Math.max(c.min, Math.min(c.max, kelvin)));
+            expect(id, 'on', { color_mode: 'color_temp', color_temp_kelvin: kelvin, rgb_color: kelvinToRgb(kelvin) },
+                (x) => x.state === 'on' && x.attributes.color_mode === 'color_temp' && Math.abs((x.attributes.color_temp_kelvin || 0) - kelvin) < 150, 8000);
+        }
+        later('c:' + id, 350, () => {
+            call('light', 'turn_on', hs ? { hs_color: hs.map((v) => Math.round(v)) } : { color_temp_kelvin: kelvin }, id).catch(failed(id));
+        });
+    };
+
+    // ---------- Players ----------
+
+    // Home Assistant's media player features
+    const MF = {
+        pause: 1, volumeSet: 4, mute: 8, previous: 16, next: 32, turnOn: 128, turnOff: 256,
+        volumeStep: 1024, source: 2048, stop: 4096, play: 16384
+    };
+    const supports = (id, what) => {
+        const s = entity(id);
+        const bit = typeof what === 'number' ? what : MF[what];
+        return !!s && ((s.attributes.supported_features || 0) & bit) === bit;
+    };
+    const playPause = (id) => {
+        const s = entity(id);
+        if (!s) return Promise.resolve();
+        const playing = s.state === 'playing';
+        const service = playing ? (supports(id, 'pause') ? 'media_pause' : 'media_stop') : 'media_play';
+        expect(id, playing ? 'paused' : 'playing', null, (x) => x.state !== s.state);
+        return call('media_player', service, {}, id).catch(failed(id));
+    };
+    // 'media_next_track', 'media_previous_track'
+    const mediaCommand = (id, service) => call('media_player', service, {}, id);
+    // 0–1; the remote's presses are sent as one
+    const setVolume = (id, v) => {
+        v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+        expect(id, null, { volume_level: v }, (x) => Math.abs((x.attributes.volume_level || 0) - v) < 0.02, 8000);
+        later('v:' + id, 300, () => call('media_player', 'volume_set', { volume_level: v }, id).catch(failed(id)));
+    };
+    // for players that only step (up and down, no level)
+    const stepVolume = (id, d) => call('media_player', d > 0 ? 'volume_up' : 'volume_down', {}, id);
+    const mute = (id) => {
+        const s = entity(id);
+        const m = !(s && s.attributes.is_volume_muted);
+        expect(id, null, { is_volume_muted: m }, (x) => !!x.attributes.is_volume_muted === m);
+        return call('media_player', 'volume_mute', { is_volume_muted: m }, id).catch(failed(id));
+    };
+    const setSource = (id, source) => {
+        expect(id, null, { source }, (x) => x.attributes.source === source, 8000);
+        return call('media_player', 'select_source', { source }, id).catch(failed(id));
+    };
+    // a player (a TV) on or off
+    const power = (id) => {
+        const s = entity(id);
+        const on = !!s && (s.state === 'off' || s.state === 'standby');
+        expect(id, on ? 'on' : 'off', null, (x) => (x.state !== 'off' && x.state !== 'standby') === on, 12000);
+        return call('media_player', on ? 'turn_on' : 'turn_off', {}, id).catch(failed(id));
+    };
+    // a player's picture (album art, a TV's app), for an <img> (the player's
+    // own token is in the address, like a camera still's)
+    const pictureUrl = (id) => {
+        const s = entity(id);
+        const pic = s && s.attributes.entity_picture;
+        if (!pic) return '';
+        if (/^(https?:|data:)/.test(pic)) return pic;
+        return address() + pic;
+    };
+
+    // ---------- Fans, choices, numbers, buttons ----------
+
+    // 0–100; the remote's presses are sent as one
+    const setFanSpeed = (id, pct) => {
+        pct = Math.max(0, Math.min(100, Math.round(pct)));
+        expect(id, pct > 0 ? 'on' : 'off', { percentage: pct }, (x) => (pct > 0 ? x.attributes.percentage === pct : x.state === 'off'), 8000);
+        later('f:' + id, 400, () => call('fan', 'set_percentage', { percentage: pct }, id).catch(failed(id)));
+    };
+    const setPreset = (id, mode) => {
+        expect(id, 'on', { preset_mode: mode }, (x) => x.attributes.preset_mode === mode);
+        return call('fan', 'set_preset_mode', { preset_mode: mode }, id).catch(failed(id));
+    };
+    const setOption = (id, option) => {
+        expect(id, option, null, (x) => x.state === option);
+        return call(domainOf(id), 'select_option', { option }, id).catch(failed(id));
+    };
+    const setNumber = (id, value) => {
+        const s = entity(id);
+        if (!s) return;
+        const a = s.attributes;
+        const v = Math.max(a.min != null ? a.min : -Infinity, Math.min(a.max != null ? a.max : Infinity, value));
+        expect(id, String(v), null, (x) => Math.abs(parseFloat(x.state) - v) < 1e-6, 8000);
+        later('n:' + id, 500, () => call(domainOf(id), 'set_value', { value: v }, id).catch(failed(id)));
+    };
+    // a button pressed, a script run
+    const run = (id) => {
+        const d = domainOf(id);
+        if (d === 'button') return call('button', 'press', {}, id);
+        if (d === 'script') return call('script', 'turn_on', {}, id);
+        return call(d, 'turn_on', {}, id);
+    };
+
     // ---------- Cameras ----------
 
     // a still from the camera (an <img> can load it from any page); fresh
@@ -951,7 +1265,7 @@
         ['garage', 'Garage', 'outside'], ['primary_bedroom', 'Primary Bedroom', 'second'], ['office', 'Office', 'second']
     ];
     const MOCK_LIGHTS = [
-        ['living_room', 'Living Room Lights', 'on', 70, true], ['living_room', 'Floor Lamp', 'on', 55], ['living_room', 'Ceiling', 'off', 0],
+        ['living_room', 'Living Room', 'on', 70, true], ['living_room', 'Floor Lamp', 'on', 55], ['living_room', 'Ceiling', 'off', 0],
         ['living_room', 'TV Backlight', 'on', 30], ['kitchen', 'Kitchen Pendants', 'on', 100], ['kitchen', 'Under Cabinet', 'off', 0],
         ['dining_room', 'Chandelier', 'off', 0], ['hallway', 'Hallway Ceiling', 'off', 0], ['front_door', 'Porch Light', 'on', 80],
         ['backyard', 'Patio String Lights', 'off', 0], ['primary_bedroom', 'Bedside Left', 'off', 0], ['primary_bedroom', 'Bedside Right', 'off', 0],
@@ -976,11 +1290,22 @@
         areas = MOCK_AREAS.map(([id, name, floor]) => ({ area_id: id, name, floor_id: floor, temperature_entity_id: id === 'living_room' ? 'sensor.living_room_temperature' : null }));
         for (const [area, name, st, pct, isGroup] of MOCK_LIGHTS) {
             const id = 'light.' + slug(name);
-            const attrs = { friendly_name: name, supported_color_modes: pct == null ? ['onoff'] : ['color_temp'] };
+            // Hue-like bulbs: white and color; the plain ones only dim or switch
+            const hue = pct != null && !/ceiling|cabinet|chandelier/i.test(name);
+            const attrs = {
+                friendly_name: name,
+                supported_color_modes: pct == null ? ['onoff'] : hue ? ['color_temp', 'xy'] : ['brightness'],
+                min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6535
+            };
             if (pct != null && st === 'on') attrs.brightness = Math.round(pct * 2.55);
-            if (isGroup) attrs.entity_id = ['light.floor_lamp', 'light.ceiling', 'light.tv_backlight'];
+            if (hue && st === 'on') {
+                if (/backlight/i.test(name)) Object.assign(attrs, { color_mode: 'xy', hs_color: [262, 70], rgb_color: hsToRgb([262, 70]) });
+                else Object.assign(attrs, { color_mode: 'color_temp', color_temp_kelvin: 2700, rgb_color: kelvinToRgb(2700) });
+            }
+            if (isGroup) Object.assign(attrs, { entity_id: ['light.floor_lamp', 'light.ceiling', 'light.tv_backlight'], is_hue_group: true });
             put(id, st, attrs);
             placeOf.set(id, area);
+            platformOf.set(id, 'hue');
         }
         for (const [area, name] of MOCK_SCENES) {
             const id = 'scene.' + slug(name);
@@ -1000,7 +1325,8 @@
             hvac_modes: ['off', 'heat', 'cool', 'heat_cool', 'fan_only'], hvac_action: 'cooling', target_temp_step: 1, current_humidity: 48
         });
         placeOf.set('climate.hallway_thermostat', 'hallway');
-        put('sensor.living_room_temperature', '72.5', { friendly_name: 'Living Room Temperature', unit_of_measurement: '°F' });
+        put('sensor.living_room_temperature', '72.5', { friendly_name: 'Living Room Temperature', unit_of_measurement: '°F', device_class: 'temperature' });
+        mockMore(put);
         mockRingTimes = [new Date(Date.now() - 42 * 60000), new Date(Date.now() - 5.2 * 3600000), new Date(Date.now() - 20 * 3600000)];
         findDoorbells();
         clearInterval(mockTimer);
@@ -1009,21 +1335,173 @@
         setStatus('ready');
         emit();
     };
+    // the rest of the made-up house: outlets and power strips, players (a
+    // Sonos group across two rooms), a purifier with its settings, sensors,
+    // automations, and the things HOMER must leave out (a siren, a fridge
+    // that's gone)
+    const mockArt = (a, b, text) => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 240;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 240, 240);
+        grad.addColorStop(0, a);
+        grad.addColorStop(1, b);
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 240, 240);
+        g.fillStyle = 'rgba(255,255,255,.9)';
+        g.font = '800 30px Barlow, sans-serif';
+        g.fillText(text, 20, 214);
+        return c.toDataURL('image/jpeg', 0.85);
+    };
+    const mockMore = (put) => {
+        const dev = (entity, device, info, own) => {
+            deviceOf.set(entity, device);
+            if (!devInfo.has(device)) devInfo.set(device, info);
+            if (own === null) mainOf.add(entity);
+            else if (own) ownName.set(entity, own);
+        };
+        const at = (id, area) => placeOf.set(id, area);
+        // wall switches with the living room's lights
+        const kasa = { model: 'HS200', maker: 'TP-Link' };
+        put('switch.living_room_fan_light', 'on', { friendly_name: 'Living Room Fan Light' });
+        dev('switch.living_room_fan_light', 'dev_lr_fanlight', Object.assign({ name: 'Living Room Fan Light' }, kasa), null);
+        put('switch.living_room_fan', 'off', { friendly_name: 'Living Room Fan' });
+        dev('switch.living_room_fan', 'dev_lr_fan', Object.assign({ name: 'Living Room Fan' }, kasa), null);
+        ['switch.living_room_fan_light', 'switch.living_room_fan'].forEach((id) => { at(id, 'living_room'); wallSwitches.add(id); });
+        // power strips
+        const strip = (area, device, name, outlets) => {
+            const base = 'switch.' + slug(name);
+            put(base, outlets.some((o) => o[1] === 'on') ? 'on' : 'off', { friendly_name: name });
+            dev(base, device, { name, model: 'KP303', maker: 'TP-Link' }, null);
+            at(base, area);
+            for (const [own, st] of outlets) {
+                const id = base + '_' + slug(own);
+                put(id, st, { friendly_name: name + ' ' + own });
+                dev(id, device, null, own);
+                at(id, area);
+            }
+        };
+        strip('living_room', 'dev_strip_lr', 'TP-LINK_Power Strip_7085', [['Amplifier', 'on'], ['Turntable', 'off'], ['Bookshelf', 'off']]);
+        strip('office', 'dev_strip_office', 'Office Power Strip', [['Office Amplifier', 'on'], ['Office Turntable', 'on'], ['Plug 3', 'off']]);
+        put('switch.garage', 'on', { friendly_name: 'Garage', device_class: 'outlet' });
+        // players: a Sonos group (the living room leads, the kitchen follows), a TV, a WiiM
+        const sonos = 4127295;
+        const song = { media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', media_content_type: 'music' };
+        const art = mockArt('#c9743a', '#3b2a5c', 'HARVEST MOON');
+        put('media_player.living_room_sonos', 'playing', Object.assign({
+            friendly_name: 'Living Room', volume_level: 0.32, is_volume_muted: false, supported_features: sonos, source_list: ['TV', 'Line-in'],
+            group_members: ['media_player.living_room_sonos', 'media_player.kitchen_sonos'], entity_picture: art
+        }, song));
+        dev('media_player.living_room_sonos', 'dev_sonos_lr', { name: 'Living Room', model: 'SYMFONISK Picture frame', maker: 'Sonos' }, null);
+        at('media_player.living_room_sonos', 'living_room');
+        platformOf.set('media_player.living_room_sonos', 'sonos');
+        put('media_player.kitchen_sonos', 'playing', Object.assign({
+            friendly_name: 'Kitchen', volume_level: 0.2, is_volume_muted: false, supported_features: sonos,
+            group_members: ['media_player.living_room_sonos', 'media_player.kitchen_sonos'], entity_picture: art
+        }, song));
+        dev('media_player.kitchen_sonos', 'dev_sonos_k', { name: 'Kitchen', model: 'One SL', maker: 'Sonos' }, null);
+        at('media_player.kitchen_sonos', 'kitchen');
+        platformOf.set('media_player.kitchen_sonos', 'sonos');
+        put('media_player.living_room_tv', 'on', {
+            friendly_name: 'Living Room TV', volume_level: 0.18, is_volume_muted: false, supported_features: 24509,
+            source_list: ['TV', 'HDMI 1', 'HDMI 2', 'HDMI 3'], source: 'HDMI 1', device_class: 'tv'
+        });
+        dev('media_player.living_room_tv', 'dev_tv_lr', { name: 'Living Room TV', model: 'QN65Q80', maker: 'Samsung' }, null);
+        at('media_player.living_room_tv', 'living_room');
+        platformOf.set('media_player.living_room_tv', 'samsungtv');
+        // the same TV again over DLNA: left out
+        put('media_player.living_room_tv_dlna', 'unavailable', { friendly_name: 'Living Room TV', supported_features: 0 });
+        dev('media_player.living_room_tv_dlna', 'dev_tv_lr_dlna', { name: 'Living Room TV', model: 'QN65Q80', maker: 'Samsung' }, null);
+        at('media_player.living_room_tv_dlna', 'living_room');
+        platformOf.set('media_player.living_room_tv_dlna', 'dlna_dmr');
+        put('media_player.office_wiim', 'unavailable', { friendly_name: 'Office Wiim', supported_features: 743949 });
+        dev('media_player.office_wiim', 'dev_wiim_office', { name: 'Office Wiim', model: 'WiiM Mini', maker: 'WiiM' }, null);
+        at('media_player.office_wiim', 'office');
+        platformOf.set('media_player.office_wiim', 'linkplay');
+        // the purifier, and its own settings
+        const pur = { name: 'Xiaomi Smart Air Purifier 4 Compact', model: 'zhimi.airp.cpa4', maker: 'zhimi' };
+        put('fan.air_purifier', 'on', { friendly_name: pur.name + ' Air Purifier', preset_modes: ['Auto', 'Sleep', 'Favorite'], preset_mode: 'Favorite', supported_features: 56 });
+        dev('fan.air_purifier', 'dev_purifier', pur, 'Air Purifier');
+        put('number.air_purifier_favorite_level', '11', { friendly_name: pur.name + ' custom-service favorite-level', min: 0, max: 14, step: 1 });
+        dev('number.air_purifier_favorite_level', 'dev_purifier', pur, 'custom-service favorite-level');
+        put('switch.air_purifier_child_lock', 'off', { friendly_name: pur.name + ' Physical Control Locked' });
+        dev('switch.air_purifier_child_lock', 'dev_purifier', pur, 'Physical Control Locked');
+        put('switch.air_purifier_power', 'on', { friendly_name: pur.name + ' Air Purifier Power' });
+        dev('switch.air_purifier_power', 'dev_purifier', pur, 'Air Purifier Power');
+        put('switch.air_purifier_alarm', 'off', { friendly_name: pur.name + ' Alarm' });
+        dev('switch.air_purifier_alarm', 'dev_purifier', pur, 'Alarm');
+        put('sensor.air_purifier_pm25', '5', { friendly_name: pur.name + ' PM2.5', device_class: 'pm25', unit_of_measurement: 'µg/m³' });
+        dev('sensor.air_purifier_pm25', 'dev_purifier', pur, 'PM2.5');
+        ['fan.air_purifier', 'number.air_purifier_favorite_level', 'switch.air_purifier_child_lock', 'switch.air_purifier_power', 'switch.air_purifier_alarm', 'sensor.air_purifier_pm25'].forEach((id) => at(id, 'living_room'));
+        // sensors
+        put('sensor.living_room_humidity', '48', { friendly_name: 'Living Room Humidity', device_class: 'humidity', unit_of_measurement: '%' });
+        at('sensor.living_room_humidity', 'living_room');
+        put('binary_sensor.living_room_motion', 'on', { friendly_name: 'Living Room Motion', device_class: 'motion' });
+        at('binary_sensor.living_room_motion', 'living_room');
+        put('binary_sensor.front_door_door', 'on', { friendly_name: 'Front Door Door', device_class: 'door' });
+        at('binary_sensor.front_door_door', 'front_door');
+        put('binary_sensor.kitchen_outside_door', 'off', { friendly_name: 'Kitchen Outside Door Door', device_class: 'door' });
+        at('binary_sensor.kitchen_outside_door', 'kitchen');
+        // the thermostat's own settings
+        const eco = { name: 'Home', model: 'ECB601', maker: 'ecobee Inc.' };
+        dev('climate.hallway_thermostat', 'dev_thermostat', eco, null);
+        put('select.hallway_current_mode', 'home', { friendly_name: 'Home Current Mode', options: ['home', 'sleep', 'away'] });
+        dev('select.hallway_current_mode', 'dev_thermostat', eco, 'Current Mode');
+        put('button.hallway_clear_hold', 'unknown', { friendly_name: 'Home Clear Hold' });
+        dev('button.hallway_clear_hold', 'dev_thermostat', eco, 'Clear Hold');
+        put('button.hallway_identify', 'unknown', { friendly_name: 'Home Identify', device_class: 'identify' });
+        dev('button.hallway_identify', 'dev_thermostat', eco, 'Identify');
+        ['select.hallway_current_mode', 'button.hallway_clear_hold', 'button.hallway_identify'].forEach((id) => at(id, 'hallway'));
+        // automations and helpers (no room, like most)
+        put('automation.living_room_lamps', 'on', { friendly_name: 'Living Room Lamps' });
+        put('automation.party_mode', 'off', { friendly_name: 'Party Mode' });
+        put('input_boolean.party_lights_toggle', 'on', { friendly_name: 'Party Lights Toggle' });
+        put('script.movie_time', 'off', { friendly_name: 'Movie Time' });
+        // never shown: a siren, a switch that sets one off, a fridge that's gone
+        put('siren.front_door_siren', 'unknown', { friendly_name: 'Front Door Siren' });
+        put('switch.front_door_siren_on_event', 'off', { friendly_name: 'Front Door Siren on event' });
+        at('switch.front_door_siren_on_event', 'front_door');
+        put('switch.refrigerator_cubed_ice', 'unavailable', { friendly_name: 'Cubed ice', restored: true });
+        at('switch.refrigerator_cubed_ice', 'kitchen');
+    };
     const mockCall = async (domain, service, data, id) => {
         await new Promise((r) => setTimeout(r, 250));
         const s = states[id];
         if (!s) throw new Error('no such entity');
         const x = Object.assign({}, s, { attributes: Object.assign({}, s.attributes), last_changed: new Date().toISOString() });
-        if (domain === 'light' || domain === 'switch') {
-            if (service === 'turn_off') { x.state = 'off'; delete x.attributes.brightness; }
+        const A = x.attributes;
+        if (domain === 'light' || domain === 'switch' || domain === 'automation' || domain === 'input_boolean' || domain === 'fan') {
+            if (service === 'turn_off') { x.state = 'off'; delete A.brightness; }
             if (service === 'turn_on') {
                 x.state = 'on';
-                if (data.brightness_pct != null) x.attributes.brightness = Math.round(data.brightness_pct * 2.55);
-                else if (x.attributes.brightness == null && (x.attributes.supported_color_modes || []).some((m) => m !== 'onoff')) x.attributes.brightness = 255;
+                if (data.brightness_pct != null) A.brightness = Math.round(data.brightness_pct * 2.55);
+                else if (domain === 'light' && A.brightness == null && (A.supported_color_modes || []).some((m) => m !== 'onoff')) A.brightness = 255;
+                if (data.hs_color) Object.assign(A, { color_mode: 'xy', hs_color: data.hs_color, rgb_color: hsToRgb(data.hs_color), color_temp_kelvin: null });
+                if (data.color_temp_kelvin) Object.assign(A, { color_mode: 'color_temp', color_temp_kelvin: data.color_temp_kelvin, rgb_color: kelvinToRgb(data.color_temp_kelvin) });
+                if (domain === 'light' && !data.hs_color && !data.color_temp_kelvin && !A.color_mode && (A.supported_color_modes || []).includes('color_temp')) {
+                    Object.assign(A, { color_mode: 'color_temp', color_temp_kelvin: 2700, rgb_color: kelvinToRgb(2700) });
+                }
             }
+            if (service === 'set_percentage') { A.percentage = data.percentage; x.state = data.percentage > 0 ? 'on' : 'off'; }
+            if (service === 'set_preset_mode') { A.preset_mode = data.preset_mode; x.state = 'on'; }
         } else if (domain === 'climate') {
-            if (service === 'set_temperature') Object.assign(x.attributes, data);
+            if (service === 'set_temperature') Object.assign(A, data);
             if (service === 'set_hvac_mode') x.state = data.hvac_mode;
+        } else if (domain === 'media_player') {
+            if (service === 'media_play') x.state = 'playing';
+            if (service === 'media_pause' || service === 'media_stop') x.state = 'paused';
+            if (service === 'volume_set') A.volume_level = data.volume_level;
+            if (service === 'volume_up' || service === 'volume_down') A.volume_level = Math.max(0, Math.min(1, (A.volume_level || 0) + (service === 'volume_up' ? 0.02 : -0.02)));
+            if (service === 'volume_mute') A.is_volume_muted = data.is_volume_muted;
+            if (service === 'select_source') A.source = data.source;
+            if (service === 'turn_on') x.state = 'on';
+            if (service === 'turn_off') x.state = 'off';
+            if (service === 'media_next_track') A.media_title = 'Old Man';
+            if (service === 'media_previous_track') A.media_title = 'Harvest Moon';
+        } else if (domain === 'select' || domain === 'input_select') {
+            x.state = data.option;
+        } else if (domain === 'number' || domain === 'input_number') {
+            x.state = String(data.value);
         }
         states[id] = x;
         const o = overlay.get(id);
@@ -1111,6 +1589,31 @@
         setTemperature,
         setMode,
         scene,
+        color,
+        setColor,
+        kelvinToRgb,
+        hsToRgb,
+        supports,
+        playPause,
+        mediaCommand,
+        setVolume,
+        stepVolume,
+        mute,
+        setSource,
+        power,
+        pictureUrl,
+        setFanSpeed,
+        setPreset,
+        setOption,
+        setNumber,
+        run,
+        extras,
+        device,
+        shortName,
+        platform: (id) => platformOf.get(id) || '',
+        isGroup,
+        isWallSwitch: (id) => wallSwitches.has(id),
+        isMain: (id) => mainOf.has(id),
         snapshotUrl,
         playCamera,
         rings,

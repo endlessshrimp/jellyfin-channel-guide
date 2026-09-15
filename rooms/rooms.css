@@ -855,3 +855,404 @@
 }
 
 @keyframes ho-spin { to { transform: rotate(360deg); } }
+
+/* ---------- At a glance: under the room's name, read only ---------- */
+
+.ho-glance {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.ho-glance:empty { display: none; }
+
+.ho-glance .homer-glance {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 16px 0 12px;
+    border-radius: 19px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line-strong);
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: #d6e0ec;
+    white-space: nowrap;
+}
+
+.ho-glance .homer-glance .material-icons { font-size: 21px; color: var(--accent-2); }
+
+/* a door left open: the needle's amber; smoke or a leak: red */
+.ho-glance .homer-glance.warn { border-color: rgba(255, 197, 77, 0.45); color: var(--lit); }
+.ho-glance .homer-glance.warn .material-icons { color: var(--lit); }
+.ho-glance .homer-glance.alert { border-color: rgba(255, 90, 90, 0.6); background: rgba(255, 59, 59, 0.14); color: #ffb3b3; }
+.ho-glance .homer-glance.alert .material-icons { color: #ff7a7a; }
+
+/* ---------- The lights: wall switches, then the bulbs ---------- */
+
+.ho-subsec {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 16px 14px 0;
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+
+.ho-subsec::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-strong);
+}
+
+/* a bulb's color: a dot on its bulb (a ring while it's off) */
+.ho-bulb { position: relative; }
+
+.ho-dot {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 20px;
+    height: 20px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 3px #0e1c33;
+    display: none;
+    cursor: pointer;
+}
+
+.ho-dot.show { display: block; }
+.ho-dot.lit { border-color: rgba(255, 255, 255, 0.7); }
+
+/* ---------- Rows shaped like a light: outlets, automations, fans, numbers ---------- */
+
+/* on is HOMER's blue, not a light's amber */
+.ho-light.acc.on .ho-bulb { background: rgba(111, 211, 255, 0.14); box-shadow: 0 0 24px rgba(111, 211, 255, 0.22); }
+.ho-light.acc.on .ho-bulb .material-icons { color: var(--accent-2); }
+.ho-light.acc .ho-bar i { background: linear-gradient(90deg, #2f8cff, var(--accent-2)); }
+.ho-light.acc.on .ho-pill { background: rgba(111, 211, 255, 0.14); border-color: rgba(111, 211, 255, 0.45); color: var(--accent-2); }
+.ho-light.acc.sel .ho-bar i { background: #bfeaff; }
+.ho-light.acc.sel.on .ho-pill { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.ho-light.run .ho-pill { border-style: dashed; color: var(--text); }
+.ho-light.nopill .ho-pill { visibility: hidden; }
+
+/* a device's own setting, under it */
+.ho-row.extra { margin-left: 52px; }
+.ho-light.extra { height: 72px; }
+.ho-light.extra .ho-bulb { width: 44px; height: 44px; }
+.ho-light.extra .ho-bulb .material-icons { font-size: 25px; }
+.ho-light.extra .ho-light-name { font-size: 24px; }
+
+/* ---------- A card: a player's (or a fan's) rows together ---------- */
+
+.ho-card {
+    margin-top: 12px;
+    padding: 2px 10px 10px;
+    border-radius: 18px;
+    background: rgba(8, 18, 34, 0.55);
+    border: 1px solid var(--line);
+}
+
+.ho-card .ho-row { margin-top: 8px; }
+
+/* ---------- A player ---------- */
+
+.ho-media {
+    height: 140px;
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) minmax(280px, 32%);
+    align-items: center;
+    gap: 26px;
+    padding: 0 28px 0 14px;
+}
+
+.ho-art {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0a1426;
+    box-shadow: 0 0 0 1px var(--line-strong);
+    display: grid;
+    place-items: center;
+}
+
+.ho-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.ho-art.has-art img { opacity: 1; }
+.ho-art-icon { font-size: 50px; color: var(--faint); }
+.ho-media.on .ho-art-icon { color: var(--accent-2); }
+
+.ho-media-text { min-width: 0; }
+
+.ho-media-name {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-media-line {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-media.playing .ho-media-line { color: var(--accent-2); }
+
+.ho-media-title {
+    margin-top: 4px;
+    font-size: 22px;
+    font-weight: 600;
+    color: #d6e0ec;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-media-title:empty { display: none; }
+
+.ho-vol {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ho-vol-icon { font-size: 28px; color: var(--dim); }
+.ho-vol .ho-bar { flex: 1; }
+.ho-vol .ho-bar i { background: linear-gradient(90deg, #2f8cff, var(--accent-2)); }
+
+.ho-vol-v {
+    min-width: 76px;
+    text-align: right;
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.ho-media.no-vol .ho-vol { visibility: hidden; }
+.ho-media.off-line { opacity: 0.55; }
+.ho-media.sel .ho-media-line,
+.ho-media.sel.playing .ho-media-line,
+.ho-media.sel .ho-vol-icon { color: rgba(255, 255, 255, 0.85); }
+.ho-media.sel .ho-media-title { color: #fff; }
+.ho-media.sel .ho-bar { background: rgba(255, 255, 255, 0.28); }
+.ho-media.sel .ho-vol .ho-bar i { background: #bfeaff; }
+
+/* its buttons: play, skip, mute, power */
+.ho-mbtn { padding: 0 22px 0 16px; }
+.ho-mbtn span:last-child { font-size: 21px; }
+.ho-mbtn.cur { background: rgba(47, 140, 255, 0.2); border-color: rgba(111, 211, 255, 0.55); }
+
+/* a labeled row of choices: an input, a mode, a device's setting */
+.ho-choices {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.ho-choices-label {
+    flex: none;
+    max-width: 200px;
+    padding-left: 10px;
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-choices .ho-chips-track { flex: 1; min-width: 0; }
+.ho-choices.extra .ho-chip { height: 52px; font-size: 21px; }
+.ho-chips.off-line { opacity: 0.55; }
+
+/* ---------- A bulb's color ---------- */
+
+.ho-picker {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    background: rgba(2, 5, 10, 0.62);
+}
+
+.ho-picker.show { display: flex; }
+
+.ho-picker-card {
+    width: min(1060px, 94%);
+    box-sizing: border-box;
+    padding: 28px 30px 30px;
+    border-radius: 20px;
+    background: #0b1830;
+    box-shadow: 0 0 0 1px var(--line-strong), 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.ho-picker-head {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 6px 6px;
+}
+
+.ho-picker-dot {
+    flex: none;
+    width: 46px;
+    height: 46px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.ho-picker-dot.lit { border-color: rgba(255, 255, 255, 0.75); box-shadow: 0 0 26px rgba(255, 255, 255, 0.18); }
+.ho-picker-name { font-size: 32px; line-height: 1.1; font-weight: 800; }
+
+.ho-picker-sub {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-pk-row {
+    margin-top: 14px;
+    border-radius: 14px;
+    background: rgba(20, 36, 60, 0.5);
+    border: 1px solid rgba(160, 190, 230, 0.06);
+}
+
+.ho-pk-row.sel {
+    background: var(--cell-hi);
+    border-color: rgba(160, 200, 255, 0.3);
+}
+
+.ho-pk-sw { padding: 12px; }
+
+.ho-pk-track {
+    position: relative;
+    display: flex;
+    gap: 8px;
+}
+
+/* all the presets in one row: a swatch, its name under it */
+.ho-sw {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 12px;
+    background: var(--cell);
+    border: 1px solid var(--line-strong);
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ho-sw-dot {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.ho-pk-val .ho-sw-dot { width: 30px; height: 30px; }
+
+.ho-sw.cur { border-color: rgba(111, 211, 255, 0.7); background: rgba(47, 140, 255, 0.18); }
+
+.ho-sw.sel {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    color: #fff;
+}
+
+.ho-pk-strip {
+    height: 78px;
+    display: grid;
+    grid-template-columns: 110px 1fr 110px;
+    align-items: center;
+    gap: 22px;
+    padding: 0 22px;
+    cursor: pointer;
+}
+
+.ho-pk-label {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.ho-pk-grad {
+    position: relative;
+    height: 22px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.ho-pk-grad i {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 4px solid #fff;
+    background: rgba(0, 0, 0, 0.15);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition: left 160ms ease;
+}
+
+.ho-pk-row.sel .ho-pk-grad i { width: 36px; height: 36px; box-shadow: 0 0 0 3px rgba(47, 140, 255, 0.8), 0 4px 14px rgba(0, 0, 0, 0.5); }
+
+.ho-pk-val {
+    display: flex;
+    justify-content: flex-end;
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}

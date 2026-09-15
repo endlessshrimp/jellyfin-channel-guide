@@ -180,6 +180,12 @@ through `ctx`, as Weather's do. Two things worth copying:
   8px track (`touch-action: none`), and the new brightness is sent once, when
   the finger lifts. A tap on the bar sets it there; a tap anywhere else on the
   row switches the light.
+- **A bulb's colors** open as a sheet from the bottom, inside the screen's
+  main area (above the tab bar): the presets in a grid of four, then a white
+  strip and a color strip you drag (`touch-action: none`; the color is sent
+  when the finger lifts or rests, like dimming). A tap beside the sheet, ✕ or
+  Esc closes it. Everything else in a room stays one level deep: a player's
+  buttons, inputs and a device's settings sit on its card, not behind it.
 - **The quick controls and the doorbell** (`rooms/quick.js`) are drawn once for
   both layouts: a sheet from the bottom and a card at the top on a phone
   (`.phone`), a panel at the right and a card at the top right, scaled from

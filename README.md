@@ -84,19 +84,44 @@ HOMER's code or the injector config except, if you like, its address.
 
 - **Rooms** (Home's menu, or **Rooms** at the top of Home on a phone) lists
   Home Assistant's areas, with what's on and the temperature, plus
-  **Cameras** for every camera. A room shows its thermostat (◀▶ sets the
-  temperature, with its modes under it), its scenes (◀▶ picks, OK turns one
-  on), its lights (a row each: ◀▶ dims in 10% steps, OK switches) and its
-  cameras (OK opens one). Esc goes back a step. On a phone the rooms are chips
-  along the top; tap a bulb to switch it, drag its bar to dim.
+  **Cameras** for every camera and **Climate** for the thermostat. A room
+  shows, top to bottom:
+  - **At a glance** (read only): its temperature and humidity, a door or
+    window left open, motion now, the air (PM2.5, AQI, CO₂), smoke or a leak.
+  - Its **scenes** (◀▶ picks, OK turns one on).
+  - Its **lights**: wall switches first, then the bulbs (the room's own group,
+    **All lights**, first). ◀▶ dims in 10% steps, OK switches. A bulb that
+    does color has a dot in its color; **C** opens its colors: presets, a
+    warm-to-cool white strip and a color strip.
+  - Its **cameras** (OK opens one).
+  - **Switches & outlets**: plugs and power strips (a strip's own switch is
+    **All outlets**).
+  - **Media**: a card per player: what's playing and its art, ◀▶ for the
+    volume and OK to play or pause on the card, then its buttons (skip, mute,
+    power) and its inputs. A speaker group shows once, under the speaker
+    leading it; the same speaker or TV coming in through two integrations
+    (itself, DLNA, Cast) shows once.
+  - **Fans** (an air purifier): on and off, its speed or modes, and the
+    device's own settings under it (a child lock, a favorite level).
+  - **Automations & helpers**: automations (on is enabled), toggles, and
+    scripts and buttons to run.
+
+  What's left out: sirens and anything that sets one off, alarm panels,
+  hidden and settings/diagnostic entities, buttons that restart or reset a
+  device, and devices whose integration isn't running (Home Assistant only
+  remembers them). Anything else that's unavailable is dimmed with no
+  controls. Esc goes back a step. On a phone the rooms are chips along the
+  top, with the same sections; tap a bulb to switch it, drag its bar to dim,
+  tap its color dot for its colors.
 - **A camera** opens large, live when the camera streams (Home Assistant's HLS,
   played with hls.js, or the browser's own on an iPhone), otherwise a still
   that refreshes every second. ◀▶ goes to the next camera. A doorbell shows
   the day's rings.
 - **L** (or the lightbulb in the player's controls) opens the quick controls
   over any HOMER screen or a full-screen video, which keeps playing: one room
-  at a time (◀▶ on its name changes rooms), its scenes and lights, and the
-  house's thermostat pinned at the bottom. **L** or **Esc** closes it; it
+  at a time (◀▶ on its name changes rooms), its scenes, its lights, what its
+  players are playing (◀▶ volume, OK play/pause), and the house's thermostat
+  pinned at the bottom. **L** or **Esc** closes it; it
   closes by itself after 20 seconds. On a phone it's a sheet from the bottom.
 - **The doorbell.** When Home Assistant says the doorbell rang (a Reolink
   visitor sensor or a doorbell event entity), its camera comes up small at the
@@ -265,7 +290,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **C** | Switch country: All, USA, UK, France (combines with the category) |
 | **Page Up / Page Down** | Jump a screen of channels |
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
-| **L** | Quick controls for Home Assistant's lights, scenes and thermostat, over whatever's playing (once Home Assistant is connected) |
+| **L** | Quick controls for Home Assistant's lights, scenes, players and thermostat, over whatever's playing (once Home Assistant is connected) |
 | **Esc / Backspace / G** | Close the guide |
 
 With a mouse or trackpad: scroll the grid freely (sideways moves through

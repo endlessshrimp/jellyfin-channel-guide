@@ -6,9 +6,10 @@
  * small panel at the right of the screen, over a full-screen video, a docked
  * one, or any HOMER screen; the video keeps playing under it. One room at a
  * time (◀▶ on its name switches rooms; it remembers the last one): its scenes
- * (◀▶ picks, OK runs) and its lights (◀▶ dims, OK switches), and pinned at
- * the bottom, whatever room you're in, the house's thermostat (◀▶ sets the
- * temperature; its modes under it). L or Esc closes
+ * (◀▶ picks, OK runs), its lights (wall switches, then the bulbs: ◀▶ dims,
+ * OK switches) and what its players are playing (◀▶ sets the volume, OK
+ * plays or pauses), and pinned at the bottom, whatever room you're in, the
+ * house's thermostat (◀▶ sets the temperature; its modes under it). L or Esc closes
  * it, and it closes by itself after 20 seconds without a key. On a phone it's
  * a sheet from the bottom: tap to switch, drag a bar to dim.
  *
@@ -121,10 +122,16 @@
     const recallRoom = () => { try { return localStorage.getItem(ROOM_KEY) || ''; } catch { return ''; } };
     const keepRoom = (id) => { try { localStorage.setItem(ROOM_KEY, id); } catch { /* this session only */ } };
 
-    // the rooms worth a quick panel: ones with lights or scenes
+    // the rooms worth a quick panel: ones with lights, scenes or players
     const quickRooms = () => {
         const c = C();
-        return c ? c.roomList().filter((r) => r.id !== c.CAMERAS && (r.lights.length || r.scenes.length)) : [];
+        return c ? c.roomList().filter((r) => r.id !== c.CAMERAS && (r.lights.length || r.scenes.length || (r.media || []).length)) : [];
+    };
+    // the room's players that are on (a TV that's off, a speaker that's
+    // unplugged, stay out)
+    const nowPlaying = (r) => {
+        const c = C();
+        return r && c ? c.mediaCards(r).filter((id) => c.mediaInfo(id, r).active) : [];
     };
     const room = () => rooms.find((r) => r.id === roomId) || rooms[0] || null;
     const thermostats = () => {
@@ -138,7 +145,11 @@
         const out = [];
         if (r) {
             if (r.scenes.length) out.push({ kind: 'scenes', ids: r.scenes });
-            r.lights.forEach((id) => out.push({ kind: 'light', id }));
+            // the wall switches, then the bulbs
+            const parts = c.lightParts(r);
+            parts.switches.forEach((id) => out.push({ kind: 'light', id, part: 'switches' }));
+            parts.bulbs.forEach((id) => out.push({ kind: 'light', id, part: 'bulbs' }));
+            nowPlaying(r).forEach((id) => out.push({ kind: 'media', id }));
         }
         thermostats().forEach(({ id, room: tr }) => {
             const T = c.climateInfo(id, tr);
@@ -148,23 +159,36 @@
         return out;
     };
 
+    const rowSig = (x) => x.kind + (x.which || '') + (x.kind === 'media' ? x.id : '');
     const build = () => {
         const c = C();
         const r = room();
         rows = rowsFor(r);
-        builtSig = (r ? r.id : '') + '|' + rows.map((x) => x.kind + (x.which || '')).join(',');
+        builtSig = (r ? r.id : '') + '|' + rows.map(rowSig).join(',');
+        const parts = r ? c.lightParts(r) : { switches: [], bulbs: [] };
+        const split = parts.switches.length && parts.bulbs.length;
         // the room's rows scroll; the thermostat's stay put at the bottom
         const html = { body: '', foot: '' };
         let last = '';
+        let lastPart = '';
         rows.forEach((row, i) => {
-            const sec = row.kind === 'setpoint' || row.kind === 'modes' ? 'Thermostat' : row.kind === 'scenes' ? 'Scenes' : 'Lights';
+            const sec = row.kind === 'setpoint' || row.kind === 'modes' ? 'Thermostat' : row.kind === 'scenes' ? 'Scenes' : row.kind === 'media' ? 'Now playing' : 'Lights';
             const to = sec === 'Thermostat' ? 'foot' : 'body';
             if (sec !== last && to === 'body') html.body += `<div class="hq-sec">${esc(sec)}</div>`;
             last = sec;
+            if (row.kind === 'light' && split && row.part !== lastPart) {
+                html.body += `<div class="hq-subsec">${esc(row.part === 'switches' ? 'Wall switches' : c.bulbsLabel(parts.bulbs))}</div>`;
+                lastPart = row.part;
+            }
             if (row.kind === 'light') {
                 html[to] += `<div class="hq-row hq-light" data-r="${i}" role="button">
-                        <span class="hq-bulb">${icon(HA().glyph(row.id))}</span>
+                        <span class="hq-bulb">${icon(HA().glyph(row.id))}<i class="hq-dot"></i></span>
                         <div class="hq-light-main"><div class="hq-light-top"><span class="hq-name"></span><span class="hq-val"></span></div><div class="hq-bar"><i></i></div></div>
+                    </div>`;
+            } else if (row.kind === 'media') {
+                html[to] += `<div class="hq-row hq-light hq-media" data-r="${i}" role="button">
+                        <span class="hq-art">${icon('speaker', 'hq-art-icon')}<img alt="" draggable="false"></span>
+                        <div class="hq-light-main"><div class="hq-light-top"><span class="hq-name"></span><span class="hq-val"></span></div><div class="hq-media-title"></div><div class="hq-bar"><i></i></div></div>
                     </div>`;
             } else if (row.kind === 'scenes' || row.kind === 'modes') {
                 const chips = row.kind === 'scenes'
@@ -210,6 +234,25 @@
                 n.querySelector('.hq-name').textContent = L.name;
                 n.querySelector('.hq-val').textContent = c.lightText(L);
                 n.querySelector('.hq-bar i').style.width = (L.pct || 0) + '%';
+                const dot = n.querySelector('.hq-dot');
+                dot.classList.toggle('show', !!L.dot);
+                dot.style.background = L.dot;
+            } else if (row.kind === 'media') {
+                const M = c.mediaInfo(row.id, r);
+                n.classList.toggle('on', M.playing);
+                n.classList.toggle('switch', !M.canVolume);
+                n.querySelector('.hq-name').textContent = M.name;
+                n.querySelector('.hq-val').textContent = M.canVolume ? (M.muted ? 'Muted' : M.volume + '%') : M.stateText;
+                n.querySelector('.hq-media-title').textContent = c.mediaTitle(M) || c.mediaLine(M);
+                n.querySelector('.hq-bar i').style.width = (M.canVolume ? M.volume : 0) + '%';
+                n.querySelector('.hq-art-icon').textContent = M.playing ? 'pause' : 'play_arrow';
+                const art = n.querySelector('.hq-art');
+                const img = art.querySelector('img');
+                if (img.dataset.src !== M.art) {
+                    img.dataset.src = M.art;
+                    art.classList.remove('has-art');
+                    if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
+                }
             } else if (row.kind === 'setpoint') {
                 const T = c.climateInfo(row.id, row.room);
                 const t = T.targets.find((x) => x.which === row.which);
@@ -235,6 +278,11 @@
         const items = [];
         if (ri === -1 && rooms.length > 1) items.push(['◀▶', 'Rooms']);
         else if (row && row.kind === 'light') items.push(['◀▶', 'Dim'], ['OK', 'On/off']);
+        else if (row && row.kind === 'media') {
+            const M = C().mediaInfo(row.id, room());
+            if (M.canVolume || M.canStep) items.push(['◀▶', 'Volume']);
+            if (M.canPlay) items.push(['OK', M.playing ? 'Pause' : 'Play']);
+        }
         else if (row && row.kind === 'setpoint') items.push(['◀▶', 'Temperature']);
         else if (row && row.ids) items.push(['◀▶', 'Pick'], ['OK', row.kind === 'scenes' ? 'Turn on' : 'Set']);
         items.push(['L', 'Close']);
@@ -281,7 +329,10 @@
         const h = HA();
         if (!row || !h) return;
         if (row.kind === 'light') h.toggle(row.id).catch(failed);
-        else if (row.kind === 'scenes') {
+        else if (row.kind === 'media') {
+            const M = C().mediaInfo(row.id, room());
+            if (M.canPlay) h.playPause(M.target).catch(failed);
+        } else if (row.kind === 'scenes') {
             const id = row.ids[k];
             h.scene(id).then(() => toast(`${h.name(id, room() && room().name)} is on`)).catch(failed);
         } else if (row.kind === 'modes') h.setMode(row.id, row.ids[k]).catch(failed);
@@ -293,6 +344,8 @@
         if (row.kind === 'light') {
             const L = c.lightInfo(row.id, room());
             if (L.pct != null && !L.unavailable) h.setBrightness(row.id, clamp((Math.round((L.pct || 0) / 10) + d) * 10, 0, 100));
+        } else if (row.kind === 'media') {
+            c.stepMedia(c.mediaInfo(row.id, room()), d);
         } else if (row.kind === 'setpoint') {
             const T = c.climateInfo(row.id, row.room);
             const t = T.targets.find((x) => x.which === row.which);
@@ -319,7 +372,7 @@
             if (!rooms.find((r) => r.id === roomId)) roomId = (rooms.find((r) => r.id === recallRoom()) || rooms.find((r) => r.id === (C() && C().recalled())) || C().firstRoom(rooms) || {}).id || '';
         }
         const r = room();
-        if (rowsFor(r).map((x) => x.kind + (x.which || '')).join(',') !== builtSig.split('|')[1] || (r ? r.id : '') !== builtSig.split('|')[0]) build();
+        if (rowsFor(r).map(rowSig).join(',') !== builtSig.split('|')[1] || (r ? r.id : '') !== builtSig.split('|')[0]) build();
         else paint();
     };
 
@@ -512,7 +565,7 @@
         if (step) { adjust(row, Number(step.dataset.step)); return; }
         const chip = t.closest('[data-k]');
         if (chip) { ci[ri] = Number(chip.dataset.k); paint(); act(row, ci[ri]); return; }
-        if (row.kind === 'light' && !t.closest('.hq-bar')) act(row, 0);
+        if ((row.kind === 'light' || row.kind === 'media') && !t.closest('.hq-bar')) act(row, 0);
         else paint();
     });
     // drag a light's bar to dim it (a finger, or a mouse)
@@ -521,9 +574,10 @@
         const n = bar && bar.closest('.hq-light');
         if (!n) return;
         const row = rows[Number(n.dataset.r)];
-        const L = C().lightInfo(row.id, room());
-        if (L.pct == null) return;
-        dragging = { bar, id: row.id, fill: bar.querySelector('i') };
+        if (row.kind === 'media') {
+            if (!C().mediaInfo(row.id, room()).canVolume) return;
+        } else if (C().lightInfo(row.id, room()).pct == null) return;
+        dragging = { bar, id: row.id, media: row.kind === 'media', fill: bar.querySelector('i') };
         try { bar.setPointerCapture(ev.pointerId); } catch { /* fine */ }
         const p = barPct(bar, ev.clientX);
         dragging.fill.style.width = p + '%';
@@ -539,7 +593,8 @@
     });
     const endDrag = () => {
         if (!dragging) return;
-        HA().setBrightness(dragging.id, dragging.pct);
+        if (dragging.media) HA().setVolume(dragging.id, dragging.pct / 100);
+        else HA().setBrightness(dragging.id, dragging.pct);
         dragging = null;
     };
     panel.addEventListener('pointerup', endDrag);

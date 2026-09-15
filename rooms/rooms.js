@@ -168,6 +168,11 @@
             const s = h.entity(id);
             if (s && s.attributes.current_temperature != null) return s.attributes.current_temperature;
         }
+        // else the room's first temperature sensor
+        for (const id of (room.glance && room.glance.temps) || []) {
+            const s = h.entity(id);
+            if (s && isFinite(parseFloat(s.state))) return parseFloat(s.state);
+        }
         return null;
     };
     const roomSummary = (room) => {
@@ -186,7 +191,15 @@
             parts.push(on === 0 ? 'Lights off' : list.length === 1 ? 'Light on' : `${on} of ${list.length} on`);
         } else if (room.cameras.length) {
             parts.push(`${room.cameras.length} camera${room.cameras.length === 1 ? '' : 's'}`);
+        } else if ((room.switches || []).length) {
+            const on = room.switches.filter((id) => { const s = h.entity(id); return s && s.state === 'on'; }).length;
+            parts.push(on ? `${on} of ${room.switches.length} on` : 'All off');
+        } else if ((room.media || []).length && !(room.media || []).some((id) => mediaInfo(id, room).playing)) {
+            parts.push(`${room.media.length} player${room.media.length === 1 ? '' : 's'}`);
         }
+        // a player playing, by name
+        const playing = (room.media || []).map((id) => mediaInfo(id, room)).find((M) => M.playing && M.target === M.id);
+        if (playing) parts.push(`${playing.name} playing`);
         const t = roomTemp(room);
         if (t != null) parts.push(deg(t));
         return parts.join(' · ');
@@ -205,12 +218,15 @@
         // a wall switch named just for its room ("Dining Room Light") reads
         // as what it is next to the bulbs
         if (/^switch\./.test(id) && /^lights?$/i.test(name.trim())) name = 'Wall switch';
+        const color = h.color(id);
         return {
             id,
             name,
             on: h.lightOn(id),
             pct, // 0–100, or null: it only switches
             group,
+            color, // what it can do with color (null: it only dims)
+            dot: color && color.rgb ? rgbCss(color.rgb) : '', // its color now, while it's on
             unavailable: !s || s.state === 'unavailable'
         };
     };
@@ -256,6 +272,271 @@
         const what = running ? C.action : MODE_LABELS[C.mode] || C.mode;
         return `${what}${t ? ' to ' + t : ''}${!running && C.action ? ' · ' + C.action : ''}`;
     };
+
+    // ---------- The rest of a room: bulbs' colors, outlets, players, fans,
+    // automations, and what's worth a glance ----------
+
+    const domainOf = (id) => id.split('.')[0];
+    const pretty = (s) => { const t = String(s ?? '').replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
+    const rgbCss = (rgb) => (rgb ? `rgb(${rgb.map((v) => Math.round(v)).join(',')})` : '');
+    const agoShort = (iso) => {
+        const t = Date.parse(iso || '');
+        return isFinite(t) && t > 0 && t < Date.now() + 60000 ? agoText(new Date(t)) : '';
+    };
+
+    // A room's lights in two parts: its wall switches, then the bulbs (the
+    // room's light group, "All lights", first). Both lists are in house order.
+    const lightParts = (room) => {
+        const h = HA();
+        const switches = room.lights.filter((id) => h.isWallSwitch(id));
+        return { switches, bulbs: room.lights.filter((id) => !h.isWallSwitch(id)) };
+    };
+    const bulbsLabel = (ids) => (ids.length && ids.every((id) => HA().platform(id) === 'hue') ? 'Hue bulbs' : 'Bulbs');
+
+    // Color presets: three whites (for a bulb with white) and eight colors
+    // (for a color bulb)
+    const SWATCHES = [
+        { name: 'Warm white', kelvin: 2200 }, { name: 'Soft white', kelvin: 2700 }, { name: 'Daylight', kelvin: 5000 },
+        { name: 'Red', hs: [0, 100] }, { name: 'Orange', hs: [26, 100] }, { name: 'Yellow', hs: [48, 100] },
+        { name: 'Green', hs: [120, 100] }, { name: 'Teal', hs: [174, 100] }, { name: 'Blue', hs: [226, 100] },
+        { name: 'Purple', hs: [275, 90] }, { name: 'Pink', hs: [322, 70] }
+    ];
+    const swatchesFor = (c) => (c ? SWATCHES.filter((s) => (s.kelvin ? c.white : c.color)) : []);
+    // whites drawn a little lighter than the math says, so Warm white doesn't
+    // read as orange next to Orange
+    const whiteRgb = (k) => HA().kelvinToRgb(k).map((v) => Math.round(v + (255 - v) * 0.35));
+    const swatchRgb = (s) => (s.kelvin ? whiteRgb(s.kelvin) : HA().hsToRgb(s.hs));
+    // the preset a bulb is showing now (-1 for none)
+    const swatchNow = (c, list) => list.findIndex((s) => (s.kelvin
+        ? c.kelvin != null && Math.abs(c.kelvin - Math.max(c.min, Math.min(c.max, s.kelvin))) < 150
+        : c.hs && Math.abs(((c.hs[0] - s.hs[0] + 540) % 360) - 180) < 8 && Math.abs(c.hs[1] - s.hs[1]) < 15));
+    // the white strip's gradient, warm to cool, and the color strip's
+    const whiteGradient = (c) => {
+        const stops = [];
+        for (let i = 0; i <= 6; i++) stops.push(rgbCss(whiteRgb(c.min + ((c.max - c.min) * i) / 6)));
+        return `linear-gradient(90deg, ${stops.join(', ')})`;
+    };
+    const hueGradient = () => `linear-gradient(90deg, ${[0, 45, 90, 135, 180, 225, 270, 315, 360].map((hue) => rgbCss(HA().hsToRgb([hue, 100]))).join(', ')})`;
+
+    // A switch, outlet, automation, helper, script or button, as a row shows
+    // it: { id, name, sub, on, runs, unavailable, icon, onText, offText }.
+    // A power strip's own switch is its "All outlets".
+    const sameDevice = (a, b) => { const h = HA(); return !!h.device(a) && h.device(a) === h.device(b); };
+    // a power strip's own switch: its device has outlets too
+    const isStrip = (id, room) => HA().isMain(id) && !!room && (room.switches || []).some((x) => x !== id && sameDevice(x, id));
+    const ENT_ICONS = { switch: 'power', automation: 'autorenew', input_boolean: 'toggle_on', script: 'play_circle', button: 'touch_app' };
+    const entIcon = (id) => (/\block/i.test(HA().shortName(id, '')) ? 'lock' : ENT_ICONS[domainOf(id)] || 'toggle_on');
+    const entInfo = (id, room, extra) => {
+        const h = HA();
+        const s = h.entity(id);
+        const d = domainOf(id);
+        const runs = d === 'script' || d === 'button';
+        let name;
+        if (extra) name = h.shortName(id, '');
+        else if (d === 'switch' && isStrip(id, room)) {
+            const strips = room.switches.filter((x) => isStrip(x, room));
+            name = strips.length > 1 ? `${h.name(id, room.name)} · all outlets` : 'All outlets';
+        } else if (d === 'switch') name = h.shortName(id, room && room.name);
+        else name = h.name(id, room && room.name);
+        let sub = '';
+        if (s && d === 'automation') sub = s.attributes.last_triggered ? `Last ran ${agoShort(s.attributes.last_triggered)}` : 'Automation';
+        else if (s && d === 'script') sub = s.attributes.last_triggered ? `Last ran ${agoShort(s.attributes.last_triggered)}` : 'Script';
+        else if (s && d === 'button') sub = agoShort(s.state) ? `Last pressed ${agoShort(s.state)}` : '';
+        else if (d === 'input_boolean') sub = 'Helper';
+        return {
+            id,
+            name,
+            sub,
+            runs,
+            on: !runs && !!s && s.state === 'on',
+            unavailable: !s || s.state === 'unavailable',
+            icon: entIcon(id),
+            onText: d === 'automation' ? 'Enabled' : 'On',
+            offText: d === 'automation' ? 'Disabled' : 'Off'
+        };
+    };
+    const entVerb = (E) => (E.runs ? (domainOf(E.id) === 'button' ? 'Press' : 'Run') : domainOf(E.id) === 'automation' ? (E.on ? 'Disable' : 'Enable') : E.on ? 'Turn off' : 'Turn on');
+
+    // A player, as its card shows it. A player in a group (Sonos, WiiM
+    // multiroom) that follows another shows the group's music and sends play,
+    // pause and skip to the one leading it (target); its volume stays its own.
+    const MEDIA_STATES = { playing: 'Playing', paused: 'Paused', idle: 'Idle', on: 'On', off: 'Off', standby: 'Standby', buffering: 'Loading', unavailable: 'Unavailable' };
+    const mediaInfo = (id, room) => {
+        const h = HA();
+        const s = h.entity(id);
+        const a = (s && s.attributes) || {};
+        const state = s ? s.state : 'unavailable';
+        const unavailable = !s || state === 'unavailable';
+        const off = state === 'off' || state === 'standby';
+        const active = !unavailable && !off;
+        let name = h.name(id, room && room.id !== '_other' ? room.name : '').trim();
+        // "Living Room" in the Living Room is its maker's ("Sonos")
+        if (room && name.toLowerCase() === room.name.toLowerCase()) {
+            const d = h.device(id);
+            if (d && (d.maker || d.model)) name = d.maker && d.maker.length <= 12 ? d.maker.replace(/\s+(inc|corp|corporation|electronics|ltd)\.?$/i, '') : d.model;
+        }
+        const members = (Array.isArray(a.group_members) ? a.group_members : []).filter((m) => h.entity(m));
+        const lead = members.length > 1 ? members[0] : null;
+        const target = lead && lead !== id && h.entity(lead) ? lead : id;
+        const t = h.entity(target);
+        const ta = (t && t.attributes) || {};
+        const tState = t ? t.state : state;
+        const title = active ? ta.media_title || '' : '';
+        const artist = active ? ta.media_artist || ta.media_album_artist || ta.media_series_title || ta.app_name || '' : '';
+        const can = (w) => h.supports(id, w);
+        const canT = (w) => h.supports(target, w);
+        const others = members.filter((m) => m !== id).map((m) => h.name(m, ''));
+        return {
+            id,
+            target,
+            name,
+            icon: a.device_class === 'tv' || /\btv\b/i.test(name) ? 'tv' : 'speaker',
+            state: target !== id && active ? tState : state,
+            stateText: MEDIA_STATES[target !== id && active ? tState : state] || pretty(state),
+            unavailable,
+            off,
+            active,
+            playing: active && tState === 'playing',
+            title,
+            artist,
+            art: active && (title || ta.entity_picture) ? h.pictureUrl(target) : '',
+            source: active ? a.source || '' : '',
+            sources: active && can('source') && Array.isArray(a.source_list) ? a.source_list : [],
+            volume: a.volume_level != null ? Math.round(a.volume_level * 100) : null,
+            muted: !!a.is_volume_muted,
+            canVolume: active && can('volumeSet') && a.volume_level != null,
+            canStep: active && can('volumeStep'),
+            canMute: active && can('mute'),
+            canPlay: active && (canT('play') || canT('pause')),
+            canPrev: active && canT('previous'),
+            canNext: active && canT('next'),
+            canOn: off && can('turnOn'),
+            canOff: active && can('turnOff'),
+            group: others.length ? `With ${others.join(', ')}` : ''
+        };
+    };
+    // the players a room shows as cards: a group once, under the player
+    // leading it (a follower in another room still gets its own card there)
+    const mediaCards = (room) => room.media.filter((id) => {
+        const M = mediaInfo(id, room);
+        return !(M.target !== id && room.media.includes(M.target));
+    });
+    // a card's buttons, from what the player can do
+    const MEDIA_BUTTONS = {
+        prev: { icon: 'skip_previous', label: 'Previous' },
+        play: { icon: 'play_arrow', label: 'Play' },
+        next: { icon: 'skip_next', label: 'Next' },
+        mute: { icon: 'volume_off', label: 'Mute' },
+        power: { icon: 'power_settings_new', label: 'Turn off' }
+    };
+    const mediaButtons = (M) => {
+        if (M.unavailable) return [];
+        if (M.off) return M.canOn ? ['power'] : [];
+        return [M.canPrev && 'prev', M.canPlay && 'play', M.canNext && 'next', M.canMute && 'mute', M.canOff && 'power'].filter(Boolean);
+    };
+    const mediaButtonLabel = (M, key) => (key === 'play' ? (M.playing ? 'Pause' : 'Play') : key === 'mute' ? (M.muted ? 'Unmute' : 'Mute') : key === 'power' ? (M.off ? 'Turn on' : 'Turn off') : MEDIA_BUTTONS[key].label);
+    const mediaButtonIcon = (M, key) => (key === 'play' ? (M.playing ? 'pause' : 'play_arrow') : key === 'mute' ? (M.muted ? 'volume_off' : 'volume_up') : MEDIA_BUTTONS[key].icon);
+    const mediaLine = (M) => [M.stateText, M.source && !M.title ? M.source : '', M.group].filter(Boolean).join(' · ');
+    const mediaTitle = (M) => [M.title, M.artist].filter(Boolean).join(' — ');
+    // the remote's volume step: 5%
+    const stepMedia = (M, d) => {
+        const h = HA();
+        if (M.canVolume) h.setVolume(M.id, (M.volume + d * 5) / 100);
+        else if (M.canStep) h.stepVolume(M.id, d).catch(() => {});
+    };
+    const mediaButton = (M, key) => {
+        const h = HA();
+        if (key === 'prev') return h.mediaCommand(M.target, 'media_previous_track');
+        if (key === 'next') return h.mediaCommand(M.target, 'media_next_track');
+        if (key === 'play') return h.playPause(M.target);
+        if (key === 'mute') return h.mute(M.id);
+        return h.power(M.id);
+    };
+
+    // A fan (the purifier): { id, name, on, pct (null: no speeds), step,
+    // presets, preset, unavailable }
+    const fanInfo = (id, room) => {
+        const h = HA();
+        const s = h.entity(id);
+        const a = (s && s.attributes) || {};
+        const on = !!s && s.state === 'on';
+        const speeds = h.supports(id, 1);
+        return {
+            id,
+            name: h.shortName(id, room && room.name),
+            on,
+            pct: speeds ? (on ? a.percentage || 0 : 0) : null,
+            step: a.percentage_step || 10,
+            presets: h.supports(id, 8) && Array.isArray(a.preset_modes) ? a.preset_modes : [],
+            preset: a.preset_mode || '',
+            unavailable: !s || s.state === 'unavailable'
+        };
+    };
+    const fanText = (F) => (F.unavailable ? 'Unavailable' : !F.on ? 'Off' : [F.preset, F.pct ? F.pct + '%' : ''].filter(Boolean).join(' · ') || 'On');
+
+    // A device's own setting: a choice (select) or a number
+    const optionInfo = (id) => {
+        const h = HA();
+        const s = h.entity(id);
+        const a = (s && s.attributes) || {};
+        return { id, name: h.shortName(id, ''), options: Array.isArray(a.options) ? a.options : [], value: s ? s.state : '', unavailable: !s || s.state === 'unavailable' };
+    };
+    const numberInfo = (id) => {
+        const h = HA();
+        const s = h.entity(id);
+        const a = (s && s.attributes) || {};
+        const v = s ? parseFloat(s.state) : NaN;
+        const min = a.min != null ? a.min : 0;
+        const max = a.max != null ? a.max : 100;
+        return {
+            id, name: h.shortName(id, ''), value: isFinite(v) ? v : null, min, max, step: a.step || 1, unit: a.unit_of_measurement || '',
+            pct: isFinite(v) && max > min ? Math.round(((v - min) / (max - min)) * 100) : 0,
+            unavailable: !s || s.state === 'unavailable' || !isFinite(v)
+        };
+    };
+    const numberText = (N) => (N.unavailable ? 'Unavailable' : `${Math.round(N.value * 100) / 100}${N.unit && N.unit !== '%' ? ' ' + N.unit : N.unit}`);
+
+    // At a glance: a room's temperature and humidity, a door or window left
+    // open, motion now, the air, a leak or smoke. Read only; nothing else
+    // of Home Assistant's hundreds of sensors.
+    const DOOR_ICONS = { window: 'window', garage_door: 'garage' };
+    const ALERT_TEXT = { smoke: 'Smoke', carbon_monoxide: 'Carbon monoxide', gas: 'Gas', moisture: 'Leak' };
+    const glance = (room) => {
+        const h = HA();
+        const g = room.glance;
+        if (!h || !g) return [];
+        const out = [];
+        const num = (id) => { const s = h.entity(id); const v = s ? parseFloat(s.state) : NaN; return isFinite(v) ? v : null; };
+        const on = (id) => { const s = h.entity(id); return !!s && s.state === 'on'; };
+        // a second reading is labeled: "SmartSensor Temperature" is
+        // "SmartSensor", and the thermostat's own is "Thermostat"
+        const thermostat = (id) => !!h.device(id) && h.house().climates.some((c) => h.device(c) === h.device(id));
+        const label = (id, words) => (thermostat(id) ? 'Thermostat' : h.name(id, room.name).replace(words, '').replace(/\s+/g, ' ').trim());
+        const temps = g.temps.filter((id) => num(id) != null);
+        temps.forEach((id) => out.push({ icon: 'thermostat', text: temps.length > 1 ? `${label(id, /\b(current\s+)?temperature\b/i)} ${deg(num(id))}` : deg(num(id)) }));
+        const hums = g.hums.filter((id) => num(id) != null);
+        hums.forEach((id) => out.push({ icon: 'water_drop', text: `${hums.length > 1 ? label(id, /\b(current\s+)?humidity\b/i) + ' ' : ''}${Math.round(num(id))}%` }));
+        g.air.filter((id) => num(id) != null).forEach((id) => {
+            const dc = h.entity(id).attributes.device_class;
+            const v = Math.round(num(id));
+            // the EPA's bands: PM2.5 good to 9 µg/m³, fair to 35; AQI good to 50, fair to 100
+            const q = dc === 'pm25' ? (v <= 9 ? 'good' : v <= 35 ? 'fair' : 'poor') : dc === 'aqi' ? (v <= 50 ? 'good' : v <= 100 ? 'fair' : 'poor') : '';
+            out.push({
+                icon: 'air',
+                text: dc === 'pm25' ? `Air ${q} · ${v} µg/m³` : dc === 'aqi' ? `Air ${q} · AQI ${v}` : `CO₂ ${v} ppm`,
+                kind: q === 'poor' ? 'warn' : ''
+            });
+        });
+        g.doors.filter(on).forEach((id) => {
+            let n = h.name(id, room.name).replace(/\b(\w+)\s+\1$/i, '$1').trim(); // "Front Door Door"
+            n = n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+            out.push({ icon: DOOR_ICONS[h.entity(id).attributes.device_class] || 'meeting_room', text: `${n} open`, kind: 'warn' });
+        });
+        if (g.motion.some(on)) out.push({ icon: 'directions_walk', text: 'Motion now', kind: 'live' });
+        g.alerts.filter(on).forEach((id) => out.push({ icon: 'warning', text: ALERT_TEXT[h.entity(id).attributes.device_class] || h.name(id, room.name), kind: 'alert' }));
+        return out;
+    };
+    const glanceHtml = (list) => list.map((c) => `<span class="homer-glance${c.kind ? ' ' + c.kind : ''}">${icon(c.icon)}<span>${esc(c.text)}</span></span>`).join('');
 
     const doorbellFor = (camId) => {
         const h = HA();
@@ -335,6 +616,10 @@
     const firstRoom = (list) => (list.find((r) => !special(r) && /living|family|den|lounge/i.test(r.name))
         || list.find((r) => !special(r)) || list[0] || null);
 
+    const specialRoom = () => ({ floor: '', temperature: null, lights: [], climates: [], scenes: [], cameras: [], switches: [], media: [], fans: [], auto: [], glance: null });
+    // what makes a room's rows (a room is redrawn when it changes)
+    const roomSig = (r) => r.id + ':' + [r.lights, r.scenes, r.climates, r.cameras, r.switches, r.media, r.fans, r.auto].map((x) => (x || []).length).join('.');
+
     // The Cameras and Climate items, then the rooms (with Other last)
     const roomList = () => {
         const h = HA();
@@ -343,10 +628,10 @@
         const list = house.rooms.slice();
         const top = [];
         if (house.cameras.length) {
-            top.push({ id: CAMERAS, name: 'Cameras', floor: '', temperature: null, lights: [], climates: [], scenes: [], cameras: house.cameras.slice() });
+            top.push(Object.assign(specialRoom(), { id: CAMERAS, name: 'Cameras', cameras: house.cameras.slice() }));
         }
         if ((house.climates || []).length) {
-            top.push({ id: CLIMATE, name: 'Climate', floor: '', temperature: null, lights: [], climates: house.climates.slice(), scenes: [], cameras: [] });
+            top.push(Object.assign(specialRoom(), { id: CLIMATE, name: 'Climate', climates: house.climates.slice() }));
         }
         return top.concat(list);
     };
@@ -423,8 +708,10 @@
                     <div class="ho-room-head">
                         <div class="ho-room-name"></div>
                         <div class="ho-room-sub"></div>
+                        <div class="ho-glance"></div>
                     </div>
                     <div class="ho-room-body"><div class="ho-rows"></div></div>
+                    <div class="ho-picker"></div>
                 </div>
                 <div class="ho-state"></div>
             </div>
@@ -535,24 +822,62 @@
         const rowsFor = (r) => {
             const out = [];
             if (r.id === CAMERAS) {
-                for (let i = 0; i < r.cameras.length; i += 2) out.push({ kind: 'cameras', ids: r.cameras.slice(i, i + 2), grid: true });
+                for (let i = 0; i < r.cameras.length; i += 2) out.push({ kind: 'cameras', sec: 'cameras', ids: r.cameras.slice(i, i + 2), grid: true });
                 return out;
             }
+            // a device's own settings, under it (a thermostat's mode select, a
+            // purifier's child lock and favorite level, a player's output)
+            const extraRows = (owner, sec, card) => HA().extras(owner).forEach((id) => {
+                const d = domainOf(id);
+                if (d === 'select') {
+                    const O = optionInfo(id);
+                    if (O.options.length) out.push({ kind: 'xselect', sec, id, ids: O.options, extra: true, card });
+                } else if (d === 'number') out.push({ kind: 'xnumber', sec, id, extra: true, card });
+                else out.push({ kind: 'ent', sec, id, extra: true, card });
+            });
             r.climates.forEach((id) => {
                 const C = climateInfo(id, r);
-                (C.targets.length ? C.targets : [{ which: null }]).forEach((t) => out.push({ kind: 'setpoint', id, which: t.which }));
-                if (C.modes.length) out.push({ kind: 'modes', id, ids: C.modes });
+                (C.targets.length ? C.targets : [{ which: null }]).forEach((t) => out.push({ kind: 'setpoint', sec: 'climate', id, which: t.which }));
+                if (C.modes.length) out.push({ kind: 'modes', sec: 'climate', id, ids: C.modes });
+                extraRows(id, 'climate');
             });
-            if (r.scenes.length) out.push({ kind: 'scenes', ids: r.scenes });
-            r.lights.forEach((id) => out.push({ kind: 'light', id }));
-            if (r.cameras.length) out.push({ kind: 'cameras', ids: r.cameras });
+            if (r.scenes.length) out.push({ kind: 'scenes', sec: 'scenes', ids: r.scenes });
+            const parts = lightParts(r);
+            parts.switches.forEach((id) => out.push({ kind: 'light', sec: 'lights', part: 'switches', id }));
+            parts.bulbs.forEach((id) => out.push({ kind: 'light', sec: 'lights', part: 'bulbs', id }));
+            if (r.cameras.length) out.push({ kind: 'cameras', sec: 'cameras', ids: r.cameras });
+            (r.switches || []).forEach((id) => out.push({ kind: 'ent', sec: 'switches', id }));
+            mediaCards(r).forEach((id) => {
+                const M = mediaInfo(id, r);
+                out.push({ kind: 'media', sec: 'media', id, card: id });
+                const buttons = mediaButtons(M);
+                if (buttons.length) out.push({ kind: 'mbtns', sec: 'media', id, ids: buttons, card: id });
+                if (M.sources.length) out.push({ kind: 'sources', sec: 'media', id, ids: M.sources, card: id });
+                if (!M.unavailable) extraRows(id, 'media', id);
+            });
+            (r.fans || []).forEach((id) => {
+                const F = fanInfo(id, r);
+                out.push({ kind: 'fan', sec: 'fans', id, card: id });
+                if (F.presets.length && !F.unavailable) out.push({ kind: 'presets', sec: 'fans', id, ids: F.presets, card: id });
+                if (!F.unavailable) extraRows(id, 'fans', id);
+            });
+            (r.auto || []).forEach((id) => out.push({ kind: 'ent', sec: 'auto', id }));
             return out;
         };
+        const rowKey = (x) => x.kind + (x.which || '') + (x.id || '') + (x.ids ? '[' + x.ids.join('|') + ']' : '');
 
+        const SECTIONS = {
+            climate: ['Thermostat', 'thermostat'], scenes: ['Scenes', 'palette'], lights: ['Lights', 'lightbulb'],
+            cameras: ['Cameras', 'videocam'], switches: ['Switches & outlets', 'power'], media: ['Media', 'speaker'],
+            fans: ['Fans', 'air'], auto: ['Automations & helpers', 'autorenew']
+        };
         const section = (title, icn) => `<div class="ho-sec">${icon(icn)}${esc(title)}</div>`;
+        const subSection = (title) => `<div class="ho-subsec">${esc(title)}</div>`;
+        // a light, and every row shaped like one: an outlet, an automation, a
+        // fan, a device's number. The dot is a bulb's color.
         const lightHtml = (row, i) => `
-            <div class="ho-row ho-light" data-r="${i}" role="button">
-                <span class="ho-bulb">${icon(HA().glyph(row.id))}</span>
+            <div class="ho-row ho-light${row.kind !== 'light' ? ' acc' : ''}${row.extra ? ' extra' : ''}" data-r="${i}" role="button">
+                <span class="ho-bulb">${icon(row.kind === 'light' ? HA().glyph(row.id) : row.kind === 'fan' ? 'air' : row.kind === 'xnumber' ? 'tune' : entIcon(row.id))}<i class="ho-dot" data-dot role="button"></i></span>
                 <div class="ho-light-text"><div class="ho-light-name"></div><div class="ho-light-sub"></div></div>
                 <div class="ho-bar"><i></i></div>
                 <div class="ho-light-val"></div>
@@ -561,6 +886,27 @@
         const chipsHtml = (row, i, r) => `
             <div class="ho-row ho-chips" data-r="${i}">
                 <div class="ho-chips-track">${row.ids.map((id, k) => `<div class="ho-chip" data-k="${k}" role="button"><span>${esc(HA().name(id, r.name))}</span></div>`).join('')}</div>
+            </div>`;
+        // a row of choices with a label: a player's inputs, a fan's modes, a
+        // device's select
+        const choicesHtml = (row, i, label) => `
+            <div class="ho-row ho-chips ho-choices${row.extra ? ' extra' : ''}" data-r="${i}">
+                <div class="ho-choices-label">${esc(label)}</div>
+                <div class="ho-chips-track">${row.ids.map((o, k) => `<div class="ho-chip" data-k="${k}" data-v="${esc(o)}" role="button"><span>${esc(pretty(o))}</span></div>`).join('')}</div>
+            </div>`;
+        const mediaHtml = (row, i) => `
+            <div class="ho-row ho-media" data-r="${i}" role="button">
+                <div class="ho-art" data-still-box><img alt="" draggable="false">${icon('speaker', 'ho-art-icon')}</div>
+                <div class="ho-media-text">
+                    <div class="ho-media-name"></div>
+                    <div class="ho-media-line"></div>
+                    <div class="ho-media-title"></div>
+                </div>
+                <div class="ho-vol">${icon('volume_up', 'ho-vol-icon')}<div class="ho-bar"><i></i></div><span class="ho-vol-v"></span></div>
+            </div>`;
+        const mbtnsHtml = (row, i) => `
+            <div class="ho-row ho-chips ho-mbtns" data-r="${i}">
+                <div class="ho-chips-track">${row.ids.map((b, k) => `<div class="ho-chip ho-mbtn" data-k="${k}" data-b="${b}" role="button">${icon(MEDIA_BUTTONS[b].icon)}<span></span></div>`).join('')}</div>
             </div>`;
         const setpointHtml = (row, i) => `
             <div class="ho-row ho-set" data-r="${i}">
@@ -588,37 +934,75 @@
                     </div>`;
                 }).join('')}
             </div>`;
+        const rowHtml = (row, i, r) => {
+            if (row.kind === 'scenes') return chipsHtml(row, i, r);
+            if (row.kind === 'setpoint') return setpointHtml(row, i);
+            if (row.kind === 'modes') return modesHtml(row, i);
+            if (row.kind === 'cameras') return camsHtml(row, i, r);
+            if (row.kind === 'media') return mediaHtml(row, i);
+            if (row.kind === 'mbtns') return mbtnsHtml(row, i);
+            if (row.kind === 'sources') return choicesHtml(row, i, 'Input');
+            if (row.kind === 'presets') return choicesHtml(row, i, 'Mode');
+            if (row.kind === 'xselect') return choicesHtml(row, i, optionInfo(row.id).name);
+            return lightHtml(row, i);
+        };
 
-        const buildRoom = () => {
+        // keep: the same room again (a player turned on, a thermostat changed
+        // mode): stay on the same row, where the list was
+        const buildRoom = (keep) => {
             const r = room();
             stopStills();
             if (!r) { rowsBox.innerHTML = ''; builtFor = ''; return; }
+            const was = keep && rows[ri] ? rowKey(rows[ri]) : '';
+            const scroll = $('.ho-room-body').scrollTop;
             rows = rowsFor(r);
-            builtFor = r.id + '|' + rows.map((x) => x.kind + (x.which || '') + (x.ids ? x.ids.length : '')).join(',');
+            builtFor = r.id + '|' + rows.map(rowKey).join(',');
+            const parts = lightParts(r);
+            const split = parts.switches.length && parts.bulbs.length;
             let html = '';
-            let lastKind = '';
+            let lastSec = '';
+            let lastPart = '';
+            let card = null;
             rows.forEach((row, i) => {
-                const kind = row.kind === 'modes' || row.kind === 'setpoint' ? 'climate' : row.kind;
-                if (kind !== lastKind && r.id !== CAMERAS) {
-                    html += kind === 'light' ? section('Lights', 'lightbulb')
-                        : kind === 'scenes' ? section('Scenes', 'palette')
-                            : kind === 'climate' ? (lastKind === 'climate' ? '' : section('Thermostat', 'thermostat'))
-                                : section('Cameras', 'videocam');
+                // a player's or a fan's rows sit together on one card
+                if (card && row.card !== card) { html += '</div>'; card = null; }
+                if (row.sec !== lastSec && r.id !== CAMERAS) {
+                    const [title, icn] = SECTIONS[row.sec];
+                    html += section(title, icn);
+                    lastPart = '';
                 }
-                lastKind = kind;
-                html += row.kind === 'light' ? lightHtml(row, i)
-                    : row.kind === 'scenes' ? chipsHtml(row, i, r)
-                        : row.kind === 'setpoint' ? setpointHtml(row, i)
-                            : row.kind === 'modes' ? modesHtml(row, i)
-                                : camsHtml(row, i, r);
+                lastSec = row.sec;
+                // the lights: the wall switches, then the bulbs
+                if (row.kind === 'light' && split && row.part !== lastPart) {
+                    html += subSection(row.part === 'switches' ? 'Wall switches' : bulbsLabel(parts.bulbs));
+                    lastPart = row.part;
+                }
+                if (row.card && row.card !== card) { html += '<div class="ho-card">'; card = row.card; }
+                html += rowHtml(row, i, r);
             });
+            if (card) html += '</div>';
             if (!rows.length) html = '<div class="ho-empty">Nothing in this room HOMER can control.</div>';
             rowsBox.innerHTML = html;
             rowsBox.querySelectorAll('.ho-camtile').forEach((t) => stills.push(keepStill(t.querySelector('img'), t.dataset.cam)));
+            if (was) {
+                const n = rows.findIndex((x) => rowKey(x) === was);
+                if (n >= 0) ri = n;
+            }
             ri = clamp(ri, 0, Math.max(0, rows.length - 1));
-            $('.ho-room-body').scrollTop = 0;
+            $('.ho-room-body').scrollTop = keep ? scroll : 0;
             paintRoom();
         };
+
+        // the chip a row starts on: the one in use (a player's input, a fan's
+        // mode, a device's choice), else the first
+        const startChip = (row) => {
+            if (!row || !row.ids) return 0;
+            const h = HA();
+            const s = row.id && h.entity(row.id);
+            const now = !s ? '' : row.kind === 'sources' ? s.attributes.source : row.kind === 'presets' ? s.attributes.preset_mode : row.kind === 'modes' || row.kind === 'xselect' ? s.state : '';
+            return Math.max(0, row.ids.indexOf(now));
+        };
+        const ciOf = (i) => (ci[i] != null ? ci[i] : startChip(rows[i]));
 
         // the room's values, in place (states change all the time)
         const paintRoom = () => {
@@ -626,6 +1010,9 @@
             if (!r) return;
             $('.ho-room-name').textContent = r.name;
             $('.ho-room-sub').textContent = [r.floor, roomSummary(r)].filter(Boolean).join(' · ');
+            const g = $('.ho-glance');
+            const gh = glanceHtml(glance(r));
+            if (g.dataset.html !== gh) { g.dataset.html = gh; g.innerHTML = gh; }
             rows.forEach((row, i) => {
                 const n = rowsBox.querySelector(`[data-r="${i}"]`);
                 if (!n) return;
@@ -640,6 +1027,69 @@
                     n.querySelector('.ho-bar i').style.width = (L.pct || 0) + '%';
                     n.querySelector('.ho-light-val').textContent = L.unavailable ? '' : lightText(L);
                     n.querySelector('.ho-pill').textContent = L.unavailable ? 'Offline' : L.on ? 'On' : 'Off';
+                    const dot = n.querySelector('.ho-dot');
+                    dot.classList.toggle('show', !!L.color && !L.unavailable);
+                    dot.classList.toggle('lit', !!L.dot);
+                    dot.style.background = L.dot;
+                } else if (row.kind === 'ent') {
+                    const E = entInfo(row.id, r, row.extra);
+                    n.classList.toggle('on', E.on);
+                    n.classList.add('switch');
+                    n.classList.toggle('run', E.runs);
+                    n.classList.toggle('off-line', E.unavailable);
+                    n.querySelector('.ho-light-name').textContent = E.name;
+                    n.querySelector('.ho-light-sub').textContent = E.sub;
+                    n.querySelector('.ho-light-val').textContent = '';
+                    n.querySelector('.ho-pill').textContent = E.unavailable ? 'Offline' : E.runs ? entVerb(E) : E.on ? 'On' : 'Off';
+                } else if (row.kind === 'fan') {
+                    const F = fanInfo(row.id, r);
+                    n.classList.toggle('on', F.on);
+                    n.classList.toggle('switch', F.pct == null);
+                    n.classList.toggle('off-line', F.unavailable);
+                    n.querySelector('.ho-light-name').textContent = F.name;
+                    n.querySelector('.ho-light-sub').textContent = '';
+                    n.querySelector('.ho-bar i').style.width = (F.pct || 0) + '%';
+                    n.querySelector('.ho-light-val').textContent = F.unavailable ? '' : fanText(F);
+                    n.querySelector('.ho-pill').textContent = F.unavailable ? 'Offline' : F.on ? 'On' : 'Off';
+                } else if (row.kind === 'xnumber') {
+                    const N = numberInfo(row.id);
+                    n.classList.add('on', 'nopill');
+                    n.classList.toggle('off-line', N.unavailable);
+                    n.querySelector('.ho-light-name').textContent = N.name;
+                    n.querySelector('.ho-bar i').style.width = N.pct + '%';
+                    n.querySelector('.ho-light-val').textContent = numberText(N);
+                } else if (row.kind === 'media') {
+                    const M = mediaInfo(row.id, r);
+                    n.classList.toggle('on', M.active);
+                    n.classList.toggle('playing', M.playing);
+                    n.classList.toggle('off-line', M.unavailable);
+                    n.classList.toggle('no-vol', !M.canVolume);
+                    n.querySelector('.ho-art-icon').textContent = M.icon;
+                    n.querySelector('.ho-media-name').textContent = M.name;
+                    n.querySelector('.ho-media-line').textContent = mediaLine(M);
+                    n.querySelector('.ho-media-title').textContent = mediaTitle(M);
+                    n.querySelector('.ho-vol .ho-bar i').style.width = (M.canVolume ? M.volume : 0) + '%';
+                    n.querySelector('.ho-vol-v').textContent = M.canVolume ? (M.muted ? 'Muted' : M.volume + '%') : '';
+                    n.querySelector('.ho-vol-icon').textContent = M.muted ? 'volume_off' : 'volume_up';
+                    const art = n.querySelector('.ho-art');
+                    const img = art.querySelector('img');
+                    if (img.dataset.src !== M.art) {
+                        img.dataset.src = M.art;
+                        art.classList.remove('has-art');
+                        if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
+                    }
+                } else if (row.kind === 'mbtns') {
+                    const M = mediaInfo(row.id, r);
+                    n.querySelectorAll('.ho-mbtn').forEach((c) => {
+                        c.querySelector('.material-icons').textContent = mediaButtonIcon(M, c.dataset.b);
+                        c.querySelector('span:last-child').textContent = mediaButtonLabel(M, c.dataset.b);
+                        c.classList.toggle('cur', (c.dataset.b === 'mute' && M.muted) || (c.dataset.b === 'play' && M.playing));
+                    });
+                } else if (row.kind === 'sources' || row.kind === 'presets' || row.kind === 'xselect') {
+                    const s = HA().entity(row.id);
+                    const now = !s ? '' : row.kind === 'sources' ? s.attributes.source : row.kind === 'presets' ? s.attributes.preset_mode : s.state;
+                    n.classList.toggle('off-line', !s || s.state === 'unavailable');
+                    n.querySelectorAll('.ho-chip').forEach((c) => c.classList.toggle('cur', c.dataset.v === now));
                 } else if (row.kind === 'setpoint') {
                     const C = climateInfo(row.id, r);
                     const t = C.targets.find((x) => x.which === row.which);
@@ -660,27 +1110,34 @@
                     });
                 }
                 if (row.ids) {
-                    const k = clamp(ci[i] || 0, 0, row.ids.length - 1);
+                    const k = clamp(ciOf(i), 0, row.ids.length - 1);
                     n.querySelectorAll('[data-k]').forEach((c) => c.classList.toggle('sel', zone === 'room' && i === ri && +c.dataset.k === k));
                 }
             });
+            if (picker) paintPicker();
         };
 
         const revealRow = () => {
             const body = $('.ho-room-body');
             const n = rowsBox.querySelector(`[data-r="${ri}"]`);
             if (!n) return;
-            // the section title above a first row stays in view with it
-            const prev = n.previousElementSibling;
-            const top = (prev && prev.classList.contains('ho-sec') ? prev.offsetTop : n.offsetTop) - 16;
+            // the section title above a first row stays in view with it (and a
+            // card's head with the card's other rows)
+            const cardEl = n.parentElement && n.parentElement.classList.contains('ho-card') ? n.parentElement : null;
+            const lead = cardEl && cardEl.firstElementChild !== n ? cardEl.firstElementChild : n;
+            let prev = (cardEl || n).previousElementSibling;
+            let top = lead.offsetTop;
+            while (prev && (prev.classList.contains('ho-sec') || prev.classList.contains('ho-subsec'))) { top = prev.offsetTop; prev = prev.previousElementSibling; }
+            top -= 16;
             const bottom = n.offsetTop + n.offsetHeight + 40;
+            if (bottom - top > body.clientHeight) top = n.offsetTop - 16; // a tall card: the row itself wins
             if (top < body.scrollTop) body.scrollTop = top;
-            else if (bottom > body.scrollTop + body.clientHeight) body.scrollTop = bottom - body.clientHeight;
+            else if (bottom > body.scrollTop + body.clientHeight) body.scrollTop = Math.max(bottom - body.clientHeight, 0);
             // and a chip or camera in its track
             const row = rows[ri];
             if (row && row.ids) {
                 const track = n.querySelector('.ho-chips-track');
-                const c = n.querySelector(`[data-k="${ci[ri] || 0}"]`);
+                const c = n.querySelector(`[data-k="${ciOf(ri)}"]`);
                 if (track && c) {
                     if (c.offsetLeft - 40 < track.scrollLeft) track.scrollLeft = c.offsetLeft - 40;
                     else if (c.offsetLeft + c.offsetWidth + 40 > track.scrollLeft + track.clientWidth) {
@@ -688,6 +1145,110 @@
                     }
                 }
             }
+        };
+
+        // ----- a bulb's color -----
+        // A small panel over the room: the presets (◀▶ picks, OK sets), then
+        // a white strip (warm to cool) and a color strip that change the bulb
+        // as you move along them. ▲▼ between them, Esc (or C) closes.
+        const pickerEl = $('.ho-picker');
+        let picker = null; // { id, p (the row), k (the preset), kelvin, hue }
+        const pickerRows = () => {
+            const c = picker && HA().color(picker.id);
+            if (!c) return [];
+            return ['swatches', c.white && 'white', c.color && 'hue'].filter(Boolean);
+        };
+        const openPicker = (id) => {
+            const c = HA().color(id);
+            if (!c) return;
+            const list = swatchesFor(c);
+            const now = swatchNow(c, list);
+            picker = { id, p: 0, k: Math.max(0, now), kelvin: c.kelvin || 2700, hue: c.hs ? c.hs[0] : 30 };
+            pickerEl.innerHTML = `
+                <div class="ho-picker-card" role="dialog" aria-label="Color">
+                    <div class="ho-picker-head"><span class="ho-picker-dot"></span><div class="ho-picker-title"><div class="ho-picker-name"></div><div class="ho-picker-sub">Color</div></div></div>
+                    <div class="ho-pk-row ho-pk-sw" data-p="swatches"><div class="ho-pk-track">${list.map((s, k) => `<div class="ho-sw" data-k="${k}" role="button"><span class="ho-sw-dot" style="background:${rgbCss(swatchRgb(s))}"></span><span>${esc(s.name)}</span></div>`).join('')}</div></div>
+                    ${c.white ? `<div class="ho-pk-row ho-pk-strip" data-p="white"><div class="ho-pk-label">White</div><div class="ho-pk-grad" style="background:${whiteGradient(c)}"><i></i></div><div class="ho-pk-val"></div></div>` : ''}
+                    ${c.color ? `<div class="ho-pk-row ho-pk-strip" data-p="hue"><div class="ho-pk-label">Color</div><div class="ho-pk-grad" style="background:${hueGradient()}"><i></i></div><div class="ho-pk-val"></div></div>` : ''}
+                </div>`;
+            pickerEl.classList.add('show');
+            paintPicker();
+            updateLegend();
+        };
+        const closePicker = () => {
+            picker = null;
+            pickerEl.classList.remove('show');
+            pickerEl.innerHTML = '';
+            updateLegend();
+        };
+        const paintPicker = () => {
+            if (!picker) return;
+            const h = HA();
+            const c = h.color(picker.id);
+            if (!c) { closePicker(); return; }
+            const list = swatchesFor(c);
+            const L = lightInfo(picker.id, room());
+            pickerEl.querySelector('.ho-picker-name').textContent = L.name;
+            pickerEl.querySelector('.ho-picker-sub').textContent = !L.on ? 'Off · a color turns it on' : c.kelvin ? `White · ${c.kelvin} K` : 'Color';
+            const dot = pickerEl.querySelector('.ho-picker-dot');
+            dot.style.background = L.dot || '';
+            dot.classList.toggle('lit', !!L.dot);
+            const rowName = pickerRows()[picker.p];
+            pickerEl.querySelectorAll('.ho-pk-row').forEach((n) => n.classList.toggle('sel', n.dataset.p === rowName));
+            const now = swatchNow(c, list);
+            pickerEl.querySelectorAll('.ho-sw').forEach((n) => {
+                n.classList.toggle('sel', rowName === 'swatches' && +n.dataset.k === picker.k);
+                n.classList.toggle('cur', +n.dataset.k === now);
+            });
+            const white = pickerEl.querySelector('[data-p="white"]');
+            if (white) {
+                white.querySelector('.ho-pk-grad i').style.left = ((picker.kelvin - c.min) / (c.max - c.min)) * 100 + '%';
+                white.querySelector('.ho-pk-val').textContent = `${Math.round(picker.kelvin / 50) * 50} K`;
+            }
+            const hue = pickerEl.querySelector('[data-p="hue"]');
+            if (hue) {
+                hue.querySelector('.ho-pk-grad i').style.left = (picker.hue / 360) * 100 + '%';
+                hue.querySelector('.ho-pk-val').innerHTML = `<span class="ho-sw-dot" style="background:${rgbCss(h.hsToRgb([picker.hue, 100]))}"></span>`;
+            }
+            // the preset in view
+            const track = pickerEl.querySelector('.ho-pk-track');
+            const sw = pickerEl.querySelector(`.ho-sw[data-k="${picker.k}"]`);
+            if (track && sw) {
+                if (sw.offsetLeft - 30 < track.scrollLeft) track.scrollLeft = sw.offsetLeft - 30;
+                else if (sw.offsetLeft + sw.offsetWidth + 30 > track.scrollLeft + track.clientWidth) track.scrollLeft = sw.offsetLeft + sw.offsetWidth + 30 - track.clientWidth;
+            }
+        };
+        const applySwatch = (k) => {
+            const c = HA().color(picker.id);
+            const s = swatchesFor(c)[k];
+            if (!s) return;
+            if (s.kelvin) picker.kelvin = Math.max(c.min, Math.min(c.max, s.kelvin));
+            else picker.hue = s.hs[0];
+            HA().setColor(picker.id, s.kelvin ? { kelvin: s.kelvin } : { hs: s.hs });
+            paintPicker();
+        };
+        const pickerKey = (k, ev) => {
+            const rowsP = pickerRows();
+            const rowName = rowsP[picker.p];
+            const c = HA().color(picker.id);
+            if (k === 'ArrowUp') picker.p = Math.max(0, picker.p - 1);
+            else if (k === 'ArrowDown') picker.p = Math.min(rowsP.length - 1, picker.p + 1);
+            else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+                const d = k === 'ArrowLeft' ? -1 : 1;
+                if (rowName === 'swatches') picker.k = clamp(picker.k + d, 0, swatchesFor(c).length - 1);
+                else if (rowName === 'white') {
+                    picker.kelvin = clamp(Math.round((picker.kelvin + d * 250) / 50) * 50, c.min, c.max);
+                    HA().setColor(picker.id, { kelvin: picker.kelvin });
+                } else if (rowName === 'hue') {
+                    picker.hue = (Math.round(picker.hue / 15) * 15 + d * 15 + 360) % 360;
+                    HA().setColor(picker.id, { hs: [picker.hue, 100] });
+                }
+            } else if ((k === 'Enter' || k === ' ') && !ev.repeat) {
+                if (rowName === 'swatches') applySwatch(picker.k);
+                else closePicker();
+                return;
+            }
+            paintPicker();
         };
 
         // ----- the camera view -----
@@ -784,22 +1345,53 @@
         };
 
         // ----- legend -----
+        // what the focused row does: ◀▶ adjusts or picks, OK switches or runs
+        const rowLegend = (row, items) => {
+            const r = room();
+            if (!row) return;
+            if (row.kind === 'light') {
+                const L = lightInfo(row.id, r);
+                if (L.pct != null) items.push({ key: '◀▶', label: 'Brightness' });
+                items.push({ key: 'OK', label: L.on ? 'Turn off' : 'Turn on', action: 'ok' });
+                if (L.color && !L.unavailable) items.push({ key: 'C', label: 'Color', action: 'color' });
+            } else if (row.kind === 'ent') {
+                const E = entInfo(row.id, r, row.extra);
+                if (!E.unavailable) items.push({ key: 'OK', label: entVerb(E), action: 'ok' });
+            } else if (row.kind === 'fan') {
+                const F = fanInfo(row.id, r);
+                if (F.pct != null && !F.unavailable) items.push({ key: '◀▶', label: 'Speed' });
+                if (!F.unavailable) items.push({ key: 'OK', label: F.on ? 'Turn off' : 'Turn on', action: 'ok' });
+            } else if (row.kind === 'media') {
+                const M = mediaInfo(row.id, r);
+                if (M.canVolume || M.canStep) items.push({ key: '◀▶', label: 'Volume' });
+                if (M.off && M.canOn) items.push({ key: 'OK', label: 'Turn on', action: 'ok' });
+                else if (M.canPlay) items.push({ key: 'OK', label: M.playing ? 'Pause' : 'Play', action: 'ok' });
+            } else if (row.kind === 'mbtns') {
+                const M = mediaInfo(row.id, r);
+                items.push({ key: '◀▶', label: 'Buttons' }, { key: 'OK', label: mediaButtonLabel(M, row.ids[clamp(ciOf(ri), 0, row.ids.length - 1)]), action: 'ok' });
+            } else if (row.kind === 'sources') items.push({ key: '◀▶', label: 'Inputs' }, { key: 'OK', label: 'Switch input', action: 'ok' });
+            else if (row.kind === 'presets') items.push({ key: '◀▶', label: 'Modes' }, { key: 'OK', label: 'Set mode', action: 'ok' });
+            else if (row.kind === 'xselect') items.push({ key: '◀▶', label: 'Choices' }, { key: 'OK', label: 'Choose', action: 'ok' });
+            else if (row.kind === 'xnumber') items.push({ key: '◀▶', label: 'Adjust' });
+            else if (row.kind === 'setpoint') items.push({ key: '◀▶', label: 'Temperature' });
+            else if (row.kind === 'scenes') items.push({ key: '◀▶', label: 'Scenes' }, { key: 'OK', label: 'Turn on scene', action: 'ok' });
+            else if (row.kind === 'modes') items.push({ key: '◀▶', label: 'Modes' }, { key: 'OK', label: 'Set mode', action: 'ok' });
+            else if (row.kind === 'cameras') items.push({ key: '◀▶', label: 'Cameras' }, { key: 'OK', label: 'View', action: 'ok' });
+        };
         const updateLegend = () => {
             const items = [];
             const msg = statusMessage();
             if (msg && msg.ok) items.push({ key: 'OK', label: msg.ok, action: 'ok' });
-            else if (!msg && zone === 'list') items.push({ key: '▲▼', label: 'Rooms' }, { key: 'OK', label: 'Open', action: 'ok' });
+            else if (!msg && picker) {
+                const rowName = pickerRows()[picker.p];
+                items.push({ key: '▲▼', label: 'Presets · White · Color' });
+                if (rowName === 'swatches') items.push({ key: '◀▶', label: 'Presets' }, { key: 'OK', label: 'Set color', action: 'ok' });
+                else items.push({ key: '◀▶', label: rowName === 'white' ? 'Warmer · cooler' : 'Color' }, { key: 'OK', label: 'Done', action: 'ok' });
+                items.push({ key: 'ESC', label: 'Close', action: 'back' });
+            } else if (!msg && zone === 'list') items.push({ key: '▲▼', label: 'Rooms' }, { key: 'OK', label: 'Open', action: 'ok' });
             else if (!msg && zone === 'room') {
-                const row = rows[ri];
                 items.push({ key: '▲▼', label: 'Move' });
-                if (row && row.kind === 'light') {
-                    const L = lightInfo(row.id, room());
-                    if (L.pct != null) items.push({ key: '◀▶', label: 'Brightness' });
-                    items.push({ key: 'OK', label: L.on ? 'Turn off' : 'Turn on', action: 'ok' });
-                } else if (row && row.kind === 'setpoint') items.push({ key: '◀▶', label: 'Temperature' });
-                else if (row && row.kind === 'scenes') items.push({ key: '◀▶', label: 'Scenes' }, { key: 'OK', label: 'Turn on scene', action: 'ok' });
-                else if (row && row.kind === 'modes') items.push({ key: '◀▶', label: 'Modes' }, { key: 'OK', label: 'Set mode', action: 'ok' });
-                else if (row && row.kind === 'cameras') items.push({ key: '◀▶', label: 'Cameras' }, { key: 'OK', label: 'View', action: 'ok' });
+                rowLegend(rows[ri], items);
                 items.push({ key: 'ESC', label: 'Rooms', action: 'back' });
             } else if (!msg && zone === 'camera') {
                 if (camList().length > 1) items.push({ key: '◀▶', label: 'Next camera' });
@@ -808,9 +1400,11 @@
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' });
             if (zone === 'list' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
-            $('.ho-legend').innerHTML = items.map((i) => (i === 'spacer'
+            const html = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="ho-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
+            const leg = $('.ho-legend');
+            if (leg.dataset.html !== html) { leg.dataset.html = html; leg.innerHTML = html; }
         };
 
         const setZone = (z) => {
@@ -826,6 +1420,7 @@
         const selectRoom = (i) => {
             i = clamp(i, 0, rooms.length - 1);
             if (i === sel && builtFor.startsWith((room() || {}).id + '|')) return;
+            if (picker) closePicker();
             sel = i;
             ri = 0;
             ci = {};
@@ -843,6 +1438,25 @@
             if (!row || !h) return;
             if (row.kind === 'light') {
                 h.toggle(row.id).catch(failed);
+            } else if (row.kind === 'ent') {
+                const E = entInfo(row.id, r, row.extra);
+                if (E.unavailable) return;
+                if (E.runs) h.run(row.id).then(() => toast(`${E.name}: done`)).catch(failed);
+                else h.toggle(row.id).catch(failed);
+            } else if (row.kind === 'fan') {
+                if (!fanInfo(row.id, r).unavailable) h.toggle(row.id).catch(failed);
+            } else if (row.kind === 'media') {
+                const M = mediaInfo(row.id, r);
+                if (M.off && M.canOn) h.power(row.id).catch(failed);
+                else if (M.canPlay) h.playPause(M.target).catch(failed);
+            } else if (row.kind === 'mbtns') {
+                mediaButton(mediaInfo(row.id, r), row.ids[k]).catch(failed);
+            } else if (row.kind === 'sources') {
+                h.setSource(row.id, row.ids[k]).catch(failed);
+            } else if (row.kind === 'presets') {
+                h.setPreset(row.id, row.ids[k]).catch(failed);
+            } else if (row.kind === 'xselect') {
+                if (!optionInfo(row.id).unavailable) h.setOption(row.id, row.ids[k]).catch(failed);
             } else if (row.kind === 'scenes') {
                 const id = row.ids[k];
                 h.scene(id).then(() => toast(`${h.name(id, r.name)} is on`)).catch(failed);
@@ -852,15 +1466,35 @@
                 openCamera(row.ids[k], 'room');
             }
         };
+        // ◀▶ on a row; false when it had nothing to change (◀ then goes back
+        // to the rooms)
         const adjust = (row, d) => {
             const h = HA();
             if (!row || !h) return false;
             if (row.kind === 'light') {
                 const L = lightInfo(row.id, room());
-                if (L.pct == null || L.unavailable) return true;
+                if (L.pct == null || L.unavailable) return false;
                 // 10% steps from 0; off → 10%
                 const next = clamp((Math.round((L.pct || 0) / 10) + d) * 10, 0, 100);
                 h.setBrightness(row.id, next);
+                return true;
+            }
+            if (row.kind === 'fan') {
+                const F = fanInfo(row.id, room());
+                if (F.pct == null || F.unavailable) return false;
+                h.setFanSpeed(row.id, clamp((Math.round(F.pct / F.step) + d) * F.step, 0, 100));
+                return true;
+            }
+            if (row.kind === 'media') {
+                const M = mediaInfo(row.id, room());
+                if (!M.canVolume && !M.canStep) return false;
+                stepMedia(M, d);
+                return true;
+            }
+            if (row.kind === 'xnumber') {
+                const N = numberInfo(row.id);
+                if (N.unavailable) return false;
+                h.setNumber(row.id, clamp(N.value + d * N.step, N.min, N.max));
                 return true;
             }
             if (row.kind === 'setpoint') {
@@ -871,12 +1505,13 @@
                 return true;
             }
             if (row.ids) {
-                const k = clamp((ci[ri] || 0) + d, 0, row.ids.length - 1);
-                const moved = k !== (ci[ri] || 0);
+                const was = clamp(ciOf(ri), 0, row.ids.length - 1);
+                const k = clamp(was + d, 0, row.ids.length - 1);
                 ci[ri] = k;
                 paintRoom();
                 revealRow();
-                return moved;
+                updateLegend();
+                return k !== was;
             }
             return false;
         };
@@ -884,7 +1519,7 @@
             const n = clamp(ri + d, 0, rows.length - 1);
             if (n === ri) return;
             // between two camera rows of the grid, keep the column
-            if (rows[ri].ids && rows[n].ids && rows[n].kind === rows[ri].kind) ci[n] = clamp(ci[ri] || 0, 0, rows[n].ids.length - 1);
+            if (rows[ri].ids && rows[n].ids && rows[n].kind === rows[ri].kind && rows[n].kind === 'cameras') ci[n] = clamp(ciOf(ri), 0, rows[n].ids.length - 1);
             ri = n;
             paintRoom();
             revealRow();
@@ -915,12 +1550,26 @@
                 if (!ev.repeat) goHome();
                 return;
             }
+            const colorKey = k === 'c' || k === 'C' || k === 'ContextMenu';
+            // the color panel takes the keys while it's up
+            if (picker) {
+                if (BACK_KEYS.includes(k) || colorKey) { eat(ev); if (!ev.repeat) closePicker(); return; }
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(k)) { eat(ev); pickerKey(k, ev); updateLegend(); }
+                return;
+            }
             if (BACK_KEYS.includes(k)) {
                 eat(ev);
                 if (ev.repeat) return;
                 if (zone === 'camera') closeCamera();
                 else if (zone === 'room') setZone('list');
                 else goBack();
+                return;
+            }
+            // C on a bulb that does color: its color panel
+            if (colorKey && zone === 'room' && !statusMessage()) {
+                const row = rows[ri];
+                const L = row && row.kind === 'light' ? lightInfo(row.id, room()) : null;
+                if (L && L.color && !L.unavailable) { eat(ev); if (!ev.repeat) openPicker(row.id); }
                 return;
             }
             const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', ' '];
@@ -943,7 +1592,7 @@
                     // ◀ from the first chip or camera (or a row that doesn't
                     // adjust) goes back to the rooms
                     if (!adjust(row, d) && d < 0) setZone('list');
-                } else if (enter && !ev.repeat) act(row, ci[ri] || 0);
+                } else if (enter && !ev.repeat) act(row, clamp(ciOf(ri), 0, row.ids ? row.ids.length - 1 : 0));
             } else if (zone === 'camera') {
                 if (k === 'ArrowLeft' || k === 'ArrowUp') stepCamera(-1);
                 else if (k === 'ArrowRight' || k === 'ArrowDown') stepCamera(1);
@@ -971,9 +1620,28 @@
                 else if (a === 'fullscreen') fullscreen();
                 else if (a === 'back') onKey({ key: 'Escape', preventDefault() {}, stopPropagation() {}, target: document.body });
                 else if (a === 'ok') onKey({ key: 'Enter', preventDefault() {}, stopPropagation() {}, target: document.body });
+                else if (a === 'color') onKey({ key: 'c', preventDefault() {}, stopPropagation() {}, target: document.body });
                 return;
             }
             if (t.closest('.ho-state [data-ok]')) { statusOk(); return; }
+            // the color panel: a preset sets it, a strip sets it where it's
+            // clicked, a click beside the card closes it
+            if (picker) {
+                if (!t.closest('.ho-picker-card')) { closePicker(); return; }
+                const sw = t.closest('.ho-sw');
+                const strip = t.closest('.ho-pk-strip');
+                const rowsP = pickerRows();
+                if (sw) { picker.p = 0; picker.k = Number(sw.dataset.k); applySwatch(picker.k); } else if (strip) {
+                    const g = strip.querySelector('.ho-pk-grad').getBoundingClientRect();
+                    const x = clamp((ev.clientX - g.left) / g.width, 0, 1);
+                    const c = HA().color(picker.id);
+                    picker.p = rowsP.indexOf(strip.dataset.p);
+                    if (strip.dataset.p === 'white') { picker.kelvin = Math.round((c.min + x * (c.max - c.min)) / 50) * 50; HA().setColor(picker.id, { kelvin: picker.kelvin }); } else { picker.hue = Math.round(x * 360) % 360; HA().setColor(picker.id, { hs: [picker.hue, 100] }); }
+                    paintPicker();
+                }
+                updateLegend();
+                return;
+            }
             const pick = t.closest('.ho-cam-pick');
             if (pick) { openCamera(pick.dataset.cam, camFrom); return; }
             if (zone === 'camera' && t.closest('.ho-cam-main')) { closeCamera(); return; }
@@ -987,16 +1655,29 @@
             const step = t.closest('.ho-step');
             if (step) { adjust(row, Number(step.dataset.step)); return; }
             const c = t.closest('[data-k]');
-            if (c) { ci[ri] = Number(c.dataset.k); paintRoom(); act(row, ci[ri]); return; }
+            if (c) { ci[ri] = Number(c.dataset.k); paintRoom(); updateLegend(); act(row, ci[ri]); return; }
+            // a bulb's color dot opens its color panel
+            if (row.kind === 'light' && t.closest('.ho-dot.show')) { openPicker(row.id); return; }
+            // a click on a bar sets it there (brightness, speed, volume, a
+            // number); anywhere else switches, or plays
+            const bar = t.closest('.ho-bar');
+            const at = bar ? clamp((ev.clientX - bar.getBoundingClientRect().left) / bar.getBoundingClientRect().width, 0, 1) : null;
             if (row.kind === 'light') {
-                // a click on the bar sets the brightness there; anywhere else switches
-                const bar = t.closest('.ho-bar');
                 const L = lightInfo(row.id, room());
-                if (bar && L.pct != null) {
-                    const b = bar.getBoundingClientRect();
-                    HA().setBrightness(row.id, Math.round(clamp((ev.clientX - b.left) / b.width, 0, 1) * 10) * 10);
-                } else act(row, 0);
-            }
+                if (bar && L.pct != null) HA().setBrightness(row.id, Math.round(at * 10) * 10);
+                else act(row, 0);
+            } else if (row.kind === 'fan') {
+                const F = fanInfo(row.id, room());
+                if (bar && F.pct != null) HA().setFanSpeed(row.id, Math.max(F.step, Math.round((at * 100) / F.step) * F.step));
+                else act(row, 0);
+            } else if (row.kind === 'media') {
+                const M = mediaInfo(row.id, room());
+                if (bar && M.canVolume) HA().setVolume(row.id, Math.round(at * 20) / 20);
+                else act(row, 0);
+            } else if (row.kind === 'xnumber') {
+                const N = numberInfo(row.id);
+                if (bar && !N.unavailable) HA().setNumber(row.id, Math.round((N.min + at * (N.max - N.min)) / N.step) * N.step);
+            } else if (row.kind === 'ent') act(row, 0);
         };
 
         window.addEventListener('keydown', onKey, true);
@@ -1019,8 +1700,8 @@
             if (!alive) return;
             drawStatus();
             const next = roomList();
-            const sig = next.map((r) => r.id + ':' + r.lights.length + r.scenes.length + r.climates.length + r.cameras.length).join(',');
-            const was = rooms.map((r) => r.id + ':' + r.lights.length + r.scenes.length + r.climates.length + r.cameras.length).join(',');
+            const sig = next.map(roomSig).join(',');
+            const was = rooms.map(roomSig).join(',');
             if (sig !== was) {
                 const keep = room() ? room().id : (wanted && wanted.room) || recalled();
                 rooms = next;
@@ -1031,8 +1712,9 @@
             } else {
                 paintList();
                 const r = room();
-                // a thermostat switched to a mode with other set points: its rows change
-                if (r && rowsFor(r).map((x) => x.kind + (x.which || '')).join() !== rows.map((x) => x.kind + (x.which || '')).join()) buildRoom();
+                // a thermostat switched to a mode with other set points, a TV
+                // turned on (its buttons and inputs): the rows change
+                if (r && rowsFor(r).map(rowKey).join() !== rows.map(rowKey).join()) buildRoom(true);
                 else paintRoom();
             }
             if (wanted && rooms.length) {
@@ -1130,9 +1812,13 @@
     // draws it (and registers it with the layout once it has loaded).
     const phoneLayout = () => !!(window.HomerLayout && window.HomerRoomsPhone && window.HomerLayout.usePhone('rooms'));
     const PHONE_CTX = {
-        CAMERAS, CLIMATE, roomList, firstRoom, roomIcon, roomSummary, lightInfo, lightText, climateInfo, climateLine, deg, MODE_LABELS, MODE_ICONS,
+        CAMERAS, CLIMATE, roomList, firstRoom, roomIcon, roomSummary, roomSig, lightInfo, lightText, climateInfo, climateLine, deg, MODE_LABELS, MODE_ICONS,
         doorbellFor, agoText, ringText, noRings, lastRingText, keepStill, statusMessage, esc, icon, clamp, remember, recalled,
         goHome, goBack, goSettings, docked,
+        // v0.3.19: bulbs' colors, outlets, players, fans, automations, at a glance
+        domainOf, pretty, rgbCss, lightParts, bulbsLabel, SWATCHES, swatchesFor, swatchRgb, swatchNow, whiteGradient, hueGradient,
+        ENT_ICONS, entIcon, entInfo, entVerb, mediaInfo, mediaCards, mediaButtons, mediaButtonLabel, mediaButtonIcon, MEDIA_BUTTONS, mediaLine, mediaTitle,
+        stepMedia, mediaButton, fanInfo, fanText, optionInfo, numberInfo, numberText, glance, glanceHtml,
     };
     const draw = (from) => (phoneLayout() ? window.HomerRoomsPhone.create(PHONE_CTX, from) : createScreen(from));
 
