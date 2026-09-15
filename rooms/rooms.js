@@ -199,9 +199,12 @@
         const a = (s && s.attributes) || {};
         const pct = h.brightness(id);
         const group = Array.isArray(a.entity_id) || !!a.is_hue_group;
-        let name = h.name(id, room && room.name);
+        let name = h.name(id, room && room.name).trim();
         // a room's own group ("Office" in the Office) is its lights, all of them
         if (group && room && name.toLowerCase() === room.name.toLowerCase()) name = 'All lights';
+        // a wall switch named just for its room ("Dining Room Light") reads
+        // as what it is next to the bulbs
+        if (/^switch\./.test(id) && /^lights?$/i.test(name.trim())) name = 'Wall switch';
         return {
             id,
             name,
@@ -549,7 +552,7 @@
         const section = (title, icn) => `<div class="ho-sec">${icon(icn)}${esc(title)}</div>`;
         const lightHtml = (row, i) => `
             <div class="ho-row ho-light" data-r="${i}" role="button">
-                <span class="ho-bulb">${icon('lightbulb')}</span>
+                <span class="ho-bulb">${icon(HA().glyph(row.id))}</span>
                 <div class="ho-light-text"><div class="ho-light-name"></div><div class="ho-light-sub"></div></div>
                 <div class="ho-bar"><i></i></div>
                 <div class="ho-light-val"></div>

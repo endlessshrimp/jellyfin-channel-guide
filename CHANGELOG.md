@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.18
+
+- Rooms: TP-Link wall switches (Kasa HS200/HS210/KS200 in-wall switches,
+  which Home Assistant keeps as switches, not lights) are with each room's
+  lights, after the room's "All lights" and before the bulbs: on/off, no
+  dimming. One named just for its room ("Dining Room Light") reads **Wall
+  switch**; one that runs a fan gets a fan icon. Plugs and power strips stay
+  out. A room with only a wall switch (Hallway, Back Porch) now shows up.
+
 ## v0.3.17
 
 - Rooms: the thermostat is the house's, not a room's. It has its own

@@ -134,7 +134,7 @@
             if (r.lights.length) {
                 html += section('Lights', 'lightbulb') + r.lights.map((id) => `
                     <div class="op-light" data-id="${esc(id)}">
-                        <button type="button" class="op-bulb" aria-label="Switch">${icon('lightbulb')}</button>
+                        <button type="button" class="op-bulb" aria-label="Switch">${icon(HA().glyph(id))}</button>
                         <div class="op-light-main">
                             <div class="op-light-top"><span class="op-light-name"></span><span class="op-light-val"></span></div>
                             <div class="op-bar"><i></i></div>

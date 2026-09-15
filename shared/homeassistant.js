@@ -504,6 +504,7 @@
         placeOf = new Map();
         deviceOf = new Map();
         hidden = new Set();
+        wallSwitches = new Set();
         states = {};
         doorbells = [];
         built = null;
@@ -514,6 +515,14 @@
     };
 
     const domainOf = (id) => id.split('.')[0];
+
+    // Wall switches (TP-Link Kasa's HS200/HS210/KS200… in-wall switches) are
+    // "switch" entities in Home Assistant, not lights, but they're a room's
+    // lights (or its fan): Rooms shows them with the lights, on/off only.
+    // Plugs and power strips (KP303, HS103…) are left out.
+    const WALL_SWITCH_MODELS = /^(HS2\d\d|KS2\d\d|ES2\d)/i;
+    const isWallSwitchDevice = (d) => /tp-?link|kasa/i.test(d.manufacturer || '') && WALL_SWITCH_MODELS.test(String(d.model || '').trim());
+    let wallSwitches = new Set();
     const isDoorbellSensor = (s) => {
         const id = s.entity_id;
         const d = domainOf(id);
@@ -539,6 +548,8 @@
         areas = areaList || [];
         floors = floorList || [];
         const devArea = new Map((devices || []).map((d) => [d.id, d.area_id]));
+        const wallDevice = new Set((devices || []).filter(isWallSwitchDevice).map((d) => d.id));
+        wallSwitches = new Set();
         placeOf = new Map();
         deviceOf = new Map();
         hidden = new Set();
@@ -547,6 +558,7 @@
             const area = e.ai || (e.di && devArea.get(e.di)) || null;
             if (area) placeOf.set(e.ei, area);
             if (e.hb || e.ec != null) hidden.add(e.ei); // hidden, or a config/diagnostic entity
+            else if (domainOf(e.ei) === 'switch' && e.di && wallDevice.has(e.di)) wallSwitches.add(e.ei);
         }
         // what HOMER shows: lights, thermostats, cameras, scenes, the rooms'
         // temperatures, and anything that says the doorbell rang
@@ -554,7 +566,7 @@
         states = {};
         for (const s of all || []) {
             const d = domainOf(s.entity_id);
-            if ((DOMAINS.includes(d) && !hidden.has(s.entity_id)) || isDoorbellSensor(s)) wanted.add(s.entity_id);
+            if ((DOMAINS.includes(d) && !hidden.has(s.entity_id)) || wallSwitches.has(s.entity_id) || isDoorbellSensor(s)) wanted.add(s.entity_id);
         }
         areas.forEach((a) => { if (a.temperature_entity_id) wanted.add(a.temperature_entity_id); });
         built = null;
@@ -735,7 +747,7 @@
         const other = { id: '_other', name: 'Other', icon: '', floor: '', level: 100, temperature: null, lights: [], climates: [], cameras: [], scenes: [] };
         const KIND = { light: 'lights', climate: 'climates', camera: 'cameras', scene: 'scenes' };
         for (const id of Object.keys(states)) {
-            const kind = KIND[domainOf(id)];
+            const kind = wallSwitches.has(id) ? 'lights' : KIND[domainOf(id)];
             if (!kind || hidden.has(id) || (kind === 'cameras' && twin(id)) || skipped.has(placeOf.get(id))) continue;
             const room = rooms.get(placeOf.get(id)) || other;
             room[kind].push(id);
@@ -743,8 +755,9 @@
         let list = [...rooms.values(), other].filter((r) => r.lights.length + r.climates.length + r.cameras.length + r.scenes.length > 0);
         for (const r of list) {
             const nm = (id) => nameOf(id, r.name);
-            // light groups (a room's "all lights") first, then by name
-            const group = (id) => { const a = states[id].attributes; return Array.isArray(a.entity_id) || a.is_hue_group ? 0 : 1; };
+            // light groups (a room's "all lights") first, then its wall switches,
+            // then the bulbs, each by name
+            const group = (id) => { const a = states[id].attributes; return Array.isArray(a.entity_id) || a.is_hue_group ? 0 : wallSwitches.has(id) ? 1 : 2; };
             r.lights.sort((a, b) => group(a) - group(b) || nm(a).localeCompare(nm(b)));
             r.scenes.sort((a, b) => nm(a).localeCompare(nm(b)));
             r.cameras.sort((a, b) => nm(a).localeCompare(nm(b)));
@@ -1090,6 +1103,8 @@
         entity,
         name: nameOf,
         lightOn,
+        // a light row's icon: a fan for a wall switch that runs a fan
+        glyph: (id) => (wallSwitches.has(id) && /\bfan\b/i.test(nameOf(id, '')) && !/light/i.test(nameOf(id, '')) ? 'air' : 'lightbulb'),
         brightness,
         toggle,
         setBrightness,

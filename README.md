@@ -240,13 +240,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.3.17/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.3.18/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.3.17`), so an update never changes
+The URL is pinned to a release tag (`@v0.3.18`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

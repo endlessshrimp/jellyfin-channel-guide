@@ -163,7 +163,7 @@
             last = sec;
             if (row.kind === 'light') {
                 html[to] += `<div class="hq-row hq-light" data-r="${i}" role="button">
-                        <span class="hq-bulb">${icon('lightbulb')}</span>
+                        <span class="hq-bulb">${icon(HA().glyph(row.id))}</span>
                         <div class="hq-light-main"><div class="hq-light-top"><span class="hq-name"></span><span class="hq-val"></span></div><div class="hq-bar"><i></i></div></div>
                     </div>`;
             } else if (row.kind === 'scenes' || row.kind === 'modes') {
