@@ -44,6 +44,12 @@
   results: **Not on TV through Wednesday** (however far the guide reaches),
   or **Not on TV again through Wednesday** with when it was last on ("Last
   on FX and FXX, today at 8:00 PM").
+- Player: **Skip 30s** for commercials. On a recording (or anything else with
+  a timeline), the button in the full-screen player's bar, **S**, or a
+  remote's fast-forward jumps ahead 30 seconds. Presses add up ("+1:30" at the
+  top of the picture) and the video jumps once they stop, so a whole break is
+  one jump. It replaces Jellyfin's fast-forward button; ◀ still goes back 10
+  seconds. Not on live TV.
 
 ## v0.3.18
 
