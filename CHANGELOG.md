@@ -56,6 +56,8 @@
   pages already came back to themselves.
 - Esc on a guide opened over a screen closes just the guide; the screen
   underneath no longer also goes back a step.
+- No white flash between screens during playback (the first time a screen
+  opens, while its styles load): the page behind HOMER stays its dark blue.
 
 ## v0.3.18
 
