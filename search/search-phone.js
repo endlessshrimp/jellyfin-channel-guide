@@ -292,7 +292,8 @@
             const mins = Math.round((startOf(p) - Date.now()) / 60000);
             if (mins < 1) return 'Starting';
             if (mins < 60) return `In ${mins}m`;
-            return `In ${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`;
+            // later tonight, tomorrow, or later in the week: say when
+            return ctx.startsLabel ? ctx.startsLabel(p) : `In ${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`;
         };
 
         const fillLive = (r) => {

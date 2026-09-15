@@ -367,6 +367,30 @@
 
 .hs-soon { color: var(--dim); }
 
+/* a program set to record, or recording */
+.hs-rec {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    font-family: var(--cond, inherit);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-live, #ff3b3b);
+}
+
+.hs-rec::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.hs-zone-list .hs-row.sel .hs-rec { color: #fff; }
+
 /* on the air now */
 .hs-live {
     display: inline-flex;
@@ -751,3 +775,10 @@
 }
 
 .hs-toast.show { transform: translate(50%, 0); }
+
+/* the program panel's "Set to record" / "Recording" chip */
+.hs-chip.rec {
+    background: rgba(255, 59, 59, 0.16);
+    border-color: rgba(255, 59, 59, 0.5);
+    color: #ff8a8a;
+}
