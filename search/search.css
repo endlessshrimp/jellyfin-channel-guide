@@ -727,6 +727,39 @@
 
 .hs-actions:empty { visibility: hidden; }
 
+/* nothing still to come on TV: a quiet line under the results (not a result) */
+.hs-tvnote {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 14px 12px 12px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px dashed rgba(160, 190, 230, 0.16);
+    color: var(--dim);
+}
+
+.hs-tvnote .material-icons {
+    flex: none;
+    font-size: 30px;
+    opacity: 0.8;
+}
+
+.hs-tvnote b {
+    display: block;
+    font-size: 21px;
+    font-weight: 700;
+    color: #d6e0ec;
+}
+
+.hs-tvnote span:not(.material-icons) {
+    display: block;
+    margin-top: 3px;
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 600;
+}
+
 .hs-btn { box-sizing: border-box; }
 
 /* ---------- Empty / loading / error ---------- */
