@@ -10,8 +10,9 @@
  *
  * Every call goes through HomerHub.data (a cache per URL, one request at a
  * time, timeouts), so the ticker and the tabs share what's been fetched.
- * Scores are fresh for 30 seconds (15 while a game is live), standings and
- * rankings for 30 minutes, news for 10.
+ * Scores are fresh for 15 seconds while a league has a game live, a minute
+ * when one's about to start, else 5 minutes; standings and rankings for 30
+ * minutes, news for 10.
  *
  * Favorites (Jason's): the Rangers (MLB), the Cowboys (NFL), the Texas
  * Longhorns (college football) and Arsenal (soccer). Their games lead every
@@ -200,7 +201,18 @@
 
     // ---------- Scores ----------
 
-    let lastLive = false;
+    // How fresh a league's scores need to be: 15 seconds while one of its
+    // games is live, a minute when one starts within the half hour, else 5
+    // minutes (ESPN's own cache is 8 seconds; a TV left on this screen all
+    // day shouldn't pull megabytes a minute for nothing).
+    const pace = new Map(); // league -> { live, soon }
+    const lastScores = new Map(); // league -> its last games
+    const peekScores = (league) => lastScores.get(league) || null;
+    const ttlFor = (league) => {
+        const p = pace.get(league);
+        if (!p) return 30000;
+        return p.live ? 15000 : p.soon ? 60000 : 5 * MIN;
+    };
     // The games worth showing now, per league:
     //   MLB, NBA, NHL   yesterday and today
     //   NFL             ESPN's current week
@@ -210,7 +222,7 @@
         const L = LEAGUES[league];
         if (!L) return [];
         await H().channels.lineup().catch(() => null); // so games can name our channels
-        const ttl = lastLive ? 15000 : 30000;
+        const ttl = ttlFor(league);
         let events = [];
         if (league === 'mlb' || league === 'nba' || league === 'nhl') {
             const r = await get(`${SITE}${L.path}/scoreboard?dates=${ymd(dayOffset(-1))}-${ymd(dayOffset(0))}`, ttl);
@@ -249,10 +261,16 @@
             return g;
         });
         games.sort(byInterest);
+        lastScores.set(league, games);
+        const now = Date.now();
+        pace.set(league, {
+            live: games.some((g) => g.state === 'in'),
+            soon: games.some((g) => g.state === 'pre' && g.start - now < 30 * MIN && g.start - now > -3 * 3600000)
+        });
         return games;
     };
     const anyLive = (games) => games.some((g) => g.state === 'in');
-    const noteLive = (live) => { lastLive = live; };
+    const noteLive = () => {}; // (kept for callers; the pace is per league now)
 
     // ---------- Standings ----------
 
@@ -394,11 +412,16 @@
         const urls = soccer
             ? [`${SITE}soccer/all/teams/${fav.id}/schedule?fixture=true`, `${SITE}${L.path}/teams/${fav.id}/schedule`, `${SITE}soccer/uefa.champions/teams/${fav.id}/schedule`]
             : [`${SITE}${L.path}/teams/${fav.id}/schedule`];
-        const [rs] = await Promise.all([
-            Promise.all(urls.map((u, k) => get(u, 20 * MIN).catch((err) => { if (k === 0) throw err; return null; }))),
+        // The schedule changes rarely (an hour's fine); the scores come from
+        // the league's scoreboard, which is kept fresh (15 seconds while live).
+        const [rs, , board] = await Promise.all([
+            Promise.all(urls.map((u, k) => get(u, 60 * MIN).catch((err) => { if (k === 0) throw err; return null; }))),
             teamColors(fav.league),
-            scores(fav.league).catch(() => []) // this week's opponents' colors
+            scores(fav.league).catch(() => []), // (and this week's opponents' colors)
+            soccer ? scores('ucl').catch(() => []) : null
         ]);
+        const fresh = new Map(board.map((g) => [g.id, g]));
+        if (soccer) ((peekScores('ucl')) || []).forEach((g) => fresh.set(g.id, g));
         const team = (rs[0] && rs[0].team) || {};
         const all = [];
         const seen = new Set();
@@ -406,8 +429,9 @@
             if (seen.has(e.id)) return;
             seen.add(e.id);
             const lg = soccer ? (k === 2 ? 'ucl' : 'epl') : fav.league;
-            const g = game(e, lg);
-            g.competition = (e.league && (e.league.shortName || e.league.abbreviation)) || (k === 2 ? 'Champions League' : k === 1 ? 'Premier League' : g.competition);
+            const comp = (e.league && (e.league.shortName || e.league.abbreviation)) || (k === 2 ? 'Champions League' : k === 1 ? 'Premier League' : '');
+            const g = fresh.get(String(e.id)) || game(e, lg);
+            g.competition = comp || g.competition;
             all.push(g);
         }));
         const now = Date.now();
