@@ -32,6 +32,14 @@
   restart or reset a device, and devices whose integration isn't running
   (Home Assistant only remembers them: the disconnected fridge and oven, the
   sync box). Anything else that's unavailable is dimmed, with no controls.
+- Search: **On TV** lists every airing in the guide that matches, on now or
+  still to come (the guide reaches about three days out), not just the next
+  three hours: a show's library results and its upcoming airings together.
+  Each row says when: **Live**, **In 25m**, or **Tonight**, **Tomorrow** or
+  the day. An airing that hasn't started leads with **Record** (Watch channel
+  second); **R** records the highlighted airing from anywhere in the list.
+  Pressing it again asks, then cancels (or stops one that's recording). Rows
+  and details show **Set to record** / **Recording**.
 
 ## v0.3.18
 

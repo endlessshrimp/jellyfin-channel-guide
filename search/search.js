@@ -7,11 +7,11 @@
  *   #/search?query=…   results for the query
  *   #/search           an empty screen with the search box ready to type in
  *
- * Results are grouped Movies, TV Shows, Episodes, Channels and On TV (programs
- * airing now or in the next few hours), in a list on the left with the
- * highlighted result's art, details and actions on the right. Movies, shows and
- * episodes open their HOMER details screen; channels and programs play the
- * channel.
+ * Results are grouped Movies, TV Shows, Episodes, Channels and On TV (every
+ * airing in the guide, on now or still to come, recordable from here), in a
+ * list on the left with the highlighted result's art, details and actions on
+ * the right. Movies, shows and episodes open their HOMER details screen;
+ * channels and programs play the channel.
  *
  * Remote/keyboard: arrows move, OK/Enter acts, / edits the search, Esc/Back
  * goes back, H goes Home.
@@ -41,7 +41,7 @@
 
     const Z = 99990; // same layer as the other HOMER screens, under the guide
     const TICKS_PER_MIN = 600000000;
-    const SOON_HOURS = 3; // On TV: airing now, or starting within this many hours
+    const CONFIRM_MS = 4000; // a cancel waits this long for its second press
     const DEBOUNCE_MS = 280;
     const CACHE_MS = 60000;
     // the guide's "no listings" filler, e.g. "TF1 (FR) (Sa. 18:00 - 00:00)"
@@ -140,12 +140,22 @@
     const airing = (p, now = Date.now()) => !!p && startOf(p) <= now && endOf(p) > now;
     const elapsedPct = (p) => clamp(((Date.now() - startOf(p)) / (endOf(p) - startOf(p))) * 100, 0, 100);
     const slot = (p) => `${fmtTime(new Date(startOf(p)))}–${fmtTime(new Date(endOf(p)))}`;
-    // On TV only reaches a few hours ahead, so a time is enough (no day)
+    // "In 25m", then "Tonight", "Tomorrow", "Wed" (the row already shows the
+    // time): On TV reaches as far as the guide does
+    const dayWord = (t) => {
+        const d = new Date(t);
+        const now = new Date();
+        const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+            - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+        if (days <= 0) return d.getHours() >= 17 ? 'Tonight' : 'Today';
+        if (days === 1) return 'Tomorrow';
+        return d.toLocaleDateString([], { weekday: 'short' });
+    };
     const startsLabel = (p) => {
         const mins = Math.round((startOf(p) - Date.now()) / 60000);
         if (mins < 1) return 'Starting';
         if (mins < 60) return `In ${mins}m`;
-        return fmtTime(new Date(startOf(p)));
+        return dayWord(startOf(p));
     };
     const chNum = (x) => x.ChannelNumber || x.Number || '';
 
@@ -354,7 +364,7 @@
         { key: 'series', label: 'TV Shows', types: 'Series', limit: 60 },
         { key: 'episodes', label: 'Episodes', types: 'Episode', limit: 100 },
         { key: 'channels', label: 'Channels', types: 'TvChannel', limit: 60, live: true },
-        { key: 'programs', label: 'On TV', types: 'LiveTvProgram', limit: 1000, live: true, show: 60 }
+        { key: 'programs', label: 'On TV', types: 'LiveTvProgram', limit: 1000, live: true, show: 100 }
     ];
     // a library's search button scopes the search to that kind of library
     const groupsFor = (collectionType) => {
@@ -384,7 +394,7 @@
         const url = (g) => {
             if (g.key === 'channels') return `/Items?userId=${uid}&searchTerm=${term}&IncludeItemTypes=TvChannel&Recursive=true&Fields=Overview&EnableImageTypes=Primary&ImageTypeLimit=1&Limit=${g.limit}`;
             // The server ignores start/end filters on search, so the whole match
-            // list comes back and airing-soon is picked out here.
+            // list comes back: what's on now and every airing still to come.
             if (g.key === 'programs') return `/Items?userId=${uid}&searchTerm=${term}&IncludeItemTypes=LiveTvProgram&Recursive=true&Fields=ChannelInfo,Overview&EnableImages=true&ImageTypeLimit=1&Limit=${g.limit}`;
             return `/Items?userId=${uid}&searchTerm=${term}&IncludeItemTypes=${g.types}&Recursive=true${scope}&Fields=${vodFields}&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&Limit=${g.limit}`;
         };
@@ -398,7 +408,6 @@
         })));
         if (failed === wanted.length) throw new Error('Search failed');
         const now = Date.now();
-        const soon = now + SOON_HOURS * 3600000;
         return wanted.map((g, i) => {
             const res = lists[i];
             let items = (res && res.Items) || [];
@@ -407,7 +416,7 @@
                 items = items.slice().sort((a, b) => (parseFloat(chNum(a)) || 1e9) - (parseFloat(chNum(b)) || 1e9) || String(a.Name).localeCompare(String(b.Name)));
             } else if (g.key === 'programs') {
                 items = items
-                    .filter((p) => p.StartDate && p.EndDate && endOf(p) > now && startOf(p) < soon && !PLACEHOLDER.test(p.Name || ''))
+                    .filter((p) => p.StartDate && p.EndDate && endOf(p) > now && !PLACEHOLDER.test(p.Name || ''))
                     .sort((a, b) => (airing(b, now) - airing(a, now)) || startOf(a) - startOf(b) || (parseFloat(chNum(a)) || 1e9) - (parseFloat(chNum(b)) || 1e9));
                 more = items.length > g.show;
                 items = items.slice(0, g.show);
@@ -498,6 +507,88 @@
             toastEl.className = 'hs-toast show' + (kind ? ' ' + kind : '');
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => { toastEl.className = 'hs-toast'; }, 3200);
+        };
+
+        // ----- recording (the guide's model: one request at a time, never twice) -----
+        let recModel = null;
+        let timersLoaded = false;
+        const rec = () => {
+            if (!recModel && window.HomerGuideModel) recModel = window.HomerGuideModel.create(server);
+            return recModel;
+        };
+        // a program as the guide's model holds one
+        const itemOf = (p) => ({ p, s: new Date(startOf(p)), e: new Date(endOf(p)), unknown: false });
+        // '' | 'set' | 'recording'
+        const recState = (p) => {
+            const m = rec();
+            if (!m || !p || !m.timersByProgram.has(p.Id)) return '';
+            return m.recordingNow(itemOf(p)) ? 'recording' : 'set';
+        };
+        let armed = null; // { id, timer } while a cancel waits for its second press
+        const armedFor = (p) => !!armed && !!p && armed.id === p.Id;
+        // redraw the program rows and the panel after a timer changes
+        const refreshRecs = () => {
+            for (const r of rows) {
+                if (r.kind !== 'programs' || !r.el) continue;
+                const was = r.el.classList.contains('sel');
+                r.el.innerHTML = rowHtml(r);
+                const img = r.el.querySelector('img');
+                if (img) {
+                    img.onload = () => { img.classList.add('in'); img.parentNode.classList.add('has-img'); };
+                    img.onerror = () => img.remove();
+                    img.src = img.dataset.src || '';
+                    if (img.parentNode.classList.contains('logo') && window.HomerLogos) window.HomerLogos.watch(img);
+                }
+                r.el.classList.toggle('sel', was);
+            }
+            const r = current();
+            if (r) showInfo(r);
+        };
+        const loadTimers = () => {
+            const m = rec();
+            if (!m || timersLoaded) return;
+            timersLoaded = true;
+            m.loadTimers().then(() => { if (alive) refreshRecs(); }).catch(() => { timersLoaded = false; });
+        };
+        const disarm = () => {
+            if (!armed) return;
+            clearTimeout(armed.timer);
+            armed = null;
+            refreshRecs();
+        };
+        const toggleRecord = async (p) => {
+            const m = rec();
+            if (!m) { toast('Recording isn\'t available here', 'err'); return; }
+            const item = itemOf(p);
+            if (m.isBusy(p.Id)) { toast(m.busyText() || `Still scheduling ${p.Name}…`); return; }
+            const again = armedFor(p);
+            if (armed) { clearTimeout(armed.timer); armed = null; }
+            if (!m.recordable(item)) { toast('No listing to record', 'err'); return; }
+            if (item.e <= new Date()) { toast('That program has already ended', 'err'); return; }
+            if (!m.timersByProgram.has(p.Id)) {
+                toast(`Scheduling ${p.Name}…`);
+                const ok = await m.schedule(p);
+                if (!alive) return;
+                refreshRecs();
+                toast(ok ? `${m.recordingNow(item) ? 'Recording' : 'Set to record'} ${p.Name}` : 'Couldn\'t schedule that recording', ok ? 'rec' : 'err');
+                return;
+            }
+            if (!again) {
+                // a stray press never throws a recording away: the second one does
+                armed = { id: p.Id, timer: setTimeout(disarm, CONFIRM_MS) };
+                refreshRecs();
+                toast(`${m.recordingNow(item) ? 'Stop recording' : 'Cancel recording of'} ${p.Name}? Press again`);
+                return;
+            }
+            const stopping = m.recordingNow(item);
+            toast(`${stopping ? 'Stopping' : 'Cancelling'} ${p.Name}…`);
+            const result = await m.cancel(p, stopping);
+            if (!alive) return;
+            refreshRecs();
+            if (result === 'gone') toast(`${stopping ? 'Recording stopped' : 'Recording cancelled'}: ${p.Name}`);
+            else if (result === 'unset') toast(`${p.Name} isn't set to record`);
+            else if (result === 'kept') toast('Jellyfin still has that recording scheduled', 'err');
+            else toast('Couldn\'t cancel that recording', 'err');
         };
 
         const input = $('.hs-search-input');
@@ -601,7 +692,15 @@
             if (r.kind === 'series') return [{ id: 'open', icon: 'video_library', label: 'Episodes' }];
             if (r.kind === 'movies' || r.kind === 'episodes') return [{ id: 'open', icon: 'info', label: 'Details' }];
             if (r.kind === 'channels') return [{ id: 'watch', icon: 'live_tv', label: 'Watch' }];
-            if (r.kind === 'programs') return [{ id: 'watch', icon: 'live_tv', label: airing(r.it) ? 'Watch' : 'Watch channel' }];
+            if (r.kind === 'programs') {
+                const st = recState(r.it);
+                const recAct = { id: 'record', icon: st ? 'cancel' : 'fiber_manual_record',
+                    label: armedFor(r.it) ? (st === 'recording' ? 'Stop recording?' : 'Cancel recording?') : st === 'recording' ? 'Stop recording' : st ? 'Cancel recording' : 'Record' };
+                // on now: watch first; still to come: record first
+                return airing(r.it)
+                    ? [{ id: 'watch', icon: 'live_tv', label: 'Watch' }, recAct]
+                    : [recAct, { id: 'watch', icon: 'live_tv', label: 'Watch channel' }];
+            }
             return [];
         };
         const drawActions = () => {
@@ -692,6 +791,8 @@
             } else {
                 const live = airing(it);
                 chips.push(live ? { text: 'On now', cls: 'live' } : { text: startsLabel(it), cls: 'soon' });
+                const st = recState(it);
+                if (st) chips.push({ text: st === 'recording' ? 'Recording' : 'Set to record', cls: 'rec' });
                 chips.push({ text: slot(it) });
                 if (it.RunTimeTicks) chips.push({ text: runtime(it) });
                 info = {
@@ -727,6 +828,11 @@
                 if (actions.length > 1) items.push({ key: '◀▶', label: 'Options' });
                 const a = actions[zone === 'actions' ? act : 0];
                 if (a) items.push({ key: 'OK', label: a.label, action: 'ok' });
+                const r = current();
+                if (r && r.kind === 'programs' && !(a && a.id === 'record')) {
+                    const st = recState(r.it);
+                    items.push({ key: 'R', label: st === 'recording' ? 'Stop recording' : st ? 'Cancel recording' : 'Record', action: 'record' });
+                }
             }
             if (zone !== 'search') items.push({ key: '/', label: 'Search', action: 'search' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' }, { key: 'ESC', label: 'Back', action: 'back' });
@@ -802,7 +908,9 @@
                     flag = '';
                 } else {
                     sub = [chNum(it) ? `CH ${chNum(it)}` : '', it.ChannelName, slot(it)].filter(Boolean).join(' · ');
-                    flag = airing(it) ? '<span class="hs-live">Live</span>' : `<span class="hs-soon">${esc(startsLabel(it))}</span>`;
+                    const st = recState(it);
+                    const recFlag = st ? `<span class="hs-rec">${st === 'recording' ? 'Recording' : 'Set to record'}</span>` : '';
+                    flag = recFlag + (airing(it) ? '<span class="hs-live">Live</span>' : `<span class="hs-soon">${esc(startsLabel(it))}</span>`);
                 }
             }
             const pct = r.kind === 'programs' ? (airing(it) ? elapsedPct(it) : 0) : (r.kind === 'series' || r.kind === 'channels' ? 0 : pctOf(it));
@@ -933,6 +1041,7 @@
             setState('');
             if (zone === 'groups' || (wantList && zone === 'search')) setZone('list');
             wantList = false;
+            if (rows.some((r) => r.kind === 'programs')) loadTimers();
         };
 
         // ----- searching -----
@@ -1038,6 +1147,10 @@
                 go(detailsHash(it.Id));
                 return;
             }
+            if (a.id === 'record') {
+                toggleRecord(it);
+                return;
+            }
             if (a.id === 'watch') {
                 const channelId = r.kind === 'channels' ? it.Id : it.ChannelId;
                 const name = r.kind === 'channels' ? it.Name : it.ChannelName;
@@ -1090,6 +1203,14 @@
                 stop(ev);
                 focusSearch();
                 return;
+            }
+            if ((k === 'r' || k === 'R') && (zone === 'list' || zone === 'actions')) {
+                const r = current();
+                if (r && r.kind === 'programs') {
+                    stop(ev);
+                    if (!ev.repeat) toggleRecord(r.it);
+                    return;
+                }
             }
             if (BACK_KEYS.includes(k)) {
                 stop(ev);
@@ -1184,6 +1305,7 @@
             else if (a === 'submit' || a === 'results') leaveInput();
             else if (a === 'retry') retry();
             else if (a === 'ok') run(zone === 'actions' ? actions[act] : actions[0]);
+            else if (a === 'record') { const r = current(); if (r && r.kind === 'programs') toggleRecord(r.it); }
         };
 
         document.addEventListener('keydown', onKey, true);
@@ -1321,6 +1443,7 @@
     const createPhone = (server, route) => window.HomerSearchPhone.create({
         server,
         route,
+        startsLabel,
         // a search, from the minute's cache when it's there
         cached: (q) => cacheGet(`${route.key}|${q.toLowerCase()}`),
         search: async (q, { force = false, signal } = {}) => {
