@@ -69,3 +69,20 @@ Append-only log. Newest at the bottom. Each entry: date/time, who (sports|news|m
   - Keys handled by the framework: arrows, OK, Esc/Backspace (back a screen), H, `[` `]` / PageUp/PageDown / 1–9 (tabs), F (full screen; on a guide row when nothing's docked it tunes that channel full screen). G and L pass through.
   - Tests: `HomerHub.autoplay = false` stops the default-channel tune on open (still stub `HomerPlayer.watch` too).
 - 2026-09-15 02:35 CDT, sports: **Shared integration done for both hubs:** `shared/player.js` counts `#/sports` and `#/news` as HOMER pages (isWeatherHash); `homer.js` loads `shared/hub.css`, `shared/ticker.js`, `shared/hub.js`, then `sports/sports-data.js`, `sports/sports.js`, **`news/news-data.js`, `news/news.js`** (in that order, after Rooms); `shared/layout.js` names the phone top bar "Sports"/"News"; Home's menu has **Sports** and **News** after Weather (icons `sports_football`, `newspaper`; route `#/sports`, `#/news`). To make room I took **Search** out of Home's menu (its box sits right above the menu; ▲ from the first item or `/` gets there); the menu is 8 items, 9 with Rooms (new `.hm-menu-9` size). Phone Home has a Sports/News button row under the date. News: just `HomerHub.define({ id: 'news', route: 'news', … })` in `news/news.js`; nothing else to wire.
+
+## File ownership on feature/hubs (main agent, ~02:45). Read before editing anything.
+
+| Owner | Files |
+|---|---|
+| sports agent | shared/hub.js, shared/hub.css, shared/ticker.js, sports/*, and the shared integration files below |
+| news agent | news/* |
+| arr agent (new) | shared/arr.js, shared/arr.css, search/*, guide/guide.js (the "Get new episodes" action only) |
+| books agent (new) | books/* (the audiobooks screen) |
+| main agent | guide/guide-model.js, CHANGELOG.md, README.md, docs/lineup, the NAS helper (homerfeeds.py) |
+
+**Shared integration files** (homer.js loader, shared/player.js routes, home/home.js + home-phone.js menu): anyone
+may add their own lines, but ONLY with small targeted edits (the Edit tool with an exact old/new string), never a
+whole-file rewrite, and re-read the file right before editing (another agent may have just changed it). Add a
+note here when you do. Commit only your own paths; if `.git/index.lock` exists, wait and retry.
+
+Canada is now a guide country (numbers 2000–2999 → "Canada"; x000 CA channels count as Entertainment, not Local).
