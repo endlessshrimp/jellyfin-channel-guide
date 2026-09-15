@@ -4,26 +4,36 @@ import UIKit
 ///
 /// | Remote                      | Key                         |
 /// |-----------------------------|-----------------------------|
-/// | clickpad ▲▼◀▶ (or a swipe)  | ArrowUp/Down/Left/Right     |
+/// | clickpad ▲▼◀▶              | ArrowUp/Down/Left/Right     |
+/// | swipe ◀ ▶                   | ArrowLeft/ArrowRight        |
 /// | click (select)              | Enter                       |
+/// | hold OK                     | HOMER's menu                |
+/// | swipe ▲ / ▼                 | HOMER's swipe-up/swipe-down |
 /// | Back / Menu                 | Escape                      |
 /// | hold Back                   | h (Home)                    |
 /// | Play/Pause                  | Space (Config.playPauseKey) |
 /// | channel up/down (some TVs)  | PageUp/PageDown             |
 ///
 /// Arrows repeat while held. Back sends Escape when let go, unless it was
-/// held long enough to be Home.
+/// held long enough to be Home; OK sends Enter when let go, unless it was
+/// held long enough to be the menu. The three that aren't keys (the menu and
+/// the two swipes) reach HOMER as a homer-tv event, since a remote has no
+/// letter keys.
 @MainActor
 final class RemoteKeys {
     enum Phase: String { case down, up, press }
 
     /// Where keys go: (key, phase, repeat).
     var send: (String, Phase, Bool) -> Void = { _, _, _ in }
+    /// Where HOMER's own actions go ("menu", "swipe-up", "swipe-down").
+    var sendAction: (String) -> Void = { _ in }
 
     private var repeatTimer: Timer?
     private var repeatKey: String?
     private var backTimer: Timer?
     private var backWasHome = false
+    private var selectTimer: Timer?
+    private var selectWasMenu = false
 
     /// Whether the app handles this press (if not, UIKit gets it).
     static func handles(_ type: UIPress.PressType) -> Bool {
@@ -51,7 +61,12 @@ final class RemoteKeys {
                 MainActor.assumeIsolated { self?.backHeld() } // timers fire on the main run loop
             }
         case .select:
-            send("Enter", .down, false)
+            // Enter waits for the release: OK held down is HOMER's menu instead
+            selectWasMenu = false
+            selectTimer?.invalidate()
+            selectTimer = Timer.scheduledTimer(withTimeInterval: Config.selectHoldSeconds, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.selectHeld() }
+            }
         case .playPause:
             send(Config.playPauseKey, .down, false)
         default:
@@ -70,7 +85,10 @@ final class RemoteKeys {
             if !backWasHome { send("Escape", .press, false) }
             backWasHome = false
         case .select:
-            send("Enter", .up, false)
+            selectTimer?.invalidate()
+            selectTimer = nil
+            if !selectWasMenu { send("Enter", .press, false) }
+            selectWasMenu = false
         case .playPause:
             send(Config.playPauseKey, .up, false)
         default:
@@ -89,7 +107,9 @@ final class RemoteKeys {
             backTimer = nil
             backWasHome = false
         case .select:
-            send("Enter", .up, false)
+            selectTimer?.invalidate()
+            selectTimer = nil
+            selectWasMenu = false
         case .playPause:
             send(Config.playPauseKey, .up, false)
         default:
@@ -99,16 +119,15 @@ final class RemoteKeys {
         }
     }
 
-    /// A swipe on the clickpad's touch surface: one arrow.
+    /// A swipe on the clickpad's touch surface: sideways is an arrow; up and
+    /// down are HOMER's own (the clickpad's ▲▼ still move).
     func swiped(_ direction: UISwipeGestureRecognizer.Direction) {
-        let key: String
         switch direction {
-        case .up: key = "ArrowUp"
-        case .down: key = "ArrowDown"
-        case .left: key = "ArrowLeft"
-        default: key = "ArrowRight"
+        case .up: sendAction("swipe-up")
+        case .down: sendAction("swipe-down")
+        case .left: send("ArrowLeft", .press, false)
+        default: send("ArrowRight", .press, false)
         }
-        send(key, .press, false)
     }
 
     func reset() {
@@ -116,6 +135,14 @@ final class RemoteKeys {
         backTimer?.invalidate()
         backTimer = nil
         backWasHome = false
+        selectTimer?.invalidate()
+        selectTimer = nil
+        selectWasMenu = false
+    }
+
+    private func selectHeld() {
+        selectWasMenu = true
+        sendAction("menu")
     }
 
     private func backHeld() {

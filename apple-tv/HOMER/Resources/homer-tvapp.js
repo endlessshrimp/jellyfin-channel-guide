@@ -11,6 +11,12 @@
  *   and tells the app whenever it changes (tvOS can purge the web view's
  *   storage; the app keeps a copy in the Keychain).
  * - The remote's buttons arrive as key events: window.__homerTvApp.key().
+ * - The three that aren't keys (OK held down, and swiping up or down) arrive
+ *   as window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action } }))
+ *   with action 'menu', 'swipe-up' or 'swipe-down', for HOMER's letter
+ *   shortcuts, which a remote can't type.
+ * - Jellyfin's own pages (its sign-in, its dashboard) are zoomed, since
+ *   they're built for a desk; HOMER's screens size themselves and stay at 1.
  * - A text box getting focus asks the app for the tvOS keyboard; the app
  *   hands the text back with window.__homerTvApp.text().
  * - Tells the app when video or audio is playing (the screensaver waits).
@@ -225,8 +231,11 @@
         t.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     };
 
-    // ---------- Pages without a HOMER screen: arrows move focus, OK clicks ----------
+    // ---------- Pages without a HOMER screen ----------
 
+    // Arrows move focus and OK clicks there, and they're zoomed. HOMER's own
+    // screens (and Jellyfin's full-screen player, which fills the TV by
+    // itself) keep their own size and their own keys.
     const HOMER_SCREENS = '#hm-root, #hl-root, #cg-root, .homer-screen';
     const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"]), [contenteditable=""], [contenteditable="true"]';
     const plainPage = () => !document.querySelector(HOMER_SCREENS) && !/^#\/video/.test(location.hash);
@@ -274,6 +283,27 @@
         const i = all.indexOf(t);
         if (i >= 0 && i + 1 < all.length) focusEl(all[i + 1]);
     };
+
+    // ---------- Zoom on Jellyfin's own pages ----------
+
+    const stockZoom = Number(boot.zoom) > 0 ? Number(boot.zoom) : 1;
+    let zoom = 1;
+    const syncZoom = () => {
+        const want = plainPage() ? stockZoom : 1;
+        if (want === zoom) return;
+        zoom = want;
+        post({ type: 'zoom', value: want });
+    };
+    const watchZoom = () => {
+        syncZoom();
+        // HOMER's screens come and go as children of <body>
+        if (document.body) new MutationObserver(() => syncZoom()).observe(document.body, { childList: true });
+        setInterval(syncZoom, 2000); // a screen that only hides itself
+    };
+    window.addEventListener('hashchange', syncZoom);
+    window.addEventListener('popstate', syncZoom);
+    if (document.body) watchZoom();
+    else document.addEventListener('DOMContentLoaded', watchZoom, { once: true });
 
     // ---------- Media: keep the screensaver away while something plays ----------
 
@@ -331,6 +361,21 @@
                 fire('keyup', 'Enter', false, t);
                 if (!handled && plainPage()) next(t);
             }
+            return true;
+        },
+
+        /**
+         * A button that isn't a key: HOMER's menu (OK held down) and swiping
+         * up or down. HOMER listens for these on the window.
+         */
+        action(name) {
+            window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action: String(name) } }));
+            return true;
+        },
+
+        /** Zoom from inside the page, when the app's own can't. */
+        cssZoom(value) {
+            document.documentElement.style.zoom = Number(value) === 1 ? '' : String(value);
             return true;
         },
 

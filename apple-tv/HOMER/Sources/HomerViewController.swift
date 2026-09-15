@@ -25,6 +25,7 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
         view.backgroundColor = .black
         buildStatus()
         keys.send = { [weak self] key, phase, isRepeat in self?.sendKey(key, phase, isRepeat) }
+        keys.sendAction = { [weak self] action in self?.sendAction(action) }
         for direction: UISwipeGestureRecognizer.Direction in [.up, .down, .left, .right] {
             let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
             swipe.direction = direction
@@ -58,7 +59,9 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
 
     /// Runs before the bridge: HOMER's origin, and the sign-in saved last time.
     private func bootScript() -> String {
-        let boot: [String: Any] = ["origin": Self.origin(of: Config.homeURL), "saved": store.load()]
+        let boot: [String: Any] = ["origin": Self.origin(of: Config.homeURL),
+                                   "zoom": Config.stockPageZoom,
+                                   "saved": store.load()]
         return "window.__homerTvAppBoot = \(Self.js(boot));"
     }
 
@@ -137,6 +140,28 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
         web?.evaluate("window.__homerTvApp && window.__homerTvApp.key(\(Self.js(key)), \(Self.js(phase.rawValue)), \(isRepeat))")
     }
 
+    /// The buttons that aren't keys: HOMER hears them as a homer-tv event.
+    private func sendAction(_ action: String) {
+        web?.evaluate("window.__homerTvApp && window.__homerTvApp.action(\(Self.js(action)))")
+    }
+
+    /// Jellyfin's own pages are zoomed and sit in from the edges; HOMER's
+    /// screens fill the TV at 1.
+    ///
+    /// The zoom is CSS (`html { zoom }`), not WebKit's own page zoom: on tvOS
+    /// that one magnifies what's already laid out, so a page keeps its full
+    /// width and loses its right-hand side. CSS zoom lays the page out again
+    /// at the size it ends up, and HOMER's fixed 1920-wide stages aren't
+    /// touched because they're only up when the zoom is 1.
+    private func applyZoom(_ value: Double) {
+        guard let web else { return }
+        let zoomed = value > 1.001
+        web.view.frame = view.bounds.insetBy(dx: zoomed ? Config.stockPageInset : 0,
+                                             dy: zoomed ? Config.stockPageInset : 0)
+        web.evaluate("window.__homerTvApp && window.__homerTvApp.cssZoom(\(value))")
+        print("[HOMER] zoom \(value)")
+    }
+
     // ---------- The page ----------
 
     func homerWebViewDidFinishLoad(_ web: HomerWebView) {
@@ -189,6 +214,8 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
                 self.becomeFirstResponder()
                 self.web?.evaluate("window.__homerTvApp && window.__homerTvApp.text(\(request.id), \(Self.js(text)), \(submit))")
             }
+        case "zoom":
+            applyZoom((message["value"] as? NSNumber)?.doubleValue ?? 1)
         case "media":
             UIApplication.shared.isIdleTimerDisabled = (message["playing"] as? Bool) == true
         case "log":
@@ -254,18 +281,24 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
     private func runSelfTest() {
         guard !selfTestRan else { return }
         selfTestRan = true
-        let steps: [(TimeInterval, UIPress.PressType, Bool)] = [
+        let presses: [(TimeInterval, UIPress.PressType, Bool)] = [
             (0.5, .downArrow, true), (0.6, .downArrow, false),   // a tap
             (1.0, .rightArrow, true), (1.8, .rightArrow, false), // held: repeats
-            (2.2, .select, true), (2.3, .select, false),
+            (2.2, .select, true), (2.3, .select, false),         // OK: Enter
             (2.6, .playPause, true), (2.7, .playPause, false),
             (3.0, .menu, true), (3.1, .menu, false),             // Back: Escape
             (3.5, .menu, true), (4.4, .menu, false),             // held: h
+            (4.8, .select, true), (5.7, .select, false),         // held: the menu, no Enter
         ]
-        for (delay, type, down) in steps {
+        for (delay, type, down) in presses {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self else { return }
                 if down { self.keys.began(type) } else { self.keys.ended(type) }
+            }
+        }
+        for (delay, direction) in [(6.1, UISwipeGestureRecognizer.Direction.up), (6.4, .down), (6.7, .left)] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.keys.swiped(direction)
             }
         }
     }
@@ -298,6 +331,9 @@ final class HomerViewController: UIViewController, HomerWebViewDelegate {
                 tvapp: window.HOMER_TVAPP === true, homerLoaded: !!window.__homerLoaded,
                 layout: L ? { version: L.version, phone: L.isPhone(), touch: L.isTouch() } : null,
                 htmlClass: document.documentElement.className, focused: (document.activeElement || {}).id || null,
+                screens: [...document.querySelectorAll('#hm-root, #hl-root, #cg-root, .homer-screen')].map((e) => e.id || e.className),
+                cssZoom: document.documentElement.style.zoom || 'none', dpr: devicePixelRatio,
+                doc: document.documentElement.scrollWidth + 'x' + document.documentElement.scrollHeight,
                 video: v ? {
                     paused: v.paused, time: Math.round(v.currentTime * 10) / 10, readyState: v.readyState,
                     size: v.videoWidth + 'x' + v.videoHeight, box: Math.round(r.width) + 'x' + Math.round(r.height),

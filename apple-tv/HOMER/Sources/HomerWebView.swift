@@ -93,6 +93,7 @@ final class HomerWebView: NSObject {
 
     var currentURL: URL? { WebKitRuntime.calls(view).wk_url?() ?? nil }
 
+
     /// Runs `script` in the page; `done` gets its result (nil on error).
     func evaluate(_ script: String, done: ((Any?) -> Void)? = nil) {
         let calls = WebKitRuntime.calls(view)

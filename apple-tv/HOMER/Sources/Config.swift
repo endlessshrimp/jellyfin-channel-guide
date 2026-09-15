@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Everything you might want to change, in one place.
@@ -28,6 +29,18 @@ enum Config {
 
     /// Hold Back this long to send "h" (Home) instead of Escape.
     static let backHoldSeconds: TimeInterval = 0.6
+
+    /// Hold OK this long for HOMER's menu (a homer-tv event) instead of Enter.
+    static let selectHoldSeconds: TimeInterval = 0.6
+
+    /// Jellyfin's own pages (sign-in, the dashboard, anything HOMER doesn't
+    /// draw) are small from ten feet away, so they're zoomed. HOMER's screens
+    /// size themselves to the TV and stay at 1.
+    static let stockPageZoom = 1.5
+
+    /// A zoomed page also sits in from the edges this far, clear of a TV's
+    /// overscan.
+    static let stockPageInset: CGFloat = 24
 
     /// Holding an arrow repeats it, like a keyboard.
     static let repeatDelay: TimeInterval = 0.42
