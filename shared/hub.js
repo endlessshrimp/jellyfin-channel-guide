@@ -32,7 +32,7 @@
  *     id: 'sports', route: 'sports', title: 'Sports',
  *     css: 'sports/sports.css',              // relative to HOMER's base
  *     tv: { channel: '1300' },               // default channel number
- *     guide: { title, include(ch, info), groups: [{ key, label, test(ch, info) }] },
+ *     guide: { title, include(ch, info), groups: [{ key, label, test(ch, info), order? }] },
  *     tabs: [{ key, label, render(ctx) }],   // render may return a teardown fn
  *     ticker: { source(), refreshMs, mode, priorityLabel },
  *     onOpen(hub), onClose(hub)
@@ -410,7 +410,9 @@
 
     // ---------- UI pieces (TV-sized) ----------
 
-    const img = (url, cls, alt = '') => (url ? `<img class="${cls}" src="${esc(url)}" alt="${esc(alt)}" draggable="false" loading="lazy" decoding="async" onerror="this.classList.add('hb-broken')">` : '');
+    // an <img>; fb is a second address to try if the first one fails
+    const IMG_ERR = "if(this.dataset.fb){this.src=this.dataset.fb;this.dataset.fb=''}else{this.classList.add('hb-broken')}";
+    const img = (url, cls, alt = '', fb = '') => (url || fb ? `<img class="${cls}" src="${esc(url || fb)}"${fb && url ? ` data-fb="${esc(fb)}"` : ''} alt="${esc(alt)}" draggable="false" decoding="async" onerror="${IMG_ERR}">` : '');
     const ui = {
         el,
         esc,
@@ -436,7 +438,7 @@
             const row = (t, other) => {
                 const lose = g.state === 'post' && other.winner && !t.winner;
                 return `<div class="hb-score-team${lose ? ' lose' : ''}${t.winner ? ' win' : ''}" style="--team:${t.color ? '#' + String(t.color).replace('#', '') : 'transparent'}">
-                    <span class="hb-score-logo">${img(t.logo, '', t.abbr)}</span>
+                    <span class="hb-score-logo">${img(t.logo, '', t.abbr, t.logoFb)}</span>
                     ${t.rank && t.rank <= 25 ? `<span class="hb-score-rank">${t.rank}</span>` : ''}
                     <span class="hb-score-name">${esc(t.short || t.name || t.abbr || '')}</span>
                     ${t.record ? `<span class="hb-score-rec">${esc(t.record)}</span>` : ''}
@@ -481,7 +483,7 @@
             const cols = columns.map((c) => c.width || (c.logo ? 'minmax(0,1fr)' : 'auto')).join(' ');
             const cell = (c, r) => {
                 const v = c.fmt ? c.fmt(r) : r[c.key];
-                const inner = c.logo ? `<span class="hb-td-logo">${img(r.logo, '')}</span><span class="hb-td-text">${esc(v ?? '')}</span>` : esc(v ?? '');
+                const inner = c.logo ? `<span class="hb-td-logo">${img(r.logo, '', '', r.logoFb)}</span><span class="hb-td-text">${esc(v ?? '')}</span>` : esc(v ?? '');
                 return `<div class="hb-td ${c.align || 'l'}${c.logo ? ' team' : ''}${c.strong ? ' strong' : ''}">${inner}</div>`;
             };
             t.innerHTML = `
@@ -555,7 +557,7 @@
                 </div>
             </div>
             <div class="hb-main">
-                <div class="hb-tabs" data-hb-memory></div>
+                <div class="hb-tabs" data-hb-memory data-hb-scroll-x></div>
                 <div class="hb-panel" data-hb-scroll><div class="hb-panel-in"></div></div>
             </div>
             <div class="hb-legend"></div>
@@ -862,8 +864,13 @@
                     if (!safe(() => inc(ch, info), false)) continue;
                     picked.push({ ch, info, group: groupOf(ch, info) });
                 }
-                const order = (g.groups || []).map((x) => x.key);
-                const rank = (r) => { const k = order.indexOf(r.group.key); return k < 0 ? 999 : k; };
+                // shown in the groups' order (or their own `order`, when the
+                // tests have to run in a different one)
+                const gs = g.groups || [];
+                const rank = (r) => {
+                    const k = gs.findIndex((x) => x.key === r.group.key);
+                    return k < 0 ? 999 : gs[k].order != null ? gs[k].order : k;
+                };
                 picked.sort((a, b) => rank(a) - rank(b) || a.info.number - b.info.number);
                 rows = picked;
                 if (def.tv && def.tv.channel) defaultCh = chans.find((c) => String(c.Number) === String(def.tv.channel)) || null;

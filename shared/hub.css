@@ -239,11 +239,12 @@
 
 .hb-row {
     position: relative;
-    height: 64px;
+    height: 70px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 0 12px;
+    padding: 0 12px 4px;
     border-radius: 12px;
     transition: background 120ms ease, box-shadow 120ms ease;
 }
@@ -338,7 +339,7 @@
     position: absolute;
     left: 124px;
     right: 12px;
-    bottom: 5px;
+    bottom: 6px;
     height: 3px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.08);
@@ -828,7 +829,6 @@ img.hb-broken { visibility: hidden; }
 .hb-table-grid {
     display: grid;
     align-items: center;
-    column-gap: 16px;
 }
 
 .hb-tr { display: contents; }
@@ -840,11 +840,12 @@ img.hb-broken { visibility: hidden; }
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--faint);
-    padding: 0 0 6px;
+    padding: 0 8px 6px;
 }
 
 .hb-td {
     height: 44px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     font-size: 23px;

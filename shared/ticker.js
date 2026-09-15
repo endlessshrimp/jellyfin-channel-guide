@@ -40,7 +40,8 @@
     // a team in a score item: logo, abbreviation, score (the winner bright)
     const side = (t, showScore, dim) => {
         if (!t) return '';
-        const logo = t.logo ? `<img class="hb-tk-logo" src="${esc(t.logo)}" alt="" draggable="false" onerror="this.remove()">` : '';
+        const fb = t.logoFb && t.logoFb !== t.logo ? ` data-fb="${esc(t.logoFb)}"` : '';
+        const logo = t.logo ? `<img class="hb-tk-logo" src="${esc(t.logo)}"${fb} alt="" draggable="false" onerror="if(this.dataset.fb){this.src=this.dataset.fb;this.dataset.fb=''}else{this.remove()}">` : '';
         const rank = t.rank && t.rank <= 25 ? `<span class="hb-tk-rank">${t.rank}</span>` : '';
         return `<span class="hb-tk-team${dim ? ' dim' : ''}">${logo}${rank}<b>${esc(t.abbr || t.short || t.name || '')}</b>${showScore ? `<span class="hb-tk-num">${esc(t.score ?? '')}</span>` : ''}</span>`;
     };
@@ -60,7 +61,7 @@
         else {
             const net = g.channel ? `<span class="hb-tk-net">${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
                 : g.network ? `<span class="hb-tk-net">${esc(g.network)}</span>` : '';
-            status = `<span class="hb-tk-status">${esc(g.status || '')}</span>${net}`;
+            status = `<span class="hb-tk-status">${esc(g.short || g.status || '')}</span>${net}`;
         }
         const sep = pre ? '<span class="hb-tk-at">@</span>' : '';
         const html = `<span class="hb-tk-game${g.priority ? ' fav' : ''}">${side(a, !pre, dimA)}${sep}${side(h, !pre, dimH)}${status}</span>`;
@@ -110,7 +111,6 @@
         let paused = false;
         let anim = null; // the crawl's Web Animation
         let destroyed = false;
-        let sinceFav = 0;
 
         const order = (segs) => {
             // priority items lead each segment, and get a segment of their own
@@ -247,7 +247,6 @@
             }
             si = ((k % queue.length) + queue.length) % queue.length;
             const seg = queue[si];
-            if (seg.fav) sinceFav = 0;
             pages = (seg.mode || cfg.mode) === 'crawl' ? [seg.items] : paginate(seg);
             pi = lastPage ? pages.length - 1 : 0;
             paintLabel(seg);

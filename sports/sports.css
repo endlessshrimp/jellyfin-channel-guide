@@ -1,0 +1,289 @@
+/*
+ * HOMER Sports (#/sports): what the Sports hub adds to shared/hub.css. The
+ * favorites' matchup cards (each on its two teams' colors), and the tables'
+ * zone colors. Scoped to .hb-sports.
+ */
+
+.hb-sports {
+    --gold: #ffc233;
+}
+
+/* ---------- My Teams: a matchup card per favorite ---------- */
+
+.hb-sports .sp-matches { gap: 18px; }
+
+.hb-sports .sp-match {
+    --c1: #1a2a44;
+    --c2: #1a2a44;
+    position: relative;
+    height: 282px;
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 22px 16px;
+    box-sizing: border-box;
+    background: #0a1426;
+    box-shadow: 0 0 0 1px var(--line-strong), 0 16px 40px rgba(0, 0, 0, 0.4);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.hb-sports .sp-match.hb-focus {
+    transform: scale(1.025);
+    box-shadow: var(--focus-ring);
+    z-index: 2;
+}
+
+/* the two teams' colors, split on a slant, under a navy wash so white reads on any of them */
+.hb-sports .sp-match-bg {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(4, 10, 24, 0.15) 0%, rgba(4, 10, 24, 0.55) 60%, rgba(4, 10, 24, 0.85) 100%),
+        linear-gradient(105deg, var(--c1) 0%, var(--c1) 49.6%, var(--c2) 50.4%, var(--c2) 100%);
+    opacity: 0.86;
+}
+
+.hb-sports .sp-match-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(420px 220px at 50% 58%, rgba(4, 10, 24, 0.55), transparent 70%);
+}
+
+.hb-sports .sp-match > :not(.sp-match-bg) { position: relative; }
+
+.hb-sports .sp-match-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 34px;
+    white-space: nowrap;
+}
+
+.hb-sports .sp-fav {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 7px;
+    background: var(--gold);
+    color: #1a1200;
+}
+
+.hb-sports .sp-match-kind {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.hb-sports .sp-match-kind.live { color: #ff8a8a; }
+
+.hb-sports .sp-match-standing {
+    margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.hb-sports .sp-match-mid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+}
+
+.hb-sports .sp-match-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.hb-sports .sp-match-logo {
+    width: 104px;
+    height: 104px;
+    display: grid;
+    place-items: center;
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+}
+
+.hb-sports .sp-match-logo img {
+    max-width: 104px;
+    max-height: 104px;
+    object-fit: contain;
+}
+
+.hb-sports .sp-match-team b {
+    max-width: 100%;
+    font-family: var(--cond);
+    font-size: 27px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.hb-sports .sp-match-team b small {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.75);
+    margin-right: 6px;
+}
+
+.hb-sports .sp-match-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 150px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.hb-sports .sp-match-day {
+    font-family: var(--cond);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.hb-sports .sp-match-time {
+    font-size: 46px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+    white-space: nowrap;
+}
+
+.hb-sports .sp-match-score {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 64px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.hb-sports .sp-match-score span { color: rgba(255, 255, 255, 0.6); }
+.hb-sports .sp-match-score span.w { color: #fff; }
+.hb-sports .sp-match-score i { font-style: normal; font-size: 40px; color: rgba(255, 255, 255, 0.5); }
+
+.hb-sports .sp-match-status {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hb-sports .sp-match-status.in { color: #ff8a8a; }
+
+.hb-sports .sp-match-status i {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 12px var(--live);
+}
+
+.hb-sports .sp-match-at {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+}
+
+.hb-sports .sp-match-foot {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    white-space: nowrap;
+}
+
+.hb-sports .sp-match-last {
+    font-size: 21px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.88);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-sports .sp-match-last b {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 6px;
+    border-radius: 6px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 800;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.hb-sports .sp-match-last b.W { background: #1f9d55; }
+.hb-sports .sp-match-last b.L { background: #c0392b; }
+.hb-sports .sp-match-last small { font-family: var(--cond); font-size: 18px; color: rgba(255, 255, 255, 0.65); margin-left: 4px; }
+
+.hb-sports .sp-match-tv {
+    margin-left: auto;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: rgba(4, 10, 24, 0.55);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.hb-sports .sp-match-tv.on { background: rgba(47, 140, 255, 0.85); color: #fff; }
+.hb-sports .sp-match-tv .material-icons { font-size: 20px; }
+
+.hb-sports .sp-match-none {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    font-size: 24px;
+    color: var(--dim);
+}
+
+/* ---------- Tables ---------- */
+
+/* a Premier League row's zone (Champions League, Europa, the drop): a stripe at the left */
+.hb-sports .hb-tr[style*="--row"] .hb-td:first-child { box-shadow: inset 4px 0 0 var(--row); padding-left: 10px; }
+.hb-sports .hb-tr.hi[style*="--row"] .hb-td:first-child { box-shadow: inset 5px 0 0 var(--gold); }
+
+/* ---------- Grids ---------- */
+
+.hb-sports .sp-grid { gap: 16px; }
+.hb-sports .sp-two { gap: 16px; }
