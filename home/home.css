@@ -163,9 +163,15 @@
     gap: 6px; /* seven items: 7 × 52 + 6 × 6 = 400, level with On Now */
 }
 
-/* eight (Rooms, with Home Assistant connected): 8 × 46 + 7 × 4.57 = 400 */
+/* eight (Sports and News; Rooms makes nine): 8 × 46 + 7 × 4.57 = 400 */
 .hm-menu.hm-menu-8 { gap: calc(32px / 7); }
 .hm-menu.hm-menu-8 .hm-menu-item { height: 46px; font-size: 26px; }
+
+/* nine (Sports and News, and Rooms with Home Assistant connected):
+   9 × 40 + 8 × 5 = 400 */
+.hm-menu.hm-menu-9 { gap: 5px; }
+.hm-menu.hm-menu-9 .hm-menu-item { height: 40px; font-size: 25px; }
+.hm-menu.hm-menu-9 .hm-menu-item .material-icons { font-size: 28px; }
 
 .hm-menu-item {
     height: 52px;

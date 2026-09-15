@@ -35,6 +35,7 @@
     css('skin/skin.css', 'homer-skin');
     css('shared/weather.css', 'homer-weather');
     css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
+    css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
     js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
@@ -61,4 +62,10 @@
     js('forecast/forecast-phone.js'); // Weather's phone layout
     js('rooms/rooms.js'); // Home Assistant's rooms
     js('rooms/rooms-phone.js'); // Rooms' phone layout
+    js('shared/ticker.js'); // the hubs' BottomLine-style ticker
+    js('shared/hub.js'); // the hubs' screen: TV window, channel guide, tabs, ticker
+    js('sports/sports-data.js'); // ESPN's scores, standings, rankings and news
+    js('sports/sports.js'); // the Sports hub (#/sports)
+    js('news/news-data.js'); // the News hub's feeds
+    js('news/news.js'); // the News hub (#/news)
 })();

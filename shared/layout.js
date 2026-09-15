@@ -190,6 +190,8 @@
         if (/^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return { tab: null, name: 'Settings' };
         if (/^#\/weather(\?|$)/.test(h)) return { tab: null, name: 'Weather' };
         if (/^#\/rooms(\?|$)/.test(h)) return { tab: null, name: 'Rooms' };
+        if (/^#\/sports(\?|$)/.test(h)) return { tab: null, name: 'Sports' };
+        if (/^#\/news(\?|$)/.test(h)) return { tab: null, name: 'News' };
         return { tab: 'home', name: 'Home' };
     };
 

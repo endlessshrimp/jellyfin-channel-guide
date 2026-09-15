@@ -10,7 +10,8 @@
  * on a live card watches it, as on TV. There's no menu: the tab bar has the
  * screens and the top bar the weather and Search, so Settings (the one left
  * over) is a button at the top of Home, beside the date, with Rooms before it
- * once Home Assistant is connected on this device.
+ * once Home Assistant is connected on this device. Sports and News (the hubs)
+ * are a row of buttons under them.
  *
  * Watch plays the channel in a strip under the top bar (HomerPlayer docks the
  * real video there, in the same place as the guide's), and the rows keep
@@ -72,6 +73,10 @@
                             <button type="button" class="hmp-settings hmp-rooms"${window.HomerHA && window.HomerHA.isSetUp() ? '' : ' hidden'}><span class="hmp-settings-pill">${icon('lightbulb')}Rooms</span></button>
                             <button type="button" class="hmp-settings"><span class="hmp-settings-pill">${icon('settings')}Settings</span></button>
                         </div>
+                        <div class="hmp-hubs">
+                            <button type="button" class="hmp-settings hmp-hub" data-go="#/sports"><span class="hmp-settings-pill">${icon('sports_football')}Sports</span></button>
+                            <button type="button" class="hmp-settings hmp-hub" data-go="#/news"><span class="hmp-settings-pill">${icon('newspaper')}News</span></button>
+                        </div>
                         <section class="hmp-hero loading" aria-label="On now">
                             <div class="hmp-art"><div class="hmp-art-logo"></div><span class="hmp-badge">Live</span></div>
                             <div class="hmp-hero-text">
@@ -101,6 +106,8 @@
         };
         $('.hmp-settings:not(.hmp-rooms)')._act = () => ctx.go('#/mypreferencesmenu');
         $('.hmp-rooms')._act = () => ctx.go('#/rooms');
+        // the hubs (Sports, News): a row of their own under the date
+        root.querySelectorAll('.hmp-hub').forEach((b) => { b._act = () => ctx.go(b.dataset.go); });
 
         // ---------- Watching ----------
         const watch = (p) => {

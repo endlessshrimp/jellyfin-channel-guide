@@ -320,6 +320,14 @@
 .hm-phone .hmp-rooms .material-icons { color: #ffc54d; }
 .hm-phone .hmp-settings:active .hmp-settings-pill { background: var(--homer-cell-hi); }
 
+/* Sports and News, a row under the date */
+.hm-phone .hmp-hubs {
+    display: flex;
+    gap: 4px;
+    padding: 0 10px 8px calc(var(--hmp-side) - 6px);
+}
+.hm-phone .hmp-hub .material-icons { color: var(--homer-accent-2); }
+
 /* ---------- On Now ---------- */
 
 .hm-phone .hmp-art {
@@ -795,6 +803,7 @@
         background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 100%);
     }
 
+    .hm-phone.hmp-docked .hmp-hubs { display: none; } /* no row for it here; the tabs and Back get around */
     .hm-phone.hmp-docked .hmp-art { display: none; }
     .hm-phone.hmp-docked .hmp-hero-text { padding: 10px 14px; }
     .hm-phone.hmp-docked .hmp-hero-ch { display: none; } /* the strip has the channel */
