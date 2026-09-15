@@ -5,7 +5,7 @@
  * buttons and the loading/empty state.
  *
  * Screens: Movies/TV Shows/details (hl-), Search (hs-), Recordings
- * (hr-), Settings (hx-) and Weather (hf-). Each screen's own
+ * (hr-), Settings (hx-), Weather (hf-) and Rooms (ho-). Each screen's own
  * stylesheet loads after this one and adds only what it does differently.
  * The guide and Home keep their own copies for now. A screen's phone layout
  * doesn't use any of this: see shared/phone.css.
@@ -17,7 +17,8 @@
 #hs-root,
 #hr-root,
 .hx-root,
-#hf-root {
+#hf-root,
+#ho-root {
     --bg0: var(--homer-bg0, #02050a);
     --bg1: var(--homer-bg1, #07142a);
     --panel: var(--homer-panel, rgba(9, 20, 38, 0.72));
@@ -53,7 +54,8 @@
 #hs-stage,
 #hr-stage,
 .hx-stage,
-#hf-stage {
+#hf-stage,
+#ho-stage {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -72,7 +74,8 @@
 #hs-stage::after,
 #hr-stage::after,
 .hx-stage::after,
-#hf-stage::after {
+#hf-stage::after,
+#ho-stage::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -88,7 +91,8 @@
 .hs-topbar,
 .hr-topbar,
 .hx-topbar,
-.hf-topbar {
+.hf-topbar,
+.ho-topbar {
     position: absolute;
     left: 72px;
     right: 72px;
@@ -104,7 +108,8 @@
 .hs-brand,
 .hr-brand,
 .hx-brand,
-.hf-brand {
+.hf-brand,
+.ho-brand {
     display: flex;
     align-items: center;
     gap: 18px;
@@ -117,7 +122,8 @@
 .hs-brand-mark,
 .hr-brand-mark,
 .hx-brand-mark,
-.hf-brand-mark {
+.hf-brand-mark,
+.ho-brand-mark {
     width: 44px;
     height: 44px;
     border-radius: 12px;
@@ -131,7 +137,8 @@
 .hs-brand-mark::before,
 .hr-brand-mark::before,
 .hx-brand-mark::before,
-.hf-brand-mark::before {
+.hf-brand-mark::before,
+.ho-brand-mark::before {
     content: "";
     width: 18px;
     height: 13px;
@@ -143,7 +150,8 @@
 .hs-brand-sub,
 .hr-brand-sub,
 .hx-brand-sub,
-.hf-brand-sub {
+.hf-brand-sub,
+.ho-brand-sub {
     color: var(--dim);
     font-weight: 600;
     letter-spacing: 0.3em;
@@ -158,7 +166,8 @@
 .hs-brand.homer-home,
 .hr-brand.homer-home,
 .hx-brand.homer-home,
-.hf-brand.homer-home {
+.hf-brand.homer-home,
+.ho-brand.homer-home {
     cursor: pointer;
     margin: -8px -16px;
     padding: 8px 16px;
@@ -170,13 +179,15 @@
 .hs-brand.homer-home:hover,
 .hr-brand.homer-home:hover,
 .hx-brand.homer-home:hover,
-.hf-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
+.hf-brand.homer-home:hover,
+.ho-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
 
 .hl-brand-mark .material-icons,
 .hs-brand-mark .material-icons,
 .hr-brand-mark .material-icons,
 .hx-brand-mark .material-icons,
-.hf-brand-mark .material-icons {
+.hf-brand-mark .material-icons,
+.ho-brand-mark .material-icons {
     display: none;
     font-size: 28px;
     color: #fff;
@@ -186,19 +197,22 @@
 .hs-brand.homer-home:hover .hs-brand-mark::before,
 .hr-brand.homer-home:hover .hr-brand-mark::before,
 .hx-brand.homer-home:hover .hx-brand-mark::before,
-.hf-brand.homer-home:hover .hf-brand-mark::before { display: none; }
+.hf-brand.homer-home:hover .hf-brand-mark::before,
+.ho-brand.homer-home:hover .ho-brand-mark::before { display: none; }
 
 .hl-brand.homer-home:hover .hl-brand-mark .material-icons,
 .hs-brand.homer-home:hover .hs-brand-mark .material-icons,
 .hr-brand.homer-home:hover .hr-brand-mark .material-icons,
 .hx-brand.homer-home:hover .hx-brand-mark .material-icons,
-.hf-brand.homer-home:hover .hf-brand-mark .material-icons { display: block; }
+.hf-brand.homer-home:hover .hf-brand-mark .material-icons,
+.ho-brand.homer-home:hover .ho-brand-mark .material-icons { display: block; }
 
 .hl-clock,
 .hs-clock,
 .hr-clock,
 .hx-clock,
-.hf-clock {
+.hf-clock,
+.ho-clock {
     text-align: right;
     line-height: 1;
 }
@@ -207,7 +221,8 @@
 .hs-clock-time,
 .hr-clock-time,
 .hx-clock-time,
-.hf-clock-time {
+.hf-clock-time,
+.ho-clock-time {
     font-size: 40px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -218,7 +233,8 @@
 .hs-clock-date,
 .hr-clock-date,
 .hx-clock-date,
-.hf-clock-date {
+.hf-clock-date,
+.ho-clock-date {
     margin-top: 6px;
     font-size: 17px;
     color: var(--dim);
@@ -301,7 +317,8 @@
 .hs-state,
 .hr-state,
 .hx-state,
-.hf-state {
+.hf-state,
+.ho-state {
     position: absolute;
     display: none;
     flex-direction: column;
@@ -316,13 +333,15 @@
 .hs-state.show,
 .hr-state.show,
 .hx-state.show,
-.hf-state.show { display: flex; }
+.hf-state.show,
+.ho-state.show { display: flex; }
 
 .hl-state b,
 .hs-state b,
 .hr-state b,
 .hx-state b,
-.hf-state b {
+.hf-state b,
+.ho-state b {
     font-size: 28px;
     font-weight: 700;
     color: var(--text);
@@ -332,7 +351,8 @@
 .hs-state span,
 .hr-state span,
 .hx-state span,
-.hf-state span {
+.hf-state span,
+.ho-state span {
     font-family: var(--cond);
     font-size: 20px;
     font-weight: 600;
@@ -345,7 +365,8 @@
 .hs-legend,
 .hr-legend,
 .hx-legend,
-.hf-legend {
+.hf-legend,
+.ho-legend {
     position: absolute;
     left: 72px;
     right: 72px;
@@ -364,7 +385,8 @@
 .hs-key,
 .hr-key,
 .hx-key,
-.hf-key {
+.hf-key,
+.ho-key {
     display: inline-grid;
     place-items: center;
     min-width: 34px;
@@ -383,13 +405,15 @@
 .hs-legend .spacer,
 .hr-legend .spacer,
 .hx-legend .spacer,
-.hf-legend .spacer { flex: 1; }
+.hf-legend .spacer,
+.ho-legend .spacer { flex: 1; }
 
 .hl-legend [data-action],
 .hs-legend [data-action],
 .hr-legend [data-action],
 .hx-legend [data-action],
-.hf-legend [data-action] {
+.hf-legend [data-action],
+.ho-legend [data-action] {
     cursor: pointer;
     transition: color 120ms ease;
 }
@@ -398,14 +422,16 @@
 .hs-legend [data-action]:hover,
 .hr-legend [data-action]:hover,
 .hx-legend [data-action]:hover,
-.hf-legend [data-action]:hover { color: var(--text); }
+.hf-legend [data-action]:hover,
+.ho-legend [data-action]:hover { color: var(--text); }
 
 /* ---------- Toast ---------- */
 
 .hl-toast,
 .hs-toast,
 .hr-toast,
-.hx-toast {
+.hx-toast,
+.ho-toast {
     position: absolute;
     left: 50%;
     top: 50px;
@@ -433,7 +459,8 @@
 .hl-toast-text,
 .hs-toast-text,
 .hr-toast-text,
-.hx-toast-text {
+.hx-toast-text,
+.ho-toast-text {
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -441,7 +468,8 @@
 .hl-toast.show,
 .hs-toast.show,
 .hr-toast.show,
-.hx-toast.show {
+.hx-toast.show,
+.ho-toast.show {
     opacity: 1;
     transform: translate(-50%, 0);
 }
@@ -449,4 +477,5 @@
 .hl-toast.err,
 .hs-toast.err,
 .hr-toast.err,
-.hx-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
+.hx-toast.err,
+.ho-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }

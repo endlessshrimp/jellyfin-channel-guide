@@ -189,6 +189,7 @@
         if (/^#\/search(\.html)?(\?|$)/.test(h)) return { tab: null, name: 'Search' };
         if (/^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return { tab: null, name: 'Settings' };
         if (/^#\/weather(\?|$)/.test(h)) return { tab: null, name: 'Weather' };
+        if (/^#\/rooms(\?|$)/.test(h)) return { tab: null, name: 'Rooms' };
         return { tab: 'home', name: 'Home' };
     };
 

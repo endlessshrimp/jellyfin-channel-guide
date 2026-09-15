@@ -12,6 +12,8 @@
  *   Subtitle language   user Configuration.SubtitleLanguagePreference (server)
  *   Streaming quality   Jellyfin Web's per-device max bitrate (localStorage)
  *   Weather location    where the clock's weather comes from (HomerWeather, localStorage)
+ *   Home Assistant      Connect (Home Assistant's own sign-in), the address, and
+ *                       Disconnect, which asks for a second OK (HomerHA, localStorage)
  *   Sign out            Jellyfin Web's own logout, after a second OK
  *
  * Remote/keyboard: ▲▼ move, ◀▶ between the list and the choices, OK selects,
@@ -299,6 +301,61 @@
     // when they open.
 
     const wx = () => window.HomerWeather || null;
+    const ha = () => window.HomerHA || null;
+
+    // Home Assistant: what this device's connection is, as a choice list
+    const HA_STATUS = {
+        connecting: 'Connecting…',
+        offline: 'Can\'t reach it right now',
+        signin: 'Signed out: connect again',
+        blocked: 'Can\'t reach it from this page'
+    };
+    const haOptions = () => {
+        const h = ha();
+        if (!h) return [];
+        const url = h.address();
+        const problem = h.addressProblem(url);
+        const address = { value: 'address', label: 'Address', sub: url ? '' : 'Type it, then press Enter', input: 'url', url };
+        if (!h.isSetUp() || h.status() === 'signin') {
+            return [
+                { value: 'connect', label: h.status() === 'signin' ? 'Connect again' : 'Connect', sub: problem || 'Sign in on Home Assistant\'s own page', done: 'Opening Home Assistant…' },
+                address
+            ];
+        }
+        const house = h.status() === 'ready' ? h.house() : null;
+        return [
+            {
+                value: 'connected',
+                label: house ? `Connected to ${house.name}` : HA_STATUS[h.status()] || 'Connecting…',
+                sub: [house && house.user ? `Signed in as ${house.user}` : '', url.replace(/^https?:\/\//, '')].filter(Boolean).join(' · '),
+                info: true
+            },
+            { value: 'disconnect', label: 'Disconnect', sub: 'Sign this device out of Home Assistant', confirm: 'Disconnect? OK to confirm', confirmTap: 'Tap again to disconnect', done: 'Disconnected' }
+        ];
+    };
+    const haSetting = () => ({
+        id: 'ha', icon: 'lightbulb', label: 'Home Assistant', scope: 'device',
+        desc: () => {
+            const h = ha();
+            const base = 'Your lights, thermostat and cameras, in Rooms and over whatever\'s playing (press L). You sign in on Home Assistant\'s own page; this device keeps its sign-in.';
+            const problem = h && (h.status() === 'blocked' ? h.problem() : !h.isSetUp() && h.address() ? h.addressProblem() : '');
+            return problem ? `${base} ${problem}` : base;
+        },
+        options: haOptions,
+        current: () => (ha() && ha().isSetUp() && ha().status() !== 'signin' ? 'connected' : null),
+        matches: (o, v) => o.value === v,
+        valueLabel: () => {
+            const h = ha();
+            if (!h || !h.isSetUp()) return 'Not connected';
+            return h.status() === 'ready' ? `Connected · ${h.house().name}` : HA_STATUS[h.status()] || 'Connecting…';
+        },
+        save: async (value) => {
+            const h = ha();
+            if (!h) return;
+            if (value === 'connect') h.signIn(OUR_ROUTE); // off to Home Assistant's sign-in, and back here
+            else if (value === 'disconnect') await h.disconnect();
+        }
+    });
 
     const SCOPES = {
         device: { icon: 'devices', label: 'This device only' },
@@ -410,6 +467,7 @@
                 },
                 save: async (value) => { if (value === 'device') await wx().useDevice(); }
             },
+            haSetting(),
             {
                 id: 'signout', icon: 'exit_to_app', label: 'Sign out', scope: 'device', action: true,
                 desc: 'Sign out of HOMER on this device and go to the sign-in screen.',
@@ -610,7 +668,8 @@
         let sel = Math.max(0, model.visible.findIndex((s) => from && s.id === from.id)); // setting
         let zone = 'list'; // list | options
         let opt = 0; // highlighted choice
-        let armed = false; // sign out asked once
+        let armed = false; // sign out (or a choice that asks first, like Disconnect) asked once
+        let armedOpt = -1; // which choice is armed
         let armTimer = 0;
         let signingOut = false;
         let alive = true;
@@ -664,12 +723,15 @@
             if (revealCurrent) opt = cur >= 0 ? cur : 0;
             opt = clamp(opt, 0, Math.max(0, options.length - 1));
             optsInner.innerHTML = options.map((o, i) => {
-                const label = s.action && armed ? 'Sign out? OK to confirm' : o.label;
+                const isArmed = armed && (s.action || (o.confirm && i === armedOpt));
+                const label = isArmed ? o.confirm || 'Sign out? OK to confirm' : o.label;
                 const lead = s.action ? `<span class="material-icons hx-opt-lead" aria-hidden="true">${s.icon}</span>` : '<span class="material-icons hx-opt-check" aria-hidden="true">check</span>';
-                const input = o.input
-                    ? `<input class="hx-zip" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" value="${esc(o.zip)}" aria-label="ZIP code">`
-                    : '';
-                return `<div class="hx-opt${i === cur ? ' cur' : ''}${i === opt ? ' sel' : ''}${o.sub ? ' two' : ''}${s.action ? ' action' : ''}${s.action && armed ? ' armed' : ''}" role="button" data-i="${i}">
+                const input = o.input === 'url'
+                    ? `<input class="hx-url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://homeassistant.local:8123" value="${esc(o.url)}" aria-label="Home Assistant address">`
+                    : o.input
+                        ? `<input class="hx-zip" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" value="${esc(o.zip)}" aria-label="ZIP code">`
+                        : '';
+                return `<div class="hx-opt${i === cur ? ' cur' : ''}${i === opt ? ' sel' : ''}${o.sub ? ' two' : ''}${s.action || o.confirm ? ' action' : ''}${isArmed ? ' armed' : ''}${o.input === 'url' ? ' url' : ''}" role="button" data-i="${i}">
                     ${lead}<div class="hx-opt-text"><div class="hx-opt-label">${esc(label)}</div>${o.sub ? `<div class="hx-opt-sub">${esc(o.sub)}</div>` : ''}</div>${input}
                 </div>`;
             }).join('');
@@ -697,8 +759,9 @@
                 items.push({ key: '▲▼', label: 'Settings' }, { key: 'OK', label: 'Choices', action: 'ok' });
             } else if (model.status === 'ready') {
                 const s = setting();
+                const o = options[opt] || {};
                 items.push({ key: '▲▼', label: 'Choices' }, { key: '◀', label: 'Settings' },
-                    { key: 'OK', label: s.action ? (armed ? 'Confirm sign out' : 'Sign out') : 'Select', action: 'ok' });
+                    { key: 'OK', label: s.action ? (armed ? 'Confirm sign out' : 'Sign out') : o.confirm && armed ? 'Confirm' : o.input === 'url' ? 'Type the address' : 'Select', action: 'ok' });
             }
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' }, { key: 'ESC', label: 'Back', action: 'back' });
             $('.hx-legend').innerHTML = items.map((i) => (i === 'spacer'
@@ -717,7 +780,8 @@
             clearTimeout(armTimer);
             if (!armed) return;
             armed = false;
-            if (setting().action) drawOptions(false);
+            armedOpt = -1;
+            drawOptions(false);
             updateLegend();
         };
 
@@ -759,12 +823,33 @@
                 signOut();
                 return;
             }
+            // a choice that asks first (Disconnect): the first OK arms it
+            if (o.confirm) {
+                if (!armed || armedOpt !== i) {
+                    armed = true;
+                    armedOpt = i;
+                    drawOptions(false);
+                    updateLegend();
+                    clearTimeout(armTimer);
+                    armTimer = setTimeout(disarm, 8000);
+                    return;
+                }
+                clearTimeout(armTimer);
+                armed = false;
+                armedOpt = -1;
+            }
+            // the address row: OK puts the cursor in its box; Enter there saves
+            if (o.input === 'url') {
+                editUrl();
+                return;
+            }
             // the ZIP row: OK puts the cursor in its box; Enter there saves
             if (o.input) {
                 editZip();
                 return;
             }
-            if (s.matches(o, s.current())) {
+            if (o.info) return; // says how things are; nothing to pick
+            if (s.matches(o, s.current()) && !o.confirm) {
                 toast('Saved');
                 return;
             }
@@ -775,7 +860,7 @@
             try {
                 await saving;
                 if (!alive) return;
-                toast('Saved');
+                toast(o.done || 'Saved');
             } catch (err) {
                 console.warn('[HOMER Settings] save failed', err);
                 if (!alive) return;
@@ -830,6 +915,41 @@
             if (k === 'ArrowUp' || k === 'ArrowDown') { ev.preventDefault(); endZip(); moveOpt(k === 'ArrowUp' ? -1 : 1); return; }
             if (k.length === 1 && !/\d/.test(k) && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();
         };
+        // ----- the Home Assistant address box -----
+        const urlBox = () => optsInner.querySelector('.hx-url');
+        const editUrl = () => {
+            const box = urlBox();
+            if (!box) return;
+            box.focus();
+            box.select();
+        };
+        const endUrl = () => {
+            const box = urlBox();
+            if (box && ha()) box.value = ha().address();
+            if (box) box.blur();
+        };
+        const submitUrl = () => {
+            const box = urlBox();
+            if (!box || !ha()) return;
+            if (!ha().setAddress(box.value)) { toast('That isn\'t an address', 'err'); return; }
+            const problem = ha().addressProblem();
+            box.blur();
+            if (problem) toast(problem, 'err');
+            else toast('Saved · ' + ha().address());
+            opt = 0; // on Connect, the next thing to press
+            drawOptions(false);
+            drawInfo();
+            drawList();
+            updateLegend();
+        };
+        // typing in the address box: Enter saves, Esc puts it back, ▲▼ leave it
+        const onUrlKey = (ev) => {
+            const k = ev.key;
+            ev.stopPropagation();
+            if (k === 'Enter') { ev.preventDefault(); submitUrl(); return; }
+            if (k === 'Escape' || k === 'GoBack' || k === 'BrowserBack') { ev.preventDefault(); endUrl(); return; }
+            if (k === 'ArrowUp' || k === 'ArrowDown') { ev.preventDefault(); endUrl(); moveOpt(k === 'ArrowUp' ? -1 : 1); }
+        };
         const onZipBlur = (ev) => {
             if (ev.target.classList && ev.target.classList.contains('hx-zip') && !zipBusy && wx()) {
                 ev.target.value = wx().zip().zip;
@@ -843,6 +963,7 @@
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             const t = ev.target;
             if (t && t.classList && t.classList.contains('hx-zip') && root.contains(t)) { onZipKey(ev); return; }
+            if (t && t.classList && t.classList.contains('hx-url') && root.contains(t)) { onUrlKey(ev); return; }
             // a digit on the ZIP row starts a new ZIP
             if (zone === 'options' && model.status === 'ready' && /^\d$/.test(ev.key) && options[opt] && options[opt].input) {
                 ev.stopPropagation();
@@ -977,6 +1098,18 @@
             }
         };
 
+        // Home Assistant's connection coming and going changes its row
+        const offHA = ha() ? ha().onChange(() => {
+            if (!alive || model.status !== 'ready') return;
+            drawList();
+            const box = urlBox();
+            if (setting() && setting().id === 'ha' && !(box && document.activeElement === box)) {
+                drawOptions(false);
+                drawInfo();
+                updateLegend();
+            }
+        }) : () => {};
+
         setZone('list');
         load();
 
@@ -989,6 +1122,7 @@
             teardown() {
                 alive = false;
                 model.dispose();
+                offHA();
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);

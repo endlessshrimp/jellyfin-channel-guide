@@ -1,0 +1,857 @@
+/*
+ * HOMER Rooms. The stage, top bar, legend, toast and loading state come from
+ * shared/shell.css; this is what Rooms adds. Colors come from
+ * shared/tokens.css. A light that's on is the needle's amber (the one warm
+ * color HOMER has); everything else is the navy screens' palette.
+ */
+
+#ho-root {
+    --lit: #ffc54d;
+    --lit-2: #ff9d2e;
+    --lit-bg: rgba(255, 176, 32, 0.16);
+    --heat: #ff9d2e;
+    --cool: #6fd3ff;
+}
+
+/* ---------- Two columns: the rooms, and the room ---------- */
+
+.ho-body {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 132px;
+    bottom: 96px;
+    display: grid;
+    grid-template-columns: 440px 1fr;
+    gap: 28px;
+}
+
+.ho-side {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+}
+
+.ho-list,
+.ho-room {
+    position: relative;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+}
+
+.ho-list {
+    flex: 1;
+}
+
+.ho-items {
+    padding: 4px 0 12px;
+}
+
+.ho-waiting .ho-side,
+.ho-waiting .ho-room { visibility: hidden; }
+
+/* ---------- Rooms list ---------- */
+
+.ho-item {
+    position: relative;
+    margin: 8px 12px 0;
+    height: 88px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 18px 0 24px;
+    background: rgba(20, 36, 60, 0.5);
+    border: 1px solid rgba(160, 190, 230, 0.06);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+/* the Cameras item sits apart from the rooms */
+.ho-item.cams { margin-bottom: 22px; }
+
+.ho-item.cams::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -15px;
+    height: 1px;
+    background: var(--line-strong);
+}
+
+.ho-item-icon {
+    flex: none;
+    font-size: 32px;
+    width: 36px;
+    color: var(--accent-2);
+}
+
+.ho-item-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ho-item-label {
+    font-size: 27px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-item-value {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 19px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-item-go {
+    flex: none;
+    font-size: 32px;
+    color: var(--faint);
+    opacity: 0;
+}
+
+/* the room on the right: resting highlight while the remote is in the room */
+.ho-item.sel {
+    background: var(--cell-hi);
+    border-color: rgba(160, 200, 255, 0.3);
+}
+
+.ho-item.sel::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 4px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent-2);
+}
+
+.ho-item.sel .ho-item-go { opacity: 1; color: var(--accent-2); }
+
+.ho-zone-list .ho-item.sel {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    z-index: 2;
+}
+
+.ho-zone-list .ho-item.sel::before { display: none; }
+
+.ho-zone-list .ho-item.sel .ho-item-icon,
+.ho-zone-list .ho-item.sel .ho-item-go { color: #fff; }
+
+.ho-zone-list .ho-item.sel .ho-item-value { color: rgba(255, 255, 255, 0.85); }
+
+/* a video playing docks under the list */
+.ho-preview {
+    display: none;
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    background: #000;
+    box-shadow: 0 0 0 1px var(--line-strong);
+    place-items: center;
+}
+
+.ho-preview .material-icons {
+    font-size: 48px;
+    color: var(--faint);
+}
+
+.ho-docked .ho-preview { display: grid; }
+
+/* ---------- The room ---------- */
+
+.ho-room {
+    display: flex;
+    flex-direction: column;
+}
+
+.ho-room-head {
+    flex: none;
+    padding: 26px 36px 8px;
+}
+
+.ho-room-name {
+    font-size: 44px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-room-sub {
+    margin-top: 6px;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 600;
+    color: var(--dim);
+    min-height: 26px;
+}
+
+.ho-room-body {
+    position: relative; /* rows and chips measure from here */
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 24px 32px;
+}
+
+.ho-rows { padding-bottom: 32px; }
+
+.ho-sec {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 26px 12px 4px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.ho-sec .material-icons {
+    font-size: 22px;
+    color: var(--faint);
+}
+
+.ho-empty {
+    margin: 60px 12px;
+    font-family: var(--cond);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-row {
+    position: relative;
+    margin-top: 10px;
+    border-radius: 14px;
+    background: rgba(20, 36, 60, 0.5);
+    border: 1px solid rgba(160, 190, 230, 0.06);
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.ho-row.sel {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    z-index: 2;
+}
+
+/* ---------- A light ---------- */
+
+.ho-light {
+    height: 84px;
+    display: grid;
+    grid-template-columns: 52px minmax(200px, 1fr) minmax(240px, 36%) 84px 88px;
+    align-items: center;
+    gap: 22px;
+    padding: 0 22px 0 18px;
+}
+
+.ho-bulb {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.ho-bulb .material-icons {
+    font-size: 30px;
+    color: var(--faint);
+    transition: color 160ms ease;
+}
+
+.ho-light.on .ho-bulb {
+    background: var(--lit-bg);
+    box-shadow: 0 0 26px rgba(255, 176, 32, 0.32);
+}
+
+.ho-light.on .ho-bulb .material-icons { color: var(--lit); }
+
+.ho-light-text { min-width: 0; }
+
+.ho-light-name {
+    font-size: 27px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-light-sub {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-light-sub:empty { display: none; }
+
+.ho-bar {
+    height: 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.ho-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--lit-2), var(--lit));
+    transition: width 200ms ease;
+}
+
+/* a light that only switches has nothing to dim */
+.ho-light.switch .ho-bar { visibility: hidden; }
+
+.ho-light-val {
+    text-align: right;
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.ho-light.on .ho-light-val { color: var(--text); }
+
+.ho-pill {
+    justify-self: end;
+    min-width: 72px;
+    text-align: center;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 7px 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--line-strong);
+    color: var(--dim);
+}
+
+.ho-light.on .ho-pill {
+    background: var(--lit-bg);
+    border-color: rgba(255, 197, 77, 0.45);
+    color: var(--lit);
+}
+
+.ho-light.off-line { opacity: 0.55; }
+
+/* on the highlight the amber stays, on a track that reads on blue */
+.ho-light.sel .ho-bar { background: rgba(255, 255, 255, 0.28); }
+.ho-light.sel .ho-bar i { background: #ffd36b; }
+.ho-light.sel .ho-light-sub,
+.ho-light.sel .ho-light-val { color: #fff; }
+.ho-light.sel:not(.on) .ho-bulb .material-icons { color: rgba(255, 255, 255, 0.75); }
+.ho-light.sel .ho-pill { border-color: rgba(255, 255, 255, 0.45); color: #fff; }
+.ho-light.sel.on .ho-pill { background: rgba(255, 211, 107, 0.25); color: #ffe19a; }
+
+/* ---------- Scenes and modes: a row of chips ---------- */
+
+.ho-chips {
+    padding: 12px;
+    cursor: default;
+}
+
+.ho-chips.sel {
+    background: var(--cell-hi);
+    border-color: rgba(160, 200, 255, 0.3);
+    box-shadow: none;
+}
+
+.ho-chips-track {
+    position: relative; /* rows and chips measure from here */
+    display: flex;
+    gap: 12px;
+    overflow: hidden;
+    padding: 6px;
+    margin: -6px;
+}
+
+.ho-chip {
+    flex: none;
+    height: 60px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 24px 0 18px;
+    border-radius: 12px;
+    background: var(--cell);
+    border: 1px solid var(--line-strong);
+    font-size: 23px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.ho-chip .material-icons {
+    font-size: 26px;
+    color: var(--accent-2);
+}
+
+/* the thermostat's mode now */
+.ho-chip.cur {
+    background: rgba(47, 140, 255, 0.2);
+    border-color: rgba(111, 211, 255, 0.55);
+}
+
+.ho-chip.sel {
+    background: var(--focus-fill);
+    border-color: transparent;
+    box-shadow: var(--focus-ring);
+    color: #fff;
+}
+
+.ho-chip.sel .material-icons { color: #fff; }
+
+/* ---------- The thermostat ---------- */
+
+.ho-set {
+    height: 132px;
+    display: grid;
+    grid-template-columns: 250px auto 1fr;
+    align-items: center;
+    gap: 36px;
+    padding: 0 32px;
+}
+
+.ho-set-now-v {
+    font-size: 68px;
+    line-height: 1;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.ho-set-now-k {
+    margin-top: 8px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.ho-set-ctl {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.ho-step {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+}
+
+.ho-step .material-icons { font-size: 34px; }
+
+.ho-set-target {
+    min-width: 150px;
+    text-align: center;
+}
+
+.ho-set-label {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.ho-set-v {
+    font-size: 58px;
+    line-height: 1.05;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.ho-set.idle .ho-step { visibility: hidden; }
+
+.ho-set-info { min-width: 0; }
+
+.ho-set-name {
+    font-size: 25px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-set-line {
+    margin-top: 4px;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-set[data-action="cooling"] .ho-set-line { color: var(--cool); }
+.ho-set[data-action="heating"] .ho-set-line,
+.ho-set[data-action="preheating"] .ho-set-line { color: var(--heat); }
+
+.ho-set.sel .ho-step { border-color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.12); }
+.ho-set.sel .ho-set-label,
+.ho-set.sel .ho-set-now-k,
+.ho-set.sel .ho-set-line { color: rgba(255, 255, 255, 0.85); }
+
+/* ---------- Cameras ---------- */
+
+.ho-cams {
+    display: flex;
+    gap: 20px;
+    padding: 14px;
+    cursor: default;
+}
+
+.ho-cams.sel {
+    background: var(--cell-hi);
+    border-color: rgba(160, 200, 255, 0.3);
+    box-shadow: none;
+}
+
+.ho-camtile {
+    position: relative;
+    flex: none;
+    width: 360px;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0a1426;
+    box-shadow: 0 0 0 1px var(--line-strong);
+    cursor: pointer;
+    transition: box-shadow 120ms ease;
+}
+
+.ho-cams.grid .ho-camtile { width: calc(50% - 10px); }
+
+.ho-camtile img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.ho-camtile.has-still img { opacity: 1; }
+
+.ho-camtile-none {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+}
+
+.ho-camtile-none .material-icons {
+    font-size: 44px;
+    color: var(--faint);
+}
+
+.ho-camtile.no-still .ho-camtile-none { display: grid; }
+
+.ho-camtile-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 36px 16px 12px;
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.85), transparent);
+    font-size: 23px;
+    font-weight: 700;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.ho-cams.grid .ho-camtile-label { font-size: 27px; padding: 48px 20px 16px; }
+
+.ho-camtile-label .material-icons {
+    font-size: 24px;
+    color: var(--accent-2);
+}
+
+.ho-camtile-ring {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text);
+}
+
+.ho-camtile-ring:empty { display: none; }
+
+.ho-camtile.sel { box-shadow: var(--focus-ring); }
+
+/* ---------- The camera view ---------- */
+
+.ho-cam {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 132px;
+    bottom: 96px;
+    display: none;
+    grid-template-columns: auto 380px;
+    justify-content: center;
+    align-items: center;
+    gap: 28px;
+}
+
+.ho-zone-camera .ho-cam { display: grid; }
+.ho-zone-camera .ho-body { visibility: hidden; }
+
+/* sized by fitCam() to the camera's shape */
+.ho-cam-main {
+    position: relative;
+    width: 1200px;
+    height: 675px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 0 0 1px var(--line-strong), var(--homer-shadow);
+    cursor: pointer;
+}
+
+.ho-cam-img,
+.ho-cam-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.ho-cam-img { opacity: 0; }
+.ho-cam-main.has-still .ho-cam-img { opacity: 1; }
+.ho-cam-video { opacity: 0; transition: opacity 250ms ease; }
+.ho-cam.live .ho-cam-video { opacity: 1; }
+
+.ho-cam-none {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-family: var(--cond);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-cam-none .material-icons { font-size: 64px; color: var(--faint); }
+.ho-cam-main.no-still:not(.has-still) .ho-cam-none { display: flex; }
+.ho-cam.live .ho-cam-none { display: none; }
+
+.ho-cam-badge {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    z-index: 2;
+}
+
+.ho-live-badge,
+.ho-still-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.ho-live-badge::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 10px rgba(255, 59, 59, 0.8);
+}
+
+.ho-still-badge { color: var(--dim); }
+
+.ho-cam-side {
+    align-self: stretch;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.45);
+    padding: 30px 28px;
+    overflow: hidden;
+}
+
+.ho-cam-name {
+    font-size: 36px;
+    line-height: 1.1;
+    font-weight: 800;
+}
+
+.ho-cam-room {
+    margin-top: 6px;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-rings-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 30px 0 10px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.ho-rings-head .material-icons { font-size: 22px; color: var(--faint); }
+
+.ho-ring {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 24px;
+}
+
+.ho-ring b { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.ho-ring span,
+.ho-rings-none {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.ho-cam-pick {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 56px;
+    padding: 0 16px;
+    margin-top: 6px;
+    border-radius: 10px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #d6e0ec;
+    cursor: pointer;
+}
+
+.ho-cam-pick .material-icons { font-size: 26px; color: var(--accent-2); }
+
+.ho-cam-pick.cur {
+    background: var(--focus-fill);
+    box-shadow: var(--focus-ring);
+    color: #fff;
+}
+
+.ho-cam-pick.cur .material-icons { color: #fff; }
+
+/* ---------- Not connected / connecting ---------- */
+
+.ho-state {
+    inset: 0;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.ho-state-icon {
+    font-size: 64px;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+}
+
+.ho-state span {
+    max-width: 760px;
+    line-height: 1.35;
+}
+
+.ho-state-ok {
+    margin-top: 18px;
+    display: inline-flex;
+    align-items: center;
+    height: 60px;
+    padding: 0 28px 0 16px;
+    border-radius: 12px;
+    background: var(--focus-fill);
+    box-shadow: var(--focus-ring);
+    font-size: 24px;
+    font-weight: 700;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.ho-state-ok .ho-key { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
+
+.ho-spinner {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: 5px solid rgba(255, 255, 255, 0.12);
+    border-top-color: var(--accent-2);
+    animation: ho-spin 900ms linear infinite;
+    margin-bottom: 8px;
+}
+
+@keyframes ho-spin { to { transform: rotate(360deg); } }

@@ -8,8 +8,9 @@ Jellyfin page matches. On a phone, HOMER has a phone layout (see
 ## Home
 
 Home replaces Jellyfin's home page: a main menu (Live TV Guide, Movies, TV
-Shows, Recordings, Weather, Search, Settings), an On Now panel, and rows of
-Continue Watching, Up Next, On Now and Recently Added.
+Shows, Recordings, Weather, Search, Settings, and Rooms once Home Assistant is
+connected), an On Now panel, and rows of Continue Watching, Up Next, On Now
+and Recently Added.
 
 - **Watch** plays the channel in the On Now preview window, and Home stays up
   so you can keep browsing. The panel shows what you're watching, with
@@ -74,6 +75,89 @@ Now, the time of day: day, dawn, dusk or night). The forecast refreshes every
 10 minutes while the screen is up, the radar every 5. Data from Open-Meteo and
 the National Weather Service.
 
+## Rooms (Home Assistant)
+
+With [Home Assistant](https://www.home-assistant.io/) connected (Settings →
+Home Assistant), HOMER has a **Rooms** screen, quick controls over whatever's
+playing, and a doorbell picture-in-picture. Nothing about Home Assistant is in
+HOMER's code or the injector config except, if you like, its address.
+
+- **Rooms** (Home's menu, or **Rooms** at the top of Home on a phone) lists
+  Home Assistant's areas, with what's on and the temperature, plus
+  **Cameras** for every camera. A room shows its thermostat (◀▶ sets the
+  temperature, with its modes under it), its scenes (◀▶ picks, OK turns one
+  on), its lights (a row each: ◀▶ dims in 10% steps, OK switches) and its
+  cameras (OK opens one). Esc goes back a step. On a phone the rooms are chips
+  along the top; tap a bulb to switch it, drag its bar to dim.
+- **A camera** opens large, live when the camera streams (Home Assistant's HLS,
+  played with hls.js, or the browser's own on an iPhone), otherwise a still
+  that refreshes every second. ◀▶ goes to the next camera. A doorbell shows
+  the day's rings.
+- **L** (or the lightbulb in the player's controls) opens the quick controls
+  over any HOMER screen or a full-screen video, which keeps playing: one room
+  at a time (◀▶ on its name changes rooms), its scenes and lights, and the
+  house's thermostat pinned at the bottom. **L** or **Esc** closes it; it
+  closes by itself after 20 seconds. On a phone it's a sheet from the bottom.
+- **The doorbell.** When Home Assistant says the doorbell rang (a Reolink
+  visitor sensor or a doorbell event entity), its camera comes up small at the
+  top right over whatever's on. **OK** opens it in Rooms (a video playing
+  docks in Rooms' preview), **Esc** puts it away, and it goes by itself after
+  30 seconds.
+
+### Connecting
+
+1. **Settings → Home Assistant → Address**: type your Home Assistant's address
+   (for example `http://homeassistant.local:8123`) and press Enter. Or put it
+   in the injector script, before HOMER loads, one per HOMER address:
+
+   ```js
+   window.HomerConfig = { homeAssistant: {
+       'http://<nas>:8096': 'http://homeassistant.local:8123',
+       'https://<nas>.<tailnet>.ts.net': 'https://<nas>.<tailnet>.ts.net:8443'
+   } };
+   ```
+
+2. **Connect**: this goes to Home Assistant's own sign-in page, and back to
+   Settings, which then says **Connected to** your home. Home Assistant signs
+   in HOMER with this page's address as its name (it's listed under your
+   Home Assistant profile's refresh tokens). Each device, and each HOMER
+   address, connects once; the sign-in is kept in that browser.
+3. **Disconnect** (press it twice) signs the device out and tells Home
+   Assistant to forget it.
+
+**Home Assistant needs no configuration change** when HOMER and Home Assistant
+are both plain `http://` on your network. HOMER talks to Home Assistant over
+its WebSocket API (states, rooms, controls, camera streams, history) and uses
+its sign-in endpoints (`/auth/token`, `/auth/revoke`) and its camera pictures
+and HLS streams, which all answer any page. It never calls Home Assistant's
+REST API, so `cors_allowed_origins` isn't needed.
+
+### From outside the house (Tailscale)
+
+An `https://` HOMER page can only reach an `https://` Home Assistant (the
+browser blocks `http://` and `ws://` from it). If HOMER is on Tailscale's
+`https://<nas>.<tailnet>.ts.net`, serve Home Assistant from the same machine
+on another port:
+
+```sh
+tailscale serve --bg --https=8443 http://<home-assistant-ip>:8123
+```
+
+and set HOMER's Home Assistant address to `https://<nas>.<tailnet>.ts.net:8443`
+on those devices. Home Assistant then sees requests coming through a proxy
+(the NAS), which it refuses unless it's told to trust it, in
+`configuration.yaml`:
+
+```yaml
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - <nas-lan-ip>
+```
+
+Restart Home Assistant after changing it. The same two lines cover a reverse
+proxy like Caddy on the same NAS.
+
 ## Channel Guide
 
 A full-screen, set-top-box style TV guide for Jellyfin Live TV. It runs inside
@@ -116,8 +200,9 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 - A **top bar** (HOMER and the screen's name, the weather, **Search**) and a
   **tab bar** (Home, Guide, Movies, Shows, Recordings) on every HOMER screen.
-  The weather opens the Weather screen; Settings is on Home. The phone shows
-  the time, so HOMER doesn't.
+  The weather opens the Weather screen; Settings is on Home, and so is Rooms
+  once Home Assistant is connected. The phone shows the time, so HOMER
+  doesn't.
 - **The guide** is a list: one row per channel with what's on (time left and a
   progress bar), what's next, and a **●** button. The time rail picks what the
   rows show: **Now**, or any half hour ahead. Category and country chips work
@@ -180,6 +265,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **C** | Switch country: All, USA, UK, France (combines with the category) |
 | **Page Up / Page Down** | Jump a screen of channels |
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
+| **L** | Quick controls for Home Assistant's lights, scenes and thermostat, over whatever's playing (once Home Assistant is connected) |
 | **Esc / Backspace / G** | Close the guide |
 
 With a mouse or trackpad: scroll the grid freely (sideways moves through

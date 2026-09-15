@@ -392,6 +392,48 @@
 
 .hx-phone .xp-zip-save:active { background: #d6e4f5; }
 
+/* Home Assistant: the address box (as wide as it can be), a choice that only
+   says how things are, and Disconnect armed by its first tap */
+.hx-phone .xp-url {
+    flex: 1;
+    width: 0;
+    min-width: 0;
+    height: 50px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 12px;
+    border-radius: 11px;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(2, 5, 10, 0.55);
+    color: var(--homer-text);
+    font-family: var(--homer-font);
+    font-size: 17px; /* 16px or more, or iPhones zoom in on it */
+    font-weight: 600;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.hx-phone .xp-url:focus {
+    border-color: #fff;
+    background: rgba(2, 5, 10, 0.75);
+    box-shadow: 0 0 0 3px rgba(111, 211, 255, 0.5);
+}
+
+.hx-phone .xp-opt-lead { flex: none; font-size: 22px; color: var(--homer-accent-2); }
+.hx-phone .xp-url-opt .xp-zip-top { cursor: default; }
+.hx-phone .xp-opt.info { cursor: default; }
+
+.hx-phone .xp-opt.armed {
+    background: linear-gradient(180deg, #ff5a5a, #c9262c);
+    border-color: transparent;
+    box-shadow: 0 0 0 2px #fff, 0 10px 30px rgba(255, 59, 59, 0.45);
+}
+
+.hx-phone .xp-opt.armed .xp-opt-label { color: #fff; font-weight: 800; }
+
 /* ---------- Sign out: a tap arms it, a second tap signs out ---------- */
 
 .hx-phone .xp-signout {

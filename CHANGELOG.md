@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+- **Rooms**: Home Assistant's rooms on a HOMER screen, once it's connected in
+  Settings. Home's menu gets a **Rooms** item (the menu fits eight items in
+  the same space; without Home Assistant it's the seven it was). The rooms
+  are a list at the left (what's on and the temperature for each, **Cameras**
+  first); a room shows its thermostat (◀▶ sets the temperature, the modes in a
+  row under it), its scenes (◀▶ picks, OK turns one on), its lights (a row
+  each: ◀▶ dims in 10% steps, OK switches, amber when on) and its cameras.
+  A room's own light group reads **All lights**. Esc goes back a step.
+- **Cameras**: a grid of stills that refresh every few seconds, and OK opens
+  one large at the camera's own shape, live when it streams (Home
+  Assistant's HLS) and a still every second until then, with ◀▶ to the next
+  camera. A doorbell shows the day's rings and when it last rang. Stills-only
+  twins of a camera (Reolink's "Snapshots" cameras) are left out.
+- **Quick controls over a video**: **L**, or a lightbulb in the player's
+  controls, opens a panel at the right over whatever's on (a full-screen
+  video, a docked one, any HOMER screen) without stopping it: one room at a
+  time (◀▶ on its name changes rooms, and it remembers), its scenes and
+  lights, and the house's thermostat pinned at the bottom. **L** or **Esc**
+  closes it, and so does 20 seconds without a key. On a phone it's a sheet from
+  the bottom.
+- **The doorbell**: when Home Assistant says it rang, the doorbell's camera
+  comes up small at the top right over whatever's on. **OK** opens it in Rooms
+  (a playing video docks in Rooms' preview), **Esc** puts it away, and it goes
+  by itself after 30 seconds. Nothing else on the remote changes while it's up.
+- Rooms on a phone: room chips along the top, then the room's thermostat
+  (− and +, the modes as buttons), scenes in a row you swipe, and its lights
+  (tap to switch, drag the bar to dim); a camera opens full width. Phone Home
+  gets a **Rooms** button beside Settings.
+- **Settings → Home Assistant**: the address (typed, or set per HOMER address
+  in the injector script as `window.HomerConfig`), **Connect**, which signs in
+  on Home Assistant's own page and comes back to Settings, and **Disconnect**
+  (press twice), which also tells Home Assistant to forget the sign-in. Each
+  device keeps its own sign-in. No password or token is in HOMER or the
+  injector config.
+- Under the hood: shared/homeassistant.js (the sign-in and its refresh, one
+  WebSocket with a ping and reconnecting, the rooms from Home Assistant's
+  areas, devices and floors, the controls with the new value showing at once
+  and the remote's repeated presses sent as one, camera stills and streams,
+  the doorbell). rooms/rooms.js and rooms/rooms-phone.js are the screen,
+  rooms/quick.js the panel and the doorbell. HomerPlayer counts #/rooms as a
+  HOMER page. Home Assistant needs no configuration change on the local
+  network; see the README for reaching it over Tailscale.
+
 ## v0.3.13
 
 - Phone guide: in landscape, a docked video shows through its strip (the

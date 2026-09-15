@@ -36,6 +36,8 @@
     css('shared/weather.css', 'homer-weather');
     css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
     js('shared/layout.js'); // first: TV or phone layout, and touch
+    js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
+    js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
     js('shared/player.js'); // every screen plays through it
     js('shared/weather.js');
     js('shared/logos.js'); // before the screens: they hand it their channel logos
@@ -56,4 +58,6 @@
     js('recordings/recordings-phone.js'); // Recordings' phone layout
     js('forecast/forecast.js');
     js('forecast/forecast-phone.js'); // Weather's phone layout
+    js('rooms/rooms.js'); // Home Assistant's rooms
+    js('rooms/rooms-phone.js'); // Rooms' phone layout
 })();

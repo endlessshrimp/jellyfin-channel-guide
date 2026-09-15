@@ -315,6 +315,9 @@
 }
 
 .hm-phone .hmp-settings-pill .material-icons { font-size: 19px; color: var(--homer-accent-2); }
+.hm-phone .hmp-settings[hidden] { display: none; }
+.hm-phone .hmp-rooms { margin-left: auto; padding-right: 0; }
+.hm-phone .hmp-rooms .material-icons { color: #ffc54d; }
 .hm-phone .hmp-settings:active .hmp-settings-pill { background: var(--homer-cell-hi); }
 
 /* ---------- On Now ---------- */

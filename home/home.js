@@ -379,10 +379,13 @@
             { icon: 'tv', label: 'TV Shows', act: () => { const r = viewRoute('tvshows'); if (r) route(r); } },
             { icon: 'fiber_smart_record', label: 'Recordings', act: () => route('#/livetv?tab=3') },
             { icon: 'wb_sunny', label: 'Weather', act: () => route('#/weather') },
+            // Home Assistant's rooms, once it's connected on this device (Settings)
+            { icon: 'lightbulb', label: 'Rooms', act: () => route('#/rooms'), when: () => !!(window.HomerHA && window.HomerHA.isSetUp()) },
             { icon: 'search', label: 'Search', hint: '/', act: () => focusSearch() },
             { icon: 'settings', label: 'Settings', act: () => route('#/mypreferencesmenu') }
-        ];
+        ].filter((m) => !m.when || m.when());
         const menu = $('.hm-menu');
+        menu.classList.toggle('hm-menu-8', MENU.length > 7);
         MENU.forEach((m) => {
             const item = el('div', 'hm-menu-item hm-focusable',
                 `<span class="material-icons" aria-hidden="true">${m.icon}</span>${esc(m.label)}${m.hint ? `<span class="hm-menu-hint">${m.hint}</span>` : ''}`);

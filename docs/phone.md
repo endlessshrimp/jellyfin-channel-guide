@@ -4,8 +4,8 @@ HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. Every HOMER screen has a phone layout of its own: the
 guide, Home, Movies and TV Shows with their details pages, Search,
-Recordings, Settings and Weather. A screen without one would draw its TV
-layout, shrunk to fit.
+Recordings, Settings, Weather and Rooms. A screen without one would draw its
+TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -168,11 +168,29 @@ that's just a column:
   keyboard's Done/Go submits, and `visualViewport` to keep the box above the
   keyboard (Settings' ZIP code).
 
+## Rooms: Home Assistant on a phone
+
+`rooms/rooms-phone.js` is a screen under the bars, like Settings, with a row
+of room chips at the top (one room at a time) instead of a list you open.
+Its data is `shared/homeassistant.js`, and its helpers (a room's summary, a
+light's or thermostat's state, camera stills) come from `rooms/rooms.js`
+through `ctx`, as Weather's do. Two things worth copying:
+
+- **Dimming with a finger**: the bar is a 26px-tall touch target around an
+  8px track (`touch-action: none`), and the new brightness is sent once, when
+  the finger lifts. A tap on the bar sets it there; a tap anywhere else on the
+  row switches the light.
+- **The quick controls and the doorbell** (`rooms/quick.js`) are drawn once for
+  both layouts: a sheet from the bottom and a card at the top on a phone
+  (`.phone`), a panel at the right and a card at the top right, scaled from
+  1080-tall units, on a TV.
+
 ## The shared TV shell: `shared/shell.css`
 
 The TV screens' stage, palette, top bar (brand and clock), key legend, toast,
 chips, buttons and loading state are in one file, listed per screen prefix
-(`hl-` library, `hs-` search, `hr-` recordings, `hx-` settings, `hf-` weather).
+(`hl-` library, `hs-` search, `hr-` recordings, `hx-` settings, `hf-` weather,
+`ho-` rooms).
 A new TV screen adds its prefix to those lists; its own stylesheet only holds
 what it does differently.
 

@@ -1,0 +1,797 @@
+/*
+ * HOMER Rooms, phone layout (rooms/rooms-phone.js). Everything is scoped to
+ * .ho-phone; colors and type come from shared/tokens.css (and
+ * shared/shell.css's #ho-root), and the bars around it from shared/phone.css,
+ * which also puts the screen between them. A light that's on is the needle's
+ * amber, as on TV.
+ *
+ * A docked video sits over .op-video (HomerPlayer pins it at 99995, above the
+ * screen); its controls are in the bar under it, clear of the video.
+ */
+
+#ho-root.ho-phone {
+    --lit: #ffc54d;
+    --lit-2: #ff9d2e;
+    --lit-bg: rgba(255, 176, 32, 0.16);
+
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+
+#ho-root.ho-phone::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+}
+
+.ho-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* ---------- Docked video ---------- */
+
+.ho-phone .op-dock {
+    display: none;
+    flex: none;
+    position: relative;
+    z-index: 1;
+    background: #02060d;
+    border-bottom: 1px solid var(--homer-line);
+}
+
+.ho-phone.op-docked .op-dock { display: block; }
+
+.ho-phone .op-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: grid;
+    place-items: center;
+    background:
+        radial-gradient(260px 160px at 30% 20%, rgba(80, 150, 255, 0.35), transparent 70%),
+        linear-gradient(160deg, #1d3a66, #0a1628 70%);
+}
+
+.ho-phone .op-video-idle {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.ho-phone.op-live-video .op-video-idle { visibility: hidden; }
+
+.ho-phone .op-dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 48px;
+    padding: 0 4px 0 14px;
+}
+
+.ho-phone .op-dock-what {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: #d6e0ec;
+    white-space: nowrap;
+}
+
+.ho-phone .op-dock-what span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.ho-phone .op-live-badge {
+    flex: none;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--homer-live);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ho-phone .op-dock-btn {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.ho-phone .op-dock-btn .material-icons {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    font-size: 21px;
+}
+
+/* ---------- Room chips ---------- */
+
+.ho-phone .op-main {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ho-phone .op-chips {
+    flex: none;
+    border-bottom: 1px solid var(--homer-line);
+    background: rgba(4, 11, 24, 0.6);
+}
+
+.ho-phone .op-chips-track {
+    position: relative; /* the chips measure from here */
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 10px calc(16px + var(--homer-phone-right)) 10px calc(16px + var(--homer-phone-left));
+    scroll-padding: 0 16px;
+}
+
+.ho-phone .op-chips-track::-webkit-scrollbar { display: none; }
+
+.ho-phone .op-chip {
+    flex: none;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px 0 11px;
+    border-radius: 20px;
+    background: var(--homer-cell);
+    border: 1px solid var(--homer-line-strong);
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: #d6e0ec;
+}
+
+.ho-phone .op-chip .material-icons { font-size: 19px; color: var(--homer-accent-2); }
+
+.ho-phone .op-chip.on {
+    background: var(--homer-focus-fill);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(47, 140, 255, 0.35);
+}
+
+.ho-phone .op-chip.on .material-icons { color: #fff; }
+
+/* ---------- The room ---------- */
+
+.ho-phone .op-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px calc(16px + var(--homer-phone-right)) 28px calc(16px + var(--homer-phone-left));
+}
+
+.ho-phone .op-col {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.ho-phone .op-name {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.ho-phone .op-sub {
+    margin-top: 2px;
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    min-height: 19px;
+}
+
+.ho-phone .op-sec {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 20px 2px 8px;
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-sec .material-icons { font-size: 17px; color: var(--homer-faint); }
+
+.ho-phone .op-empty {
+    margin: 30px 4px;
+    font-family: var(--homer-font-cond);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+/* a light: tap to switch, drag the bar to dim */
+.ho-phone .op-light {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    margin-bottom: 8px;
+    padding: 8px 16px 8px 10px;
+    box-sizing: border-box;
+    border-radius: 14px;
+    background: var(--homer-cell);
+    border: 1px solid rgba(160, 190, 230, 0.08);
+    cursor: pointer;
+}
+
+.ho-phone .op-light:active { background: var(--homer-cell-hi); }
+
+.ho-phone .op-bulb {
+    flex: none;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.ho-phone .op-bulb .material-icons { font-size: 26px; color: var(--homer-faint); }
+.ho-phone .op-light.on .op-bulb { background: var(--lit-bg); box-shadow: 0 0 20px rgba(255, 176, 32, 0.3); }
+.ho-phone .op-light.on .op-bulb .material-icons { color: var(--lit); }
+.ho-phone .op-light.off-line { opacity: 0.5; }
+
+.ho-phone .op-light-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.ho-phone .op-light-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ho-phone .op-light-name {
+    min-width: 0;
+    font-size: 16.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-phone .op-light-val {
+    flex: none;
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-light.on .op-light-val { color: var(--homer-text); }
+
+/* the bar: a tall touch target around a slim track */
+.ho-phone .op-bar {
+    position: relative;
+    height: 26px;
+    margin: 2px 0 -6px;
+    touch-action: none;
+}
+
+.ho-phone .op-bar::before,
+.ho-phone .op-bar i {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 9px;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.ho-phone .op-bar::before {
+    right: 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ho-phone .op-bar i {
+    display: block;
+    width: 0;
+    background: linear-gradient(90deg, var(--lit-2), var(--lit));
+    transition: width 160ms ease;
+}
+
+.ho-phone .op-light.switch .op-bar { visibility: hidden; height: 6px; }
+
+/* scenes: one row you swipe sideways (a room can have twenty) */
+.ho-phone .op-scenes {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(-16px - var(--homer-phone-right)) 0 calc(-16px - var(--homer-phone-left));
+    padding: 0 calc(16px + var(--homer-phone-right)) 2px calc(16px + var(--homer-phone-left));
+}
+
+.ho-phone .op-scenes::-webkit-scrollbar { display: none; }
+
+.ho-phone .op-scene {
+    flex: none;
+    white-space: nowrap;
+    height: 42px;
+    padding: 0 15px;
+    border-radius: 12px;
+    background: var(--homer-cell);
+    border: 1px solid var(--homer-line-strong);
+    font-size: 15px;
+    font-weight: 700;
+    color: #d6e0ec;
+    transition: background 160ms ease;
+}
+
+.ho-phone .op-scene:active,
+.ho-phone .op-scene.ran { background: var(--homer-focus-fill); border-color: transparent; color: #fff; }
+
+/* the thermostat */
+.ho-phone .op-therm {
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--homer-cell);
+    border: 1px solid rgba(160, 190, 230, 0.08);
+    margin-bottom: 8px;
+}
+
+.ho-phone .op-therm-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.ho-phone .op-therm-now-v {
+    font-size: 40px;
+    line-height: 1;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.ho-phone .op-therm-now-k {
+    margin-top: 4px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    white-space: nowrap;
+}
+
+.ho-phone .op-therm-name {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ho-phone .op-therm-name b { font-size: 17px; }
+
+.ho-phone .op-therm-name span {
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-therm[data-action="cooling"] .op-therm-name span { color: #6fd3ff; }
+.ho-phone .op-therm[data-action="heating"] .op-therm-name span { color: #ff9d2e; }
+
+.ho-phone .op-therm-sets:not(:empty) { margin-top: 12px; display: grid; gap: 8px; }
+
+.ho-phone .op-set {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--homer-line);
+}
+
+.ho-phone .op-step {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 0 0 1px var(--homer-line-strong);
+}
+
+.ho-phone .op-step:active { background: var(--homer-focus-fill); }
+.ho-phone .op-step .material-icons { font-size: 28px; }
+
+.ho-phone .op-set-mid { text-align: center; }
+
+.ho-phone .op-set-label {
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-set-v {
+    font-size: 34px;
+    line-height: 1.1;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.ho-phone .op-modes {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 6px;
+}
+
+.ho-phone .op-mode {
+    height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--homer-line);
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #d6e0ec;
+    text-align: center;
+}
+
+.ho-phone .op-mode .material-icons { font-size: 19px; color: var(--homer-accent-2); }
+
+.ho-phone .op-mode.on {
+    background: var(--homer-focus-fill);
+    border-color: transparent;
+    color: #fff;
+}
+
+.ho-phone .op-mode.on .material-icons { color: #fff; }
+
+/* cameras */
+.ho-phone .op-cams {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.ho-phone .op-camtile {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #0a1426;
+    box-shadow: 0 0 0 1px var(--homer-line-strong);
+}
+
+.ho-phone .op-camtile img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.ho-phone .op-camtile.has-still img { opacity: 1; }
+
+.ho-phone .op-camtile-none {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+}
+
+.ho-phone .op-camtile-none .material-icons { font-size: 36px; color: var(--homer-faint); }
+.ho-phone .op-camtile.no-still .op-camtile-none { display: grid; }
+
+.ho-phone .op-camtile-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 28px 12px 10px;
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.85), transparent);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.ho-phone .op-camtile-label .material-icons { font-size: 19px; color: var(--homer-accent-2); }
+
+.ho-phone .op-camtile-ring {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    padding: 3px 9px;
+    border-radius: 7px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.ho-phone .op-camtile-ring:empty { display: none; }
+
+/* ---------- A camera, full width (over the room, under a docked video) ---------- */
+
+.ho-phone .op-camview {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0) 85%);
+    padding: 0 var(--homer-phone-right) 20px var(--homer-phone-left);
+}
+
+.ho-phone .op-camview.show { display: flex; }
+
+.ho-phone .op-cam-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 4px;
+}
+
+.ho-phone .op-cam-close {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+}
+
+.ho-phone .op-cam-close .material-icons { font-size: 26px; }
+
+.ho-phone .op-cam-name { font-size: 20px; font-weight: 800; }
+
+.ho-phone .op-cam-room {
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-cam-pic {
+    position: relative;
+    flex: none;
+    aspect-ratio: 16 / 9;
+    background: #000;
+}
+
+.ho-phone .op-cam-pic img,
+.ho-phone .op-cam-pic video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.ho-phone .op-cam-pic img { opacity: 0; }
+.ho-phone .op-cam-pic.has-still img { opacity: 1; }
+.ho-phone .op-cam-pic video { opacity: 0; transition: opacity 250ms ease; }
+.ho-phone .op-cam-pic.live video { opacity: 1; }
+
+.ho-phone .op-cam-badge {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+}
+
+.ho-phone .op-live,
+.ho-phone .op-still {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--homer-font-cond);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.ho-phone .op-live::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--homer-live);
+}
+
+.ho-phone .op-still { color: var(--homer-dim); }
+
+.ho-phone .op-cam-step {
+    position: absolute;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(2, 5, 10, 0.6);
+}
+
+.ho-phone .op-cam-step.prev { left: 8px; }
+.ho-phone .op-cam-step.next { right: 8px; }
+.ho-phone .op-cam-step .material-icons { font-size: 28px; }
+
+.ho-phone .op-cam-rings { padding: 0 16px; }
+
+.ho-phone .op-ring {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--homer-line);
+    font-size: 16px;
+}
+
+.ho-phone .op-ring span,
+.ho-phone .op-rings-none {
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+/* ---------- Not connected / connecting ---------- */
+
+.ho-phone .op-state {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+}
+
+.ho-phone.op-waiting .op-state { display: flex; }
+.ho-phone.op-waiting .op-chips,
+.ho-phone.op-waiting .op-scroll { visibility: hidden; }
+
+.ho-phone .op-state-icon { font-size: 44px; color: var(--homer-accent-2); }
+.ho-phone .op-state b { font-size: 19px; }
+
+.ho-phone .op-state span {
+    max-width: 320px;
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-retry {
+    margin-top: 10px;
+    height: 46px;
+    padding: 0 22px;
+    border-radius: 12px;
+    background: var(--homer-focus-fill);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.ho-phone .op-spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.12);
+    border-top-color: var(--homer-accent-2);
+    animation: op-spin 900ms linear infinite;
+}
+
+@keyframes op-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Toast ---------- */
+
+.ho-phone .op-toast {
+    position: absolute;
+    left: 50%;
+    top: 12px;
+    z-index: 6;
+    box-sizing: border-box;
+    max-width: calc(100% - 32px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px 10px 14px;
+    border-radius: 12px;
+    background: rgba(9, 20, 38, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 12px 30px rgba(0, 0, 0, 0.55);
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.ho-phone .op-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.ho-phone .op-toast .material-icons { flex: none; font-size: 21px; color: var(--homer-sports); }
+.ho-phone .op-toast.err .material-icons { color: #ff7a7a; }
+.ho-phone .op-toast-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Landscape ---------- */
+
+@media (orientation: landscape) {
+    .ho-phone .op-col { max-width: 760px; }
+    .ho-phone .op-cams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    /* docked: the video at the left, the room beside it */
+    .ho-phone.op-docked { flex-direction: row; }
+
+    .ho-phone.op-docked .op-dock {
+        width: 40%;
+        padding-left: var(--homer-phone-left);
+        border-bottom: 0;
+        border-right: 1px solid var(--homer-line);
+    }
+
+    /* a camera: the picture at the left, its rings beside it */
+    .ho-phone .op-camview.show { display: grid; grid-template-columns: 58% 1fr; grid-template-rows: auto 1fr; align-content: start; }
+    .ho-phone .op-cam-top { grid-column: 1 / -1; }
+    .ho-phone .op-cam-rings { padding-top: 0; }
+    .ho-phone .op-cam-rings .op-sec { margin-top: 4px; }
+}

@@ -8,8 +8,9 @@
  * right under it, one setting at a time and one level deep: whether it's
  * saved to the account or kept on this device, what it does, and the choices,
  * with a check on the current one. Weather location has a ZIP box that brings
- * up the number pad and stays above it. Sign out asks for a second tap. Who's
- * signed in and the server are at the bottom.
+ * up the number pad and stays above it; Home Assistant has an address box,
+ * Connect, and a Disconnect that asks for a second tap. Sign out asks for a
+ * second tap. Who's signed in and the server are at the bottom.
  *
  * A video playing in a preview window docks at the top (HomerPlayer pins it
  * there); a tap on it goes full screen, ✕ stops it.
@@ -36,6 +37,7 @@
 
         let open = (ctx.state && ctx.state.id) || null; // the setting whose choices are showing
         let armed = false; // Sign out tapped once
+        let armedOpt = null; // { id, i }: a choice that asks first (Disconnect), tapped once
         let armTimer = 0;
         let signingOut = false;
         let zipBusy = false;
@@ -89,9 +91,20 @@
 
         // a choice; the ZIP code gets its box and a Save button under it
         const choiceHtml = (s, o, i, cur) => {
-            const text = `<span class="xp-opt-text"><span class="xp-opt-label">${esc(o.label)}</span>${o.sub ? `<span class="xp-opt-sub">${esc(o.sub)}</span>` : ''}</span>`;
+            const isArmed = !!(o.confirm && armedOpt && armedOpt.id === s.id && armedOpt.i === i);
+            const label = isArmed ? o.confirmTap || o.confirm : o.label;
+            const text = `<span class="xp-opt-text"><span class="xp-opt-label">${esc(label)}</span>${o.sub && !isArmed ? `<span class="xp-opt-sub">${esc(o.sub)}</span>` : ''}</span>`;
+            if (o.input === 'url') {
+                return `<div class="xp-opt xp-zip-opt xp-url-opt" data-i="${i}">
+                    <div class="xp-zip-top">${icon('link', 'xp-opt-lead')}${text}</div>
+                    <form class="xp-zip-form xp-url-form" novalidate>
+                        <input class="xp-url" type="url" inputmode="url" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://homeassistant.local:8123" value="${esc(o.url)}" aria-label="Home Assistant address">
+                        <button type="submit" class="xp-zip-save">Save</button>
+                    </form>
+                </div>`;
+            }
             if (!o.input) {
-                return `<button type="button" class="xp-opt${cur ? ' cur' : ''}" data-i="${i}" aria-pressed="${cur}">${icon('check', 'xp-opt-check')}${text}</button>`;
+                return `<button type="button" class="xp-opt${cur ? ' cur' : ''}${o.info ? ' info' : ''}${isArmed ? ' armed' : ''}" data-i="${i}" aria-pressed="${cur}">${icon('check', 'xp-opt-check')}${text}</button>`;
             }
             return `<div class="xp-opt xp-zip-opt${cur ? ' cur' : ''}" data-i="${i}">
                     <div class="xp-zip-top">${icon('check', 'xp-opt-check')}${text}</div>
@@ -161,8 +174,23 @@
         const choose = async (s, i) => {
             const o = s.options()[i];
             if (!o || m.status !== 'ready') return;
+            if (o.input === 'url') { editUrl(); return; }
             if (o.input) { editZip(); return; }
-            if (s.matches(o, s.current())) {
+            if (o.info) return; // says how things are; nothing to pick
+            // a choice that asks first (Disconnect): the first tap arms it
+            if (o.confirm) {
+                if (!armedOpt || armedOpt.id !== s.id || armedOpt.i !== i) {
+                    armedOpt = { id: s.id, i, at: Date.now() };
+                    drawSetting(s);
+                    clearTimeout(armTimer);
+                    armTimer = setTimeout(disarm, CONFIRM_MS);
+                    return;
+                }
+                if (Date.now() - armedOpt.at < 400) return; // a double tap isn't a decision
+                clearTimeout(armTimer);
+                armedOpt = null;
+            }
+            if (s.matches(o, s.current()) && !o.confirm) {
                 toast('Saved');
                 return;
             }
@@ -172,7 +200,7 @@
             try {
                 await saving;
                 if (!alive) return;
-                toast('Saved');
+                toast(o.done || 'Saved');
             } catch (err) {
                 console.warn('[HOMER Settings] save failed', err);
                 if (!alive) return;
@@ -184,6 +212,11 @@
         // ---------- Sign out ----------
         const disarm = () => {
             clearTimeout(armTimer);
+            if (armedOpt) {
+                const was = byId(armedOpt.id);
+                armedOpt = null;
+                if (was) drawSetting(was);
+            }
             if (!armed || signingOut) return;
             armed = false;
             const s = m.visible.find((x) => x.action);
@@ -203,6 +236,33 @@
             drawSetting(s);
             ctx.signOut();
         };
+
+        // ---------- The Home Assistant address box ----------
+        const HA = () => window.HomerHA || null;
+        const urlBox = () => list.querySelector('.xp-url');
+        const editUrl = () => {
+            const box = urlBox();
+            if (!box) return;
+            box.focus();
+            box.select();
+        };
+        const submitUrl = () => {
+            const box = urlBox();
+            if (!box || !HA()) return;
+            if (!HA().setAddress(box.value)) { toast('That isn\'t an address', 'err'); return; }
+            const problem = HA().addressProblem();
+            box.blur(); // the keyboard goes away
+            if (problem) toast('Needs an https:// address here', 'err');
+            else toast('Saved · ' + HA().address());
+            const s = byId('ha');
+            if (s) drawSetting(s);
+        };
+        // its connection coming and going changes its row
+        const offHA = HA() ? HA().onChange(() => {
+            const s = byId('ha');
+            const box = urlBox();
+            if (alive && s && m.status === 'ready' && !(box && document.activeElement === box)) drawSetting(s);
+        }) : () => {};
 
         // ---------- The ZIP code box ----------
         const zipBox = () => list.querySelector('.xp-zip');
@@ -245,8 +305,8 @@
         // scroll that far and bring the box up above it.
         const vv = window.visualViewport || null;
         const keepZipVisible = () => {
-            const box = zipBox();
-            if (!box || document.activeElement !== box) {
+            const box = [zipBox(), urlBox()].find((b) => b && document.activeElement === b);
+            if (!box) {
                 root.style.removeProperty('--xp-kb');
                 return;
             }
@@ -268,11 +328,16 @@
             vv.addEventListener('scroll', onViewport);
         }
         const onFocusIn = (ev) => {
-            if (!ev.target.classList.contains('xp-zip')) return;
+            if (!ev.target.classList.contains('xp-zip') && !ev.target.classList.contains('xp-url')) return;
             keepZipVisible();
             setTimeout(keepZipVisible, 350); // once the keyboard is up
         };
         const onFocusOut = (ev) => {
+            if (ev.target.classList.contains('xp-url')) {
+                if (HA()) ev.target.value = HA().address();
+                setTimeout(keepZipVisible, 350);
+                return;
+            }
             if (!ev.target.classList.contains('xp-zip')) return;
             // put the saved ZIP back unless it's being looked up
             if (!zipBusy && W()) ev.target.value = W().zip().zip;
@@ -286,13 +351,16 @@
         const onSubmit = (ev) => {
             if (!ev.target.classList.contains('xp-zip-form')) return;
             ev.preventDefault();
-            submitZip();
+            if (ev.target.classList.contains('xp-url-form')) submitUrl();
+            else submitZip();
         };
 
         // ---------- Taps ----------
         const onClick = (ev) => {
             const t = ev.target;
-            if (!t.closest('.xp-signout')) disarm();
+            // a tap anywhere but the armed button puts it back
+            const tappedOpt = t.closest('.xp-opt');
+            if (!t.closest('.xp-signout') && !(tappedOpt && tappedOpt.classList.contains('armed'))) disarm();
             if (t.closest('.xp-retry')) { load(); return; }
             if (m.status !== 'ready' || signingOut) return;
             const so = t.closest('.xp-signout');
@@ -312,7 +380,7 @@
             if (document.getElementById('cg-root')) return; // the guide is up
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (!['Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(ev.key)) return;
-            if (ev.target && ev.target.classList && ev.target.classList.contains('xp-zip')) {
+            if (ev.target && ev.target.classList && (ev.target.classList.contains('xp-zip') || ev.target.classList.contains('xp-url'))) {
                 if (ev.key !== 'Backspace') { ev.preventDefault(); ev.target.blur(); }
                 ev.stopPropagation();
                 return;
@@ -398,6 +466,7 @@
             teardown() {
                 alive = false;
                 m.dispose();
+                offHA();
                 clearTimeout(toastTimer);
                 clearTimeout(armTimer);
                 clearTimeout(kbTimer);

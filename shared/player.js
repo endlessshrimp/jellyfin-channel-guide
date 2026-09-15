@@ -82,8 +82,9 @@
     const screenFor = (h) => (/^#\/search(\.html)?(\?|$)/.test(h) ? 'HomerSearch'
         : /^#\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h) ? 'HomerRecordings'
         : /^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h) ? 'HomerSettings' : null);
-    // #/weather is HOMER's own page (Jellyfin has none), so it always counts
-    const isWeatherHash = (h) => /^#\/weather(\?|$)/.test(h);
+    // #/weather and #/rooms are HOMER's own pages (Jellyfin has neither), so
+    // they always count
+    const isWeatherHash = (h) => /^#\/(weather|rooms)(\?|$)/.test(h);
     const isGuideHash = (h) => /^#\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h);
     // On a phone the guide is a screen like the others (with a preview window a
     // video can dock in); on a TV it opens on top of whatever's there.

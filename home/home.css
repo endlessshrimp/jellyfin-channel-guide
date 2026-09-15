@@ -163,6 +163,10 @@
     gap: 6px; /* seven items: 7 × 52 + 6 × 6 = 400, level with On Now */
 }
 
+/* eight (Rooms, with Home Assistant connected): 8 × 46 + 7 × 4.57 = 400 */
+.hm-menu.hm-menu-8 { gap: calc(32px / 7); }
+.hm-menu.hm-menu-8 .hm-menu-item { height: 46px; font-size: 26px; }
+
 .hm-menu-item {
     height: 52px;
     display: flex;
