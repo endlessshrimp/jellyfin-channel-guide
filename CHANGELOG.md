@@ -40,6 +40,10 @@
   second); **R** records the highlighted airing from anywhere in the list.
   Pressing it again asks, then cancels (or stops one that's recording). Rows
   and details show **Set to record** / **Recording**.
+- Search: a show with nothing still to come in the guide says so under its
+  results: **Not on TV through Wednesday** (however far the guide reaches),
+  or **Not on TV again through Wednesday** with when it was last on ("Last
+  on FX and FXX, today at 8:00 PM").
 
 ## v0.3.18
 
