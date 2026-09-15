@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.3.16
+
+- Rooms leaves out a Home Assistant room named "Unused" and what's in it.
+- Home Assistant sign-in comes back to a fresh `/web/index.html` address (a
+  cached copy of the bare `/web/` could lack HOMER), and Rooms opens as soon
+  as the sign-in finishes.
 
 - **Rooms**: Home Assistant's rooms on a HOMER screen, once it's connected in
   Settings. Home's menu gets a **Rooms** item (the menu fits eight items in
