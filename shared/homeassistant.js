@@ -693,6 +693,10 @@
 
     const byName = (a, b) => a.name.localeCompare(b.name);
 
+    // Home Assistant rooms HOMER leaves out, with everything in them (by name,
+    // any case): a place for things that aren't in use.
+    const HIDDEN_ROOMS = ['unused'];
+
     // house(): the rooms as HOMER shows them, each with its lights,
     // thermostats, cameras and scenes (only rooms with any of those), then
     // "Other" for what has no room. Floors order the rooms when there are any.
@@ -701,7 +705,9 @@
         const rooms = new Map();
         const floorLevel = new Map(floors.map((f) => [f.floor_id, f.level == null ? 0 : f.level]));
         const floorName = new Map(floors.map((f) => [f.floor_id, f.name]));
+        const skipped = new Set(areas.filter((a) => HIDDEN_ROOMS.includes(String(a.name || '').trim().toLowerCase())).map((a) => a.area_id));
         for (const a of areas) {
+            if (skipped.has(a.area_id)) continue;
             rooms.set(a.area_id, {
                 id: a.area_id, name: a.name, icon: a.icon || '', floor: floorName.get(a.floor_id) || '',
                 level: floorLevel.has(a.floor_id) ? floorLevel.get(a.floor_id) : 99,
@@ -713,7 +719,7 @@
         const KIND = { light: 'lights', climate: 'climates', camera: 'cameras', scene: 'scenes' };
         for (const id of Object.keys(states)) {
             const kind = KIND[domainOf(id)];
-            if (!kind || hidden.has(id) || (kind === 'cameras' && twin(id))) continue;
+            if (!kind || hidden.has(id) || (kind === 'cameras' && twin(id)) || skipped.has(placeOf.get(id))) continue;
             const room = rooms.get(placeOf.get(id)) || other;
             room[kind].push(id);
         }
