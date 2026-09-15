@@ -434,6 +434,7 @@
                 st.items = items;
                 st.at = Date.now();
                 st.fromCache = false;
+                st.live = true;
                 st.fails = 0;
                 st.retryAt = 0;
                 st.error = null;
@@ -441,7 +442,7 @@
                 st.fails++;
                 st.retryAt = Date.now() + Math.min(RETRY_MAX, RETRY_MIN * 2 ** (st.fails - 1));
                 st.error = String((err && err.message) || err);
-                if (st.fromCache) st.fromCache = false; // keep the cached items; don't ask again until retryAt
+                st.fromCache = false; // the cached items stay; don't ask again until retryAt
                 console.warn(`[HOMER News] ${f.name} (${f.id}) didn't load:`, st.error);
             } finally {
                 st.loading = false;
@@ -478,15 +479,16 @@
             return stories;
         };
 
+        // 'ready' (a feed answered), 'loading', 'stale' (only the cache, and
+        // every feed has failed since), or 'error' (nothing at all)
         const status = (key) => {
             const sec = sectionOf(key);
             if (!sec) return 'error';
             const sts = sec.feeds.map((f) => state.get(f.id));
-            const any = sts.some((s) => s.items && s.items.length);
-            if (sts.some((s) => s.at && !s.fromCache && s.items && s.items.length)) return 'ready';
-            if (any) return sts.some((s) => s.loading || (!s.at && !s.fails) || s.fromCache) ? 'cached' : 'stale';
-            if (sts.every((s) => s.fails && !s.loading)) return 'error';
-            return 'loading';
+            if (sts.some((s) => s.live)) return 'ready';
+            const waiting = sts.some((s) => s.loading || !s.fails);
+            if (waiting) return 'loading';
+            return sts.some((s) => s.items && s.items.length) ? 'stale' : 'error';
         };
 
         return {

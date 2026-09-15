@@ -301,7 +301,7 @@
         const draw = () => {
             const stories = n.stories(key);
             const l = layout(stories);
-            const sig = signature(l);
+            const sig = signature(l) || 'none:' + n.status(key);
             if (sig === shown && panel.childElementCount) { refreshAges(panel); return; }
             shown = sig;
             list = [l.lead, ...l.cards, ...l.lines].filter(Boolean);
@@ -371,7 +371,9 @@
             const at = n.updatedAt(key);
             const foot = document.createElement('div');
             foot.className = 'hn-foot';
-            foot.innerHTML = `From <b>${esc(papers.join(', '))}</b>${at ? ` · updated <span class="age" data-t="${at}">${esc(fmtAge(at))}</span> ago` : ''}`;
+            const stale = n.status(key) === 'stale';
+            foot.innerHTML = `From <b>${esc(papers.join(', '))}</b>${at ? ` · updated <span class="age" data-t="${at}">${esc(fmtAge(at))}</span> ago` : ''}`
+                + (stale ? '<br>The feeds aren\'t answering right now, so these are the last ones HOMER saw. It keeps trying.' : '');
             panel.appendChild(foot);
             loadPictures(panel);
             ctx.refocus();
