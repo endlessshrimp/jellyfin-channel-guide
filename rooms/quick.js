@@ -8,7 +8,8 @@
  * time (◀▶ on its name switches rooms; it remembers the last one): its scenes
  * (◀▶ picks, OK runs), its lights (wall switches, then the bulbs: ◀▶ dims,
  * OK switches) and what its players are playing (◀▶ sets the volume, OK
- * plays or pauses), and pinned at the bottom, whatever room you're in, the
+ * plays or pauses), an Apple TV's or a Samsung TV's Remote (OK opens it in
+ * Rooms, the video docked), and pinned at the bottom, whatever room you're in, the
  * house's thermostat (◀▶ sets the temperature; its modes under it). L or Esc closes
  * it, and it closes by itself after 20 seconds without a key. On a phone it's
  * a sheet from the bottom: tap to switch, drag a bar to dim.
@@ -150,6 +151,8 @@
             parts.switches.forEach((id) => out.push({ kind: 'light', id, part: 'switches' }));
             parts.bulbs.forEach((id) => out.push({ kind: 'light', id, part: 'bulbs' }));
             nowPlaying(r).forEach((id) => out.push({ kind: 'media', id }));
+            // an Apple TV's or a Samsung TV's remote (OK opens it in Rooms)
+            c.mediaCards(r).filter((id) => c.mediaInfo(id, r).remote).forEach((id) => out.push({ kind: 'remote', id }));
         }
         thermostats().forEach(({ id, room: tr }) => {
             const T = c.climateInfo(id, tr);
@@ -159,7 +162,7 @@
         return out;
     };
 
-    const rowSig = (x) => x.kind + (x.which || '') + (x.kind === 'media' ? x.id : '');
+    const rowSig = (x) => x.kind + (x.which || '') + (x.kind === 'media' || x.kind === 'remote' ? x.id : '');
     const build = () => {
         const c = C();
         const r = room();
@@ -172,7 +175,7 @@
         let last = '';
         let lastPart = '';
         rows.forEach((row, i) => {
-            const sec = row.kind === 'setpoint' || row.kind === 'modes' ? 'Thermostat' : row.kind === 'scenes' ? 'Scenes' : row.kind === 'media' ? 'Now playing' : 'Lights';
+            const sec = row.kind === 'setpoint' || row.kind === 'modes' ? 'Thermostat' : row.kind === 'scenes' ? 'Scenes' : row.kind === 'media' ? 'Now playing' : row.kind === 'remote' ? 'Remote' : 'Lights';
             const to = sec === 'Thermostat' ? 'foot' : 'body';
             if (sec !== last && to === 'body') html.body += `<div class="hq-sec">${esc(sec)}</div>`;
             last = sec;
@@ -189,6 +192,11 @@
                 html[to] += `<div class="hq-row hq-light hq-media" data-r="${i}" role="button">
                         <span class="hq-art">${icon('speaker', 'hq-art-icon')}<img alt="" draggable="false"></span>
                         <div class="hq-light-main"><div class="hq-light-top"><span class="hq-name"></span><span class="hq-val"></span></div><div class="hq-media-title"></div><div class="hq-bar"><i></i></div></div>
+                    </div>`;
+            } else if (row.kind === 'remote') {
+                html[to] += `<div class="hq-row hq-light hq-rm switch" data-r="${i}" role="button">
+                        <span class="hq-bulb">${icon('settings_remote')}</span>
+                        <div class="hq-light-main"><div class="hq-light-top"><span class="hq-name"></span><span class="hq-val">Remote</span></div></div>
                     </div>`;
             } else if (row.kind === 'scenes' || row.kind === 'modes') {
                 const chips = row.kind === 'scenes'
@@ -253,6 +261,8 @@
                     art.classList.remove('has-art');
                     if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
                 }
+            } else if (row.kind === 'remote') {
+                n.querySelector('.hq-name').textContent = c.mediaInfo(row.id, r).name;
             } else if (row.kind === 'setpoint') {
                 const T = c.climateInfo(row.id, row.room);
                 const t = T.targets.find((x) => x.which === row.which);
@@ -283,6 +293,7 @@
             if (M.canVolume || M.canStep) items.push(['◀▶', 'Volume']);
             if (M.canPlay) items.push(['OK', M.playing ? 'Pause' : 'Play']);
         }
+        else if (row && row.kind === 'remote') items.push(['OK', 'Open the remote']);
         else if (row && row.kind === 'setpoint') items.push(['◀▶', 'Temperature']);
         else if (row && row.ids) items.push(['◀▶', 'Pick'], ['OK', row.kind === 'scenes' ? 'Turn on' : 'Set']);
         items.push(['L', 'Close']);
@@ -329,7 +340,11 @@
         const h = HA();
         if (!row || !h) return;
         if (row.kind === 'light') h.toggle(row.id).catch(failed);
-        else if (row.kind === 'media') {
+        else if (row.kind === 'remote') {
+            // in Rooms (a video playing docks there), like the doorbell's View
+            closePanel();
+            if (window.HomerRooms && window.HomerRooms.openRemote) window.HomerRooms.openRemote(row.id);
+        } else if (row.kind === 'media') {
             const M = C().mediaInfo(row.id, room());
             if (M.canPlay) h.playPause(M.target).catch(failed);
         } else if (row.kind === 'scenes') {
@@ -565,7 +580,7 @@
         if (step) { adjust(row, Number(step.dataset.step)); return; }
         const chip = t.closest('[data-k]');
         if (chip) { ci[ri] = Number(chip.dataset.k); paint(); act(row, ci[ri]); return; }
-        if ((row.kind === 'light' || row.kind === 'media') && !t.closest('.hq-bar')) act(row, 0);
+        if ((row.kind === 'light' || row.kind === 'media' || row.kind === 'remote') && !t.closest('.hq-bar')) act(row, 0);
         else paint();
     });
     // drag a light's bar to dim it (a finger, or a mouse)

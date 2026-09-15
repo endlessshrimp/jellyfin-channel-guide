@@ -700,3 +700,9 @@
 .hq-pip.phone .hq-pip-bar { padding: 10px 14px 12px; }
 .hq-panel.phone .hq-media { height: 76px; grid-template-columns: 48px 1fr; }
 .hq-panel.phone .hq-art { width: 48px; height: 48px; }
+
+/* an Apple TV's or a Samsung TV's Remote: OK opens it in Rooms */
+.hq-rm { height: 70px; }
+.hq-rm .hq-bulb .material-icons { color: var(--accent-2); }
+.hq-rm.sel .hq-bulb .material-icons { color: #fff; }
+.hq-panel.phone .hq-rm { height: 56px; }
