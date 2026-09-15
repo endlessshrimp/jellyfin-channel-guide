@@ -1278,6 +1278,7 @@
 
 .ho-zone-remote .ho-rm { display: grid; }
 .ho-zone-remote .ho-body { visibility: hidden; }
+.ho-waiting .ho-rm { visibility: hidden; } /* Home Assistant went away: its message instead */
 
 /* the player */
 .ho-rm-info {
