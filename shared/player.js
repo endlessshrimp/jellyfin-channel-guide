@@ -614,6 +614,7 @@
 
     const tick = () => {
         checkCancel();
+        document.documentElement.classList.toggle('homer-docked', docked);
         const href = location.href;
         const video = isVideoRoute();
         if (backAction) {
@@ -787,6 +788,18 @@
         }
         .videoPlayerContainer.homer-pinned .htmlvideoplayer { object-fit: cover !important; }
         .videoPlayerContainer.homer-pinned .videoSubtitles { display: none !important; }
+        /* During playback Jellyfin makes the page see-through (for players that
+           draw video behind it). With a HOMER screen up, or one still loading
+           its styles, that showed the browser's white for a moment: keep the
+           page HOMER's ground instead. Full-screen video stays see-through. */
+        :root.homer-docked,
+        :root.transparentDocument:has(#hm-root, #hl-root, #cg-root, .homer-screen) {
+            background: #02050a var(--homer-backdrop, linear-gradient(180deg, #07142a 0%, #02050a 70%)) fixed !important;
+        }
+        :root.homer-docked body,
+        :root.transparentDocument:has(#hm-root, #hl-root, #cg-root, .homer-screen) body {
+            background: transparent !important;
+        }
         .homer-cancelling .videoPlayerContainer,
         .homer-cancelling #videoOsdPage { visibility: hidden !important; }
         html:not(.homer-stock-ok) .mainAnimatedPages,
@@ -832,6 +845,7 @@
             backAction = null;
             document.querySelectorAll('.' + OSD_BTN_CLASS).forEach((b) => b.remove());
             clearPin(playerBox());
+            document.documentElement.classList.remove('homer-docked');
             style.remove();
             listeners.clear();
         }
