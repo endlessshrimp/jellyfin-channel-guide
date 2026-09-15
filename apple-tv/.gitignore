@@ -1,0 +1,7 @@
+# made by `xcodegen generate` from project.yml
+HOMER.xcodeproj/
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- HOMER's Apple TV test app (`apple-tv/`): HOMER full screen in the Apple TV's
+  hidden web view, with the Siri Remote as arrows, OK, Back and Home. When it
+  sets `window.HOMER_TVAPP`, HOMER always draws its TV layout (never a phone
+  layout or touch) and hides the mouse cursor.
+
 ## v0.4.1
 
 - News has a phone layout: the sections in a row you swipe, a **Watch CNN**
