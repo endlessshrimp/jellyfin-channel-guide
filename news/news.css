@@ -470,8 +470,8 @@
 }
 
 .hb-news.hn-reading .hn-reader-legend { display: flex; }
-.hb-news.hn-reading .hb-legend,
-.hb-news.hn-reading .hb-main { visibility: hidden; }
+.hb-news:not(.hb-phone).hn-reading .hb-legend,
+.hb-news:not(.hb-phone).hn-reading .hb-main { visibility: hidden; }
 .hb-news .hn-reader-legend .spacer { flex: 1; }
 .hb-news .hn-reader-legend [data-action] { cursor: pointer; }
 .hb-news .hn-reader-legend [data-action]:hover { color: var(--text); }
@@ -494,3 +494,271 @@
 }
 
 .hb-news .hn-tk-age.fresh { color: var(--news); }
+
+/* ================= Phone (shared/hub.js's phone layout, .hb-phone) =================
+   A column between HOMER's bars: the hub's tab row on top, then Watch CNN
+   (until something plays: then the video strip is up), the lead with its
+   picture, and a row a story (headline and paper · age, a small picture at
+   the right). A tap opens the story over the list, with a button to the
+   article itself. Sizes for a hand, not a room. */
+
+.hb-news.hb-phone .hb-panel-in { gap: 14px; padding-bottom: 20px; }
+
+/* ----- Watch CNN ----- */
+
+.hb-news.hb-phone .hn-watch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 6px 12px 6px 8px;
+    border-radius: 14px;
+    background: linear-gradient(90deg, rgba(255, 90, 90, 0.2), rgba(255, 90, 90, 0.06));
+    box-shadow: inset 0 0 0 1px rgba(255, 90, 90, 0.35);
+    cursor: pointer;
+}
+
+.hb-news.hb-docked .hn-watch { display: none; }
+
+.hb-news .hn-watch-logo {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--homer-logo-bg, #1c2940);
+    box-shadow: inset 0 0 0 1px var(--homer-logo-line, rgba(160, 190, 230, 0.18));
+    overflow: hidden;
+}
+
+.hb-news .hn-watch-logo img { max-width: 52px; max-height: 28px; object-fit: contain; }
+
+.hb-news .hn-watch-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hb-news .hn-watch-text b { font-size: 17px; font-weight: 800; }
+
+.hb-news .hn-watch-text small {
+    font-family: var(--cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-news .hn-watch > .material-icons { flex: none; font-size: 34px; color: var(--news); }
+
+/* ----- the lead ----- */
+
+.hb-news.hb-phone .hn-lead.hn-plead {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px var(--line-strong);
+    cursor: pointer;
+}
+
+.hb-news.hb-phone .hn-plead .hn-img { aspect-ratio: 16 / 9; }
+
+.hb-news.hb-phone .hn-plead .hn-lead-body { gap: 8px; padding: 12px 14px 14px; }
+
+.hb-news.hb-phone .hn-kicker { height: 22px; padding: 0 8px; border-radius: 5px; font-size: 12px; }
+
+.hb-news.hb-phone .hn-plead h2 {
+    font-size: 22px;
+    line-height: 1.16;
+    -webkit-line-clamp: 4;
+}
+
+.hb-news.hb-phone .hn-meta { font-size: 13px; gap: 6px; }
+.hb-news.hb-phone .hn-plead .hn-meta { margin-top: 2px; font-size: 14px; }
+
+/* ----- a row a story ----- */
+
+.hb-news .hn-prows {
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    background: rgba(14, 28, 50, 0.7);
+    box-shadow: 0 0 0 1px var(--line);
+    overflow: hidden;
+}
+
+.hb-news .hn-prow {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 88px;
+    padding: 12px 12px 12px 14px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.hb-news .hn-prow + .hn-prow { border-top: 1px solid var(--line); }
+.hb-news .hn-prow:active { background: rgba(47, 140, 255, 0.14); }
+
+.hb-news .hn-prow-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hb-news .hn-prow h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.22;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+}
+
+.hb-news .hn-prow .hn-meta .also { display: none; }
+
+.hb-news .hn-thumb {
+    flex: none;
+    width: 104px;
+    height: 72px;
+    border-radius: 10px;
+}
+
+.hb-news .hn-thumb .hn-mast { display: none; }
+
+/* the phone's highlight is a tap, not a remote's ring */
+.hb-news.hb-phone .hn-prow.hb-focus { box-shadow: none !important; }
+
+.hb-news.hb-phone .hn-foot { font-size: 13px; padding: 0 4px; }
+
+/* ----- a story, opened ----- */
+
+/* (relative, for the reader over it; the TV layout's offsets don't apply) */
+.hb-news.hb-phone .hb-main { position: relative; inset: auto; }
+
+.hb-news .hn-reader.phone {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+    background: var(--homer-bg0, #02050a) linear-gradient(180deg, #0b1a30, #02050a 60%);
+    box-shadow: none;
+    transform: translateY(24px);
+}
+
+.hb-news .hn-reader.phone.show { transform: none; }
+
+.hb-news .hn-pr-bar,
+.hb-news .hn-pr-nav {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 8px;
+    background: #061126;
+}
+
+.hb-news .hn-pr-bar { border-bottom: 1px solid var(--line); }
+.hb-news .hn-pr-nav { border-top: 1px solid var(--line); justify-content: space-between; }
+
+.hb-news .hn-pr-bar .hn-reader-count { margin-left: auto; padding-right: 8px; font-size: 14px; }
+
+.hb-news .hn-pr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.hb-news .hn-pr-bar .hn-pr-btn { padding: 0 10px; }
+.hb-news .hn-pr-btn:active { background: rgba(255, 255, 255, 0.1); }
+.hb-news .hn-pr-btn[disabled] { opacity: 0.35; }
+.hb-news .hn-pr-btn .material-icons { font-size: 26px; }
+
+.hb-news .hn-pr-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 16px 24px;
+}
+
+.hb-news .hn-reader.phone .hn-meta { font-size: 14px; }
+
+.hb-news .hn-reader.phone h2 {
+    font-size: 25px;
+    line-height: 1.16;
+    -webkit-line-clamp: unset;
+    display: block;
+}
+
+.hb-news .hn-reader.phone .hn-reader-img {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+}
+
+.hb-news .hn-reader.phone .hn-reader-sum {
+    font-size: 18px;
+    line-height: 1.45;
+    -webkit-line-clamp: unset;
+    display: block;
+}
+
+.hb-news .hn-reader.phone .hn-reader-also { font-size: 14px; }
+
+/* the article itself, in the phone's browser */
+.hb-news .hn-pr-read {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    margin-top: 4px;
+    padding: 0 16px;
+    border-radius: 14px;
+    background: var(--focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.hb-news .hn-pr-read span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb-news .hn-pr-read b { font-weight: 800; }
+.hb-news .hn-pr-read .material-icons { flex: none; font-size: 22px; }
+
+/* the ticker's chip fits BUSINESS; its paper and age, phone-sized */
+.hb-news.hb-phone .hb-tk-label { width: 100px; }
+.hb-news.hb-phone .hn-tk-src { margin-right: 8px; }
+.hb-news.hb-phone .hn-tk-age { margin-left: 8px; }

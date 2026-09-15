@@ -68,6 +68,8 @@
         listeners.clear();
     };
     const sectionOf = (key) => (D() ? D().SECTIONS.find((s) => s.key === key) : null);
+    // the hub drew its phone layout (shared/hub.js marks the root)
+    const isPhone = () => !!(hub && hub.root && hub.root.classList.contains('hb-phone'));
 
     // ---------- Pieces ----------
 
@@ -167,10 +169,39 @@
         <span data-action="home"><span class="hb-key">H</span>Home</span>
         <span data-action="close"><span class="hb-key">ESC</span>Back</span>`;
 
+    // On a phone the article can open: a button to it instead of the QR
+    // code, the story in a column that scrolls, ‹ › buttons for the next one.
+    const paintPhoneReader = () => {
+        const s = reader.list[reader.i];
+        const sec = sectionOf(reader.section);
+        const summary = s.summary ? `<p class="hn-reader-sum">${esc(s.summary)}</p>` : '';
+        const also = s.also && s.also.length ? `<div class="hn-reader-also">Also reported by <b>${esc(s.also.join(', '))}</b></div>` : '';
+        const n = reader.list.length;
+        reader.el.innerHTML = `
+            <div class="hn-pr-bar">
+                <button type="button" class="hn-pr-btn" data-action="close" aria-label="Back"><span class="material-icons" aria-hidden="true">arrow_back</span></button>
+                <span class="hn-reader-count">${esc(sec ? sec.label : '')} · ${reader.i + 1} of ${n}</span>
+            </div>
+            <div class="hn-pr-scroll">
+                ${metaHtml(s, { also: false })}
+                <h2>${esc(s.title)}</h2>
+                ${s.image ? picture(s, 'hn-reader-img') : ''}
+                ${summary}
+                ${also}
+                ${s.link ? `<a class="hn-pr-read" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer"><span>Read it at <b>${esc(siteOf(s))}</b></span><span class="material-icons" aria-hidden="true">open_in_new</span></a>` : ''}
+            </div>
+            <div class="hn-pr-nav">
+                <button type="button" class="hn-pr-btn" data-action="prev"${n < 2 ? ' disabled' : ''}><span class="material-icons" aria-hidden="true">chevron_left</span>Previous</button>
+                <button type="button" class="hn-pr-btn" data-action="next"${n < 2 ? ' disabled' : ''}>Next<span class="material-icons" aria-hidden="true">chevron_right</span></button>
+            </div>`;
+        loadPictures(reader.el);
+    };
+
     const paintReader = () => {
         if (!reader) return;
         const s = reader.list[reader.i];
         if (!s) return;
+        if (reader.phone) { paintPhoneReader(); return; }
         const sec = sectionOf(reader.section);
         const body = reader.el;
         const summary = s.summary
@@ -218,20 +249,38 @@
         r.root.classList.remove('hn-reading');
         setTimeout(() => { r.el.remove(); r.legend.remove(); }, 200);
         if (r.onClose) safe(() => r.onClose(r.list[r.i]));
+        else if (r.phone && hub) {
+            // opened from the ticker: a tap focused (and paused) it; let it run again
+            const tab = hub.root.querySelector('.hb-tab.on');
+            if (tab) safe(() => hub.focus(tab));
+        }
     };
 
     // open(list, i): a section's stories, at story i
     const openReader = (list, i, section, onClose) => {
         if (!hub || !list || !list[i]) return;
         if (reader) closeReader();
+        const phone = isPhone();
         const el = document.createElement('div');
-        el.className = 'hn-reader';
+        el.className = 'hn-reader' + (phone ? ' phone' : '');
         const legend = document.createElement('div');
         legend.className = 'hn-reader-legend';
         legend.innerHTML = readerKeys();
-        hub.stage.appendChild(el);
-        hub.stage.appendChild(legend);
-        reader = { el, legend, root: hub.root, list, i, section, onClose };
+        if (phone) {
+            // over the tabs and the stories, under the video strip
+            (hub.stage.querySelector('.hb-main') || hub.stage).appendChild(el);
+            el.addEventListener('click', (ev) => {
+                const a = ev.target.closest('button[data-action]');
+                if (!a) return;
+                if (a.dataset.action === 'close') closeReader();
+                else if (a.dataset.action === 'prev') stepReader(-1);
+                else if (a.dataset.action === 'next') stepReader(1);
+            });
+        } else {
+            hub.stage.appendChild(el);
+            hub.stage.appendChild(legend);
+        }
+        reader = { el, legend, root: hub.root, list, i, section, onClose, phone };
         hub.root.classList.add('hn-reading');
         paintReader();
         void el.offsetWidth;
@@ -249,6 +298,8 @@
         const n = reader.list.length;
         reader.i = (reader.i + dir + n) % n;
         paintReader();
+        const sc = reader.el.querySelector('.hn-pr-scroll');
+        if (sc) sc.scrollTop = 0;
     };
 
     // The reader's keys come before the hub's: this listener is added when
@@ -279,8 +330,91 @@
     };
     const signature = (l) => [l.lead, ...l.cards, ...l.lines].filter(Boolean).map((s) => s.id + (s.image ? '+' : '')).join(',');
 
+    // ---------- On a phone: Watch CNN, then the stories in one column ----------
+
+    // CNN and what's on it, looked up once a few minutes
+    let cnnP = null;
+    let cnnAt = 0;
+    const cnnInfo = (ctx) => {
+        if (!cnnP || Date.now() - cnnAt > 5 * 60000) {
+            cnnAt = Date.now();
+            cnnP = ctx.channels.byNumber(CNN).then(async (ch) => {
+                if (!ch) return null;
+                const M = window.HomerGuideModel;
+                const server = M && M.getServer && M.getServer();
+                let program = null;
+                if (server) {
+                    const r = await ctx.data.api(`/LiveTv/Programs?UserId=${server.UserId}&ChannelIds=${ch.Id}&IsAiring=true&Limit=1&EnableImages=false`).catch(() => null);
+                    program = (r && r.Items && r.Items[0]) || null;
+                }
+                return { ch, program };
+            });
+            cnnP.catch(() => { cnnP = null; });
+        }
+        return cnnP;
+    };
+    // a tap plays CNN in the strip at the top (HomerPlayer docks it there);
+    // hidden while something's playing (the strip is up then)
+    const watchBar = (ctx) => {
+        const b = document.createElement('div');
+        b.className = 'hn-watch';
+        b.innerHTML = `
+            <span class="hn-watch-logo"></span>
+            <span class="hn-watch-text"><b>Watch CNN</b><small>Live on ${CNN}</small></span>
+            <span class="material-icons" aria-hidden="true">play_circle</span>`;
+        ctx.focusable(b, () => ctx.hub.tune(CNN), 'Watch CNN');
+        cnnInfo(ctx).then((info) => {
+            if (!info || !b.isConnected) return;
+            const url = ctx.channels.logoUrl(info.ch, 64);
+            if (url) {
+                const chip = b.querySelector('.hn-watch-logo');
+                const img = new Image();
+                img.alt = '';
+                img.src = url;
+                chip.appendChild(img);
+                if (window.HomerLogos) window.HomerLogos.watch(img, chip);
+            }
+            const p = info.program;
+            const name = p && p.Name && !/\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/.test(p.Name) ? p.Name.replace(/^live\s*[:\-–]\s*/i, '') : '';
+            b.querySelector('small').textContent = name ? `Live · ${name}` : `Live on ${info.ch.Number}`;
+        }).catch(() => {});
+        return b;
+    };
+
+    // the lead with its picture, then a row a story: headline and paper ·
+    // age on the left, a small picture on the right
+    const drawPhone = (ctx, key, panel, l, open) => {
+        panel.appendChild(watchBar(ctx));
+        const lead = document.createElement('div');
+        lead.className = 'hn-lead hn-plead';
+        lead.dataset.key = l.lead.id;
+        lead.innerHTML = `
+            ${l.lead.image ? picture(l.lead, 'hn-lead-img') : ''}
+            <div class="hn-lead-body">
+                <span class="hn-kicker">${key === 'top' ? 'Top story' : esc(sectionOf(key).label)}</span>
+                <h2>${esc(l.lead.title)}</h2>
+                ${metaHtml(l.lead)}
+            </div>`;
+        ctx.focusable(lead, () => open(0), 'Read');
+        panel.appendChild(lead);
+        const rows = document.createElement('div');
+        rows.className = 'hn-prows';
+        [...l.cards, ...l.lines].forEach((st, k) => {
+            const r = document.createElement('div');
+            r.className = 'hn-prow';
+            r.dataset.key = st.id;
+            // the feed's own (smaller) picture is plenty for a thumbnail
+            const thumb = st.image ? picture({ source: '', image: st.imageSmall || st.image, imageSmall: st.image }, 'hn-thumb') : '';
+            r.innerHTML = `<div class="hn-prow-text"><h3>${esc(st.title)}</h3>${metaHtml(st, { also: false })}</div>${thumb}`;
+            ctx.focusable(r, () => open(k + 1), 'Read');
+            rows.appendChild(r);
+        });
+        panel.appendChild(rows);
+    };
+
     const renderSection = (key) => (ctx) => {
         const n = startNews();
+        if (!hub) hub = ctx.hub; // the first tab draws before the hub's onOpen
         const panel = ctx.panel;
         if (!n) {
             panel.appendChild(ctx.ui.empty('The news didn\'t load', 'news/news-data.js is missing.'));
@@ -307,63 +441,68 @@
             list = [l.lead, ...l.cards, ...l.lines].filter(Boolean);
             panel.innerHTML = '';
             if (!l.lead) {
+                if (isPhone()) panel.appendChild(watchBar(ctx));
                 const st = n.status(key);
                 panel.appendChild(st === 'error'
                     ? ctx.ui.empty('The news didn\'t load', 'HOMER\'s feed helper didn\'t answer. It tries again every few minutes.')
                     : ctx.ui.empty('Getting the news…'));
                 return;
             }
-            let idx = 0;
-            // the lead
-            const lead = document.createElement('div');
-            lead.className = 'hn-lead';
-            lead.dataset.key = l.lead.id;
-            lead.innerHTML = `
-                ${picture(l.lead, 'hn-lead-img')}
-                <div class="hn-lead-body">
-                    <span class="hn-kicker">${key === 'top' ? 'Top story' : esc(sectionOf(key).label)}</span>
-                    <h2>${esc(l.lead.title)}</h2>
-                    ${metaHtml(l.lead)}
-                </div>`;
-            const li = idx++;
-            ctx.focusable(lead, () => open(li), 'Read');
-            panel.appendChild(lead);
-            // the cards
-            if (l.cards.length) {
-                const grid = document.createElement('div');
-                grid.className = 'hn-grid';
-                l.cards.forEach((s) => {
-                    const c = document.createElement('div');
-                    c.className = 'hn-card' + (s.image ? '' : ' text');
-                    c.dataset.key = s.id;
-                    c.innerHTML = `
-                        ${s.image ? picture(s, 'hn-card-img') : ''}
-                        <div class="hn-card-body">
-                            <h3>${esc(s.title)}</h3>
-                            ${!s.image && s.summary ? `<div class="hn-sum">${esc(s.summary)}</div>` : ''}
-                            ${metaHtml(s)}
-                        </div>`;
-                    const ci = idx++;
-                    ctx.focusable(c, () => open(ci), 'Read');
-                    grid.appendChild(c);
-                });
-                panel.appendChild(grid);
-            }
-            // more headlines
-            if (l.lines.length) {
-                const more = document.createElement('div');
-                more.className = 'hn-more';
-                more.innerHTML = '<div class="hn-more-head">More headlines</div>';
-                l.lines.forEach((s) => {
-                    const r = document.createElement('div');
-                    r.className = 'hn-line';
-                    r.dataset.key = s.id;
-                    r.innerHTML = `<h3>${esc(s.title)}</h3>${metaHtml(s, { also: false })}`;
-                    const ri = idx++;
-                    ctx.focusable(r, () => open(ri), 'Read');
-                    more.appendChild(r);
-                });
-                panel.appendChild(more);
+            if (isPhone()) {
+                drawPhone(ctx, key, panel, l, open);
+            } else {
+                let idx = 0;
+                // the lead
+                const lead = document.createElement('div');
+                lead.className = 'hn-lead';
+                lead.dataset.key = l.lead.id;
+                lead.innerHTML = `
+                    ${picture(l.lead, 'hn-lead-img')}
+                    <div class="hn-lead-body">
+                        <span class="hn-kicker">${key === 'top' ? 'Top story' : esc(sectionOf(key).label)}</span>
+                        <h2>${esc(l.lead.title)}</h2>
+                        ${metaHtml(l.lead)}
+                    </div>`;
+                const li = idx++;
+                ctx.focusable(lead, () => open(li), 'Read');
+                panel.appendChild(lead);
+                // the cards
+                if (l.cards.length) {
+                    const grid = document.createElement('div');
+                    grid.className = 'hn-grid';
+                    l.cards.forEach((s) => {
+                        const c = document.createElement('div');
+                        c.className = 'hn-card' + (s.image ? '' : ' text');
+                        c.dataset.key = s.id;
+                        c.innerHTML = `
+                            ${s.image ? picture(s, 'hn-card-img') : ''}
+                            <div class="hn-card-body">
+                                <h3>${esc(s.title)}</h3>
+                                ${!s.image && s.summary ? `<div class="hn-sum">${esc(s.summary)}</div>` : ''}
+                                ${metaHtml(s)}
+                            </div>`;
+                        const ci = idx++;
+                        ctx.focusable(c, () => open(ci), 'Read');
+                        grid.appendChild(c);
+                    });
+                    panel.appendChild(grid);
+                }
+                // more headlines
+                if (l.lines.length) {
+                    const more = document.createElement('div');
+                    more.className = 'hn-more';
+                    more.innerHTML = '<div class="hn-more-head">More headlines</div>';
+                    l.lines.forEach((s) => {
+                        const r = document.createElement('div');
+                        r.className = 'hn-line';
+                        r.dataset.key = s.id;
+                        r.innerHTML = `<h3>${esc(s.title)}</h3>${metaHtml(s, { also: false })}`;
+                        const ri = idx++;
+                        ctx.focusable(r, () => open(ri), 'Read');
+                        more.appendChild(r);
+                    });
+                    panel.appendChild(more);
+                }
             }
             // where it's from
             const sec = sectionOf(key);
@@ -381,7 +520,9 @@
 
         // New stories reorder the cards, so while you're moving around in them
         // they wait (up to HOLD_MS after your last key); ages update anyway.
+        // (on a phone: a finger on the list in the last HOLD_MS)
         const browsing = () => {
+            if (isPhone()) return Date.now() - lastKeyAt < HOLD_MS;
             const f = panel.querySelector('.hb-focus');
             return !!f && Date.now() - lastKeyAt < HOLD_MS;
         };
@@ -396,7 +537,10 @@
             draw();
         };
         const onKeyNote = () => { lastKeyAt = Date.now(); };
+        const scrollBox = panel.closest('.hb-panel') || panel;
         window.addEventListener('keydown', onKeyNote, true);
+        scrollBox.addEventListener('scroll', onKeyNote, { passive: true });
+        scrollBox.addEventListener('pointerdown', onKeyNote, { passive: true });
         listeners.add(onUpdate);
         const ages = setInterval(() => {
             refreshAges(panel);
@@ -407,6 +551,8 @@
         return () => {
             listeners.delete(onUpdate);
             window.removeEventListener('keydown', onKeyNote, true);
+            scrollBox.removeEventListener('scroll', onKeyNote);
+            scrollBox.removeEventListener('pointerdown', onKeyNote);
             clearInterval(ages);
             if (reader && reader.section === key) closeReader();
         };
@@ -425,7 +571,9 @@
         return TICKER_SECTIONS.map((key) => {
             const sec = sectionOf(key);
             const list = n.headlines(key, 8);
-            return { label: sec.ticker, color: 'var(--news)', items: list.map((s, i) => tickerItem(s, list, i, key)) };
+            // a phone's chip is narrow: "Top", not "Top Stories"
+            const label = isPhone() ? (key === 'local' ? sec.ticker : sec.label) : sec.ticker;
+            return { label, color: 'var(--news)', items: list.map((s, i) => tickerItem(s, list, i, key)) };
         }).filter((s) => s.items.length);
     };
     let tickerTimer = 0;
@@ -469,6 +617,7 @@
                 groups: GROUPS,
             },
             tabs: data.SECTIONS.map((s) => ({ key: s.key, label: s.label, render: renderSection(s.key) })),
+            phone: true, // its phone layout: a column between HOMER's bars (shared/hub.js), no CNN until asked
             ticker: {
                 mode: 'flip',
                 pageMs: 6500,

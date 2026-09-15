@@ -133,7 +133,8 @@
         { key: 'uk', label: 'UK', ticker: 'U.K.', keep: 36 * HOUR },
         { key: 'france', label: 'France', ticker: 'France', keep: 48 * HOUR },
         { key: 'business', label: 'Business', ticker: 'Business', keep: 48 * HOUR },
-        { key: 'local', label: 'Local', ticker: 'DFW', keep: 72 * HOUR },
+        // the stations run national stories too; those are in Top and US already
+        { key: 'local', label: 'Local', ticker: 'DFW', keep: 72 * HOUR, notIn: ['top', 'us'] },
         { key: 'tech', label: 'Tech', ticker: 'Tech', keep: 72 * HOUR },
     ];
     SECTIONS.forEach((s) => { s.feeds = FEEDS.filter((f) => f.section === s.key); });
@@ -472,7 +473,12 @@
             });
             // newest first into the merge, so a story's first version is its latest
             items.sort((a, b) => (b.t || 0) - (a.t || 0));
-            const stories = rank(merge(items), sec.keep);
+            let stories = rank(merge(items), sec.keep);
+            if (sec.notIn) {
+                const others = sec.notIn.flatMap((k) => build(k).map((o) => tokens(o.title)));
+                const local = stories.filter((st) => !others.some((o) => sameStory(st.tk, o)));
+                if (local.length >= 8) stories = local;
+            }
             stories.forEach((s) => { delete s.tk; });
             built.set(key, { stories, at: Date.now() });
             dirty.delete(key);
