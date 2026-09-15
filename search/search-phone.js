@@ -363,6 +363,9 @@
                 sec.appendChild(box);
                 frag.appendChild(sec);
             }
+            // nothing still to come on TV: say so under the results
+            const note = filter === 'all' && rows.length && ctx.tvNote ? ctx.tvNote(results) : null;
+            if (note) frag.appendChild(el('div', 'sp-tvnote', `${icon('live_tv')}<div><b>${esc(note.text)}</b>${note.sub ? `<span>${esc(note.sub)}</span>` : ''}</div>`));
             resultsEl.appendChild(frag);
             // All, then one chip per kind found (a lone kind needs none)
             const total = found.reduce((a, g) => a + g.items.length, 0);
@@ -452,7 +455,13 @@
             else if (found.some((g) => g.failed)) {
                 status = 'error';
                 setState('<b>Couldn\'t search everything</b><span>Part of Jellyfin didn\'t answer.</span><button type="button" class="sp-retry">Try again</button>');
-            } else setState(`<b>Nothing found for “${esc(q)}”</b><span>Try fewer letters, or another spelling.</span>`);
+            } else {
+                // nothing anywhere; a show that was on TV earlier says when
+                const note = ctx.tvNote ? ctx.tvNote(found) : null;
+                setState(`<b>Nothing found for “${esc(q)}”</b>`
+                    + (note && note.sub ? `<span>${esc(note.text)}. ${esc(note.sub)}.</span>` : '')
+                    + '<span>Try fewer letters, or another spelling.</span>');
+            }
         };
 
         const focusInput = () => {

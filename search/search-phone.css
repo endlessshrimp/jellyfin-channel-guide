@@ -750,6 +750,39 @@
     50% { box-shadow: 0 0 0 7px rgba(255, 59, 59, 0.2); }
 }
 
+/* nothing still to come on TV: a quiet line under the results (not a result) */
+.hs-phone .sp-tvnote {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px dashed rgba(160, 190, 230, 0.16);
+    color: var(--homer-dim);
+}
+
+.hs-phone .sp-tvnote .material-icons {
+    flex: none;
+    font-size: 22px;
+    opacity: 0.8;
+}
+
+.hs-phone .sp-tvnote b {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #d6e0ec;
+}
+
+.hs-phone .sp-tvnote span:not(.material-icons) {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
 /* ---------- Empty, searching, nothing found ---------- */
 
 .hs-phone .sp-state {

@@ -159,6 +159,40 @@
     };
     const chNum = (x) => x.ChannelNumber || x.Number || '';
 
+    // When a search finds nothing still to come in the guide, On TV says so:
+    // "Not on TV through Wednesday", or "Not on TV again through Wednesday"
+    // with when it was last on.
+    const dayDiff = (t) => {
+        const d = new Date(t);
+        const now = new Date();
+        return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+            - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+    };
+    const throughWord = (t) => {
+        const last = t - 60000; // listings that end at midnight end the day before
+        const days = dayDiff(last);
+        if (days <= 0) return new Date(last).getHours() >= 17 ? 'tonight' : 'today';
+        if (days === 1) return 'tomorrow';
+        return new Date(last).toLocaleDateString([], { weekday: 'long' });
+    };
+    const agoWord = (t) => {
+        const days = dayDiff(t);
+        if (days === 0) return 'today';
+        if (days === -1) return 'yesterday';
+        return new Date(t).toLocaleDateString([], { weekday: 'long' });
+    };
+    const tvNote = (list) => {
+        const g = (list || []).find((x) => x.key === 'programs');
+        if (!g || g.failed || g.items.length) return null;
+        const through = g.reach ? ` through ${throughWord(g.reach)}` : ' in the guide';
+        const last = g.last || [];
+        if (!last.length) return { text: `Not on TV${through}`, sub: '' };
+        const names = [...new Set(last.map((p) => p.ChannelName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const on = names.length > 2 ? `${names[0]} and ${names.length - 1} more` : names.join(' and ');
+        const at = new Date(startOf(last[0]));
+        return { text: `Not on TV again${through}`, sub: `Last on ${on ? on + ', ' : ''}${agoWord(at)} at ${fmtTime(at)}` };
+    };
+
     // ---------- Images ----------
 
     const imgUrl = (id, type, tag, q) => `/Items/${id}/Images/${type}?${q}${tag ? '&tag=' + encodeURIComponent(tag) : ''}`;
@@ -386,6 +420,25 @@
         while (cache.size > 24) cache.delete(cache.keys().next().value);
     };
 
+    // How far the guide reaches: when a sample of channels' listings run out
+    // (the middle one: a few run a day longer or shorter). Kept half an hour.
+    let reachCache = null; // { at, t }
+    const guideReach = async (server, signal) => {
+        if (reachCache && Date.now() - reachCache.at < 30 * 60000) return reachCache.t;
+        const uid = server.UserId;
+        const chans = ((await api(`/LiveTv/Channels?userId=${uid}&EnableImages=false&Limit=1000`, signal)) || {}).Items || [];
+        const step = Math.max(1, Math.floor(chans.length / 10));
+        const sample = chans.filter((c, i) => i % step === 0).slice(0, 10);
+        const ends = (await Promise.all(sample.map((c) => api(`/LiveTv/Programs?UserId=${uid}&ChannelIds=${c.Id}&SortBy=StartDate&SortOrder=Descending&Limit=1&EnableImages=false`, signal)
+            .then((r) => { const p = r && r.Items && r.Items[0]; return p && p.EndDate ? endOf(p) : 0; })
+            .catch(() => 0))))
+            .filter((t) => t > Date.now())
+            .sort((a, b) => a - b);
+        const t = ends.length ? ends[Math.floor(ends.length / 2)] : 0;
+        if (t) reachCache = { at: Date.now(), t };
+        return t;
+    };
+
     const fetchResults = async (server, route, q, signal) => {
         const uid = server.UserId;
         const term = encodeURIComponent(q);
@@ -399,6 +452,7 @@
             return `/Items?userId=${uid}&searchTerm=${term}&IncludeItemTypes=${g.types}&Recursive=true${scope}&Fields=${vodFields}&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&Limit=${g.limit}`;
         };
         const wanted = groupsFor(route.collectionType);
+        const reachP = wanted.some((g) => g.key === 'programs') ? guideReach(server, signal).catch(() => 0) : Promise.resolve(0);
         let failed = 0;
         const lists = await Promise.all(wanted.map((g) => api(url(g), signal).then((res) => res || {}).catch((err) => {
             if (signal.aborted) throw err;
@@ -407,6 +461,7 @@
             return null;
         })));
         if (failed === wanted.length) throw new Error('Search failed');
+        const reach = await reachP;
         const now = Date.now();
         return wanted.map((g, i) => {
             const res = lists[i];
@@ -415,11 +470,16 @@
             if (g.key === 'channels') {
                 items = items.slice().sort((a, b) => (parseFloat(chNum(a)) || 1e9) - (parseFloat(chNum(b)) || 1e9) || String(a.Name).localeCompare(String(b.Name)));
             } else if (g.key === 'programs') {
-                items = items
-                    .filter((p) => p.StartDate && p.EndDate && endOf(p) > now && !PLACEHOLDER.test(p.Name || ''))
+                const real = items.filter((p) => p.StartDate && p.EndDate && !PLACEHOLDER.test(p.Name || ''));
+                // the last time it was on (every channel it was on then), for "Not on TV again"
+                const past = real.filter((p) => endOf(p) <= now);
+                const lastAt = past.reduce((m, p) => Math.max(m, startOf(p)), 0);
+                items = real
+                    .filter((p) => endOf(p) > now)
                     .sort((a, b) => (airing(b, now) - airing(a, now)) || startOf(a) - startOf(b) || (parseFloat(chNum(a)) || 1e9) - (parseFloat(chNum(b)) || 1e9));
                 more = items.length > g.show;
                 items = items.slice(0, g.show);
+                return { key: g.key, label: g.label, items, more, failed: !res, reach, last: past.filter((p) => startOf(p) === lastAt) };
             }
             return { key: g.key, label: g.label, items, more, failed: !res };
         });
@@ -611,6 +671,7 @@
         let status = 'idle'; // idle | loading | ready | error
         let groups = []; // shown groups: { key, label, start (first row), head (heading el or null) }
         let rows = []; // { kind, it, gi, el }
+        let noteEl = null; // "Not on TV through …" under the results
         let sel = -1;
         let zone = 'list'; // search | list | groups | actions
         let results = []; // the last search's groups, all of them
@@ -946,7 +1007,9 @@
                 const g = groups[r.gi];
                 // the first result of a group brings its heading into view too
                 const top = g.head && g.start === i ? g.head.offsetTop : r.el.offsetTop - 8;
-                scroller.reveal(top, r.el.offsetTop + r.el.offsetHeight + 12 - top);
+                // the last result brings the On TV note under it into view too
+                const below = i === rows.length - 1 && noteEl ? noteEl : r.el;
+                scroller.reveal(top, below.offsetTop + below.offsetHeight + 12 - top);
             }
             showInfo(r);
         };
@@ -1002,6 +1065,10 @@
                     rows.push(r);
                 }
             }
+            // nothing still to come on TV: say so under the results
+            const note = filter === 'all' && rows.length ? tvNote(results) : null;
+            noteEl = note ? el('div', 'hs-tvnote', `<span class="material-icons" aria-hidden="true">live_tv</span><div><b>${esc(note.text)}</b>${note.sub ? `<span>${esc(note.sub)}</span>` : ''}</div>`) : null;
+            if (noteEl) inner.appendChild(noteEl);
             // All plus one chip per kind of result; a lone kind is just its label
             const total = found.reduce((a, g) => a + g.items.length, 0);
             chips = found.length > 1
@@ -1033,7 +1100,13 @@
                 if (list.some((g) => g.failed)) {
                     status = 'error';
                     setState('<b>Couldn\'t search everything</b><span>Part of Jellyfin didn\'t answer. Press OK to try again.</span>');
-                } else setState(`<b>Nothing found for “${esc(query)}”</b><span>Try fewer letters, or another spelling.</span>`);
+                } else {
+                    // nothing anywhere; a show that was on TV earlier says when
+                    const note = tvNote(list);
+                    setState(`<b>Nothing found for “${esc(query)}”</b>`
+                        + (note && note.sub ? `<span>${esc(note.text)}. ${esc(note.sub)}.</span>` : '')
+                        + '<span>Try fewer letters, or another spelling.</span>');
+                }
                 showInfo(null);
                 if (zone !== 'search') setZone('list');
                 return;
@@ -1444,6 +1517,7 @@
         server,
         route,
         startsLabel,
+        tvNote,
         // a search, from the minute's cache when it's there
         cached: (q) => cacheGet(`${route.key}|${q.toLowerCase()}`),
         search: async (q, { force = false, signal } = {}) => {
