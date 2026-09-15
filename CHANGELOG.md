@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.2
 
 - **A real remote for an Apple TV or a Samsung TV** (Rooms → the player's
   card → **Remote**, or **Remote** in the **L** quick controls). A ring of
@@ -13,6 +13,10 @@
   - Home Assistant does the sending: `remote.send_command` on the `remote`
     entity that shares the player's device, with the Apple TV's command names
     or the Samsung's `KEY_` codes.
+- HOMER's Apple TV test app (`apple-tv/`): HOMER full screen in the Apple TV's
+  hidden web view, with the Siri Remote as arrows, OK, Back and Home. When it
+  sets `window.HOMER_TVAPP`, HOMER always draws its TV layout (never a phone
+  layout or touch) and hides the mouse cursor.
 
 ## v0.4.1
 

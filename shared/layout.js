@@ -14,6 +14,10 @@
  * to fit between the phone's top bar and tab bar: its fit() asks stageBox()
  * how much room there is.
  *
+ * In HOMER's Apple TV app (apple-tv/), which sets window.HOMER_TVAPP before
+ * the page loads, it's always the TV layout without touch, whatever the web
+ * view reports, and <html> carries homer-tvapp (no mouse cursor: shell.css).
+ *
  * On a phone every HOMER screen gets the phone chrome: a top bar (HOMER, the
  * screen's name, the weather, Search) and a tab bar (Home, Guide, Movies,
  * Shows, Recordings). Navigation still goes through HomerPlayer, so a video
@@ -23,7 +27,7 @@
  *                        stageBox, chromeShown, force, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window.HomerLayout && typeof window.HomerLayout.destroy === 'function') {
         window.HomerLayout.destroy();
@@ -41,8 +45,10 @@
     // force({ phone, touch }): for testing (an iframe can't be a phone that
     // can't hover); null goes back to the media query
     let forced = { phone: null, touch: null };
-    const isPhone = () => (forced.phone != null ? forced.phone : !!(phoneMq && phoneMq.matches));
-    const isTouch = () => (forced.touch != null ? forced.touch : !!(touchMq && touchMq.matches));
+    // the Apple TV app: a TV, never a phone or a touch screen
+    const tvApp = () => window.HOMER_TVAPP === true;
+    const isPhone = () => (tvApp() ? false : forced.phone != null ? forced.phone : !!(phoneMq && phoneMq.matches));
+    const isTouch = () => (tvApp() ? false : forced.touch != null ? forced.touch : !!(touchMq && touchMq.matches));
 
     // ---------- Jellyfin session ----------
 
@@ -100,6 +106,7 @@
         const html = document.documentElement;
         html.classList.toggle('homer-phone', now.phone);
         html.classList.toggle('homer-touch', now.touch);
+        html.classList.toggle('homer-tvapp', tvApp());
         if (now.phone) ensureViewportFit();
         const changed = now.phone !== last.phone || now.touch !== last.touch;
         const first = last.phone === null;
@@ -320,7 +327,7 @@
             wxDetach();
             top && top.remove();
             tabs && tabs.remove();
-            document.documentElement.classList.remove('homer-phone', 'homer-touch', 'homer-chrome');
+            document.documentElement.classList.remove('homer-phone', 'homer-touch', 'homer-chrome', 'homer-tvapp');
             listeners.clear();
         }
     };

@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- The page Tools/catalyst-smoke.sh loads in place of HOMER. It reports what
+     reaches it to the test server's /log. -->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOMER app smoke test</title>
+<style>body { background: #07142a; color: #fff; font: 32px system-ui; padding: 60px; }</style>
+</head>
+<body>
+<!-- counts as a HOMER screen, so the app's plain-page arrow navigation stays
+     out; with ?plain it's a sign-in form like Jellyfin's instead -->
+<div id="screen" class="homer-screen">
+    <h1>HOMER app smoke test</h1>
+    <input id="q" type="text" placeholder="Search">
+</div>
+<form id="signin" hidden>
+    <input id="user" type="text" placeholder="User">
+    <input id="pass" type="password" placeholder="Password">
+    <button id="go" type="button">Sign in</button>
+</form>
+<p id="out"></p>
+<script>
+    const plain = location.search === '?plain';
+    const log = (m) => { document.getElementById('out').textContent = m; return fetch('/log?' + encodeURIComponent(m)).catch(() => {}); };
+    log(`boot tvapp=${window.HOMER_TVAPP} maxTouchPoints=${navigator.maxTouchPoints} touch=${'ontouchstart' in window} `
+        + `bridge=${typeof window.__homerTvApp} restored=${localStorage.getItem('homer-smoke')} ua=${navigator.userAgent}`);
+    localStorage.setItem('homer-smoke', 'saved-' + Date.now());
+    document.addEventListener('keydown', (e) => log(`keydown key=${JSON.stringify(e.key)} code=${e.code} keyCode=${e.keyCode} `
+        + `repeat=${e.repeat} target=${e.target.id || e.target.tagName}`), true);
+    document.addEventListener('keyup', (e) => log(`keyup key=${JSON.stringify(e.key)}`), true);
+    document.getElementById('q').addEventListener('input', (e) => log('input value=' + e.target.value));
+    if (plain) {
+        // arrows move focus (the app's fallback); Done on the keyboard moves on to the next field
+        document.getElementById('screen').remove();
+        document.getElementById('signin').hidden = false;
+        for (const id of ['user', 'pass']) {
+            document.getElementById(id).addEventListener('input', (e) => log(`plain input ${id}=${e.target.value}`));
+        }
+        document.getElementById('go').addEventListener('click', () => log(`plain click go user=${document.getElementById('user').value}`));
+    } else {
+        // after the remote's presses (the app's self-test ends by 4.5 s), a text box takes focus
+        setTimeout(() => document.getElementById('q').focus(), 6000);
+    }
+</script>
+</body>
+</html>
