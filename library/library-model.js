@@ -201,6 +201,13 @@
 
     // ---------- Loading ----------
 
+    // Newest first by a number (season or episode order); items without one
+    // keep Jellyfin's order among themselves, after the numbered ones.
+    const newestFirst = (list, num) => list
+        .map((x, i) => ({ x, i, n: num(x) }))
+        .sort((a, b) => (b.n ?? -Infinity) - (a.n ?? -Infinity) || a.i - b.i)
+        .map((e) => e.x);
+
     const load = {
         // a Movies or TV Shows library: its titles, and the library's own name
         async library(server, parentId, isTv) {
@@ -220,17 +227,24 @@
         },
         // one item in full (a movie's cast and media streams included)
         item: (server, id) => api(`/Items/${id}?userId=${server.UserId}`),
+        // a show's seasons, newest first by when they aired (a season numbered
+        // by year, like "Season 1997", mustn't jump ahead of Season 7), then by
+        // number when there's no date; Specials last
         async seasons(server, seriesId) {
-            const res = await api(`/Shows/${seriesId}/Seasons?userId=${server.UserId}&Fields=Overview`);
-            const list = (res && res.Items) || [];
+            const res = await api(`/Shows/${seriesId}/Seasons?userId=${server.UserId}&Fields=Overview,PremiereDate,ProductionYear`);
+            const aired = (x) => (x.PremiereDate ? Date.parse(x.PremiereDate)
+                : x.ProductionYear ? Date.UTC(x.ProductionYear, 0) : undefined);
+            const list = newestFirst((res && res.Items) || [], (x) => (x.IndexNumber === 0 ? -Infinity
+                : aired(x) ?? (x.IndexNumber != null ? x.IndexNumber - 1e6 : undefined)));
             remember(list);
             return list;
         },
-        // a season's episodes (season._all: a show without seasons, all of them)
+        // a season's episodes, newest first (season._all: a show without
+        // seasons, all of them)
         async episodes(server, seriesId, season) {
             const q = season._all ? '' : `&seasonId=${season.Id}`;
             const res = await api(`/Shows/${seriesId}/Episodes?userId=${server.UserId}${q}&Fields=Overview,PremiereDate,OfficialRating,CommunityRating&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1`);
-            const list = (res && res.Items) || [];
+            const list = newestFirst((res && res.Items) || [], (x) => (x.ParentIndexNumber || 0) * 100000 + (x.IndexNumber || 0));
             remember(list);
             return list;
         }

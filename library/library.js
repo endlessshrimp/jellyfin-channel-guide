@@ -1199,11 +1199,10 @@
                 if (!seasonId) {
                     if (item.Type === 'Episode') { seasonId = item.SeasonId; preferId = item.Id; }
                     else if (item.Type === 'Season') seasonId = item.Id;
-                    else if (next) { seasonId = next.SeasonId; preferId = next.Id; }
-                    else {
-                        const firstUnplayed = seasons.find((x) => x.UserData && x.UserData.UnplayedItemCount && x.IndexNumber !== 0);
-                        seasonId = (firstUnplayed || seasons.find((x) => x.IndexNumber !== 0) || seasons[0]).Id;
-                    }
+                    // a show that's still airing opens on its newest season (what's
+                    // new); one that's ended opens where you are
+                    else if (next && s.Status !== 'Continuing') { seasonId = next.SeasonId; preferId = next.Id; }
+                    else seasonId = (seasons.find((x) => x.IndexNumber !== 0) || seasons[0]).Id;
                 }
                 const idx = Math.max(0, seasons.findIndex((x) => x.Id === seasonId));
                 setZone(zone);

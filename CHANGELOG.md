@@ -44,6 +44,21 @@
   rooms/quick.js the panel and the doorbell. HomerPlayer counts #/rooms as a
   HOMER page. Home Assistant needs no configuration change on the local
   network; see the README for reaching it over Tailscale.
+## v0.3.15
+
+- Weather: a device's own location is named by its nearest town ("Plano,
+  TX") instead of "This device's location", on the Weather screen, the
+  clock's weather and Settings. The name comes from the National Weather
+  Service in the US and BigDataCloud elsewhere, asked once per spot (rounded
+  to about 1 km) and remembered.
+
+## v0.3.14
+
+- A show's page lists its seasons newest first (by when they aired, so a
+  season numbered by year doesn't jump ahead; Specials last), and each
+  season's episodes newest first, so what's new is at the top. A show that's
+  still airing opens on its newest season; one that's ended still opens
+  where you left off. TV and phone layouts both.
 
 ## v0.3.13
 
