@@ -151,7 +151,8 @@
         const parts = [];
         if (at) parts.push(`<span><b>${esc(chapterLabel(b.chapters, at.index))}</b>${namedChapters(b.chapters) ? '' : ` of ${at.count}`}</span>`);
         parts.push(`<span><b>${f.len(b.duration - pos)}</b> left</span>`);
-        parts.push(`<span class="bk-pct">${Math.floor(pct(b, pos) * 100)}%</span>`);
+        const pc = pct(b, pos);
+        parts.push(`<span class="bk-pct">${pc > 0 && pc < 0.01 ? '&lt;1' : Math.floor(pc * 100)}%</span>`);
         return parts.join('');
     };
 
@@ -448,7 +449,7 @@
                 row.items.forEach((b) => {
                     const p = pct(b, isCur(b) ? player().state().position : b.position);
                     const tag = b.played ? `<span class="bk-tag done">${icon('check')}</span>`
-                        : p > 0 ? `<span class="bk-tag">${Math.max(1, Math.floor(p * 100))}%</span>` : '';
+                        : p > 0 ? `<span class="bk-tag">${p < 0.01 ? '&lt;1' : Math.floor(p * 100)}%</span>` : '';
                     const card = el('div', 'bk-book', `
                         <div class="bk-book-cover" style="--ar:${Math.max(0.6, Math.min(1.2, b.aspect || 1))}">${coverImg(b, 360, 'bk-cover-img')}${tag}
                             ${isCur(b) && player().state().playing ? '<span class="bk-eq"><i></i><i></i><i></i></span>' : ''}
