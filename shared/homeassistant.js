@@ -159,7 +159,12 @@
     // ---------- Sign-in (Home Assistant's own) ----------
 
     const clientId = () => location.origin + '/';
-    const redirectUri = () => location.origin + location.pathname + CALLBACK;
+    // Back to /web/index.html with a query of its own, never the bare /web/:
+    // the browser can answer an address it has seen from its cache, and a
+    // copy of Jellyfin's page from before the injector has no HOMER in it (so
+    // no one would be there to finish the sign-in).
+    const RETURN_PATH = '/web/index.html?homer-ha=return';
+    const redirectUri = () => location.origin + RETURN_PATH + CALLBACK;
     const randomHex = () => {
         const b = new Uint8Array(16);
         crypto.getRandomValues(b);
@@ -214,7 +219,11 @@
         write(PENDING_KEY, null);
         // out of the address bar (and the history) at once: the code is single-use
         const back = pending && /^#\//.test(pending.back || '') && !/homer-ha=/.test(pending.back) ? pending.back : '#/rooms';
-        location.replace(location.pathname + location.search + back);
+        // replaceState, not location.replace: dropping the query would reload
+        // the page and cut off the token exchange below; tell the screens by hand
+        const search = location.search.replace(/[?&]homer-ha=return\b/, '').replace(/^&/, '?');
+        history.replaceState(history.state, '', location.pathname + search + back);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
         if (!code || !pending || pending.state !== state || Date.now() - pending.at > 15 * 60000) {
             warn('sign-in answer didn\'t match a sign-in from this device; ignored');
             setStatus(isSetUp() ? status : 'off', 'The sign-in didn\'t finish. Try Connect again.');
