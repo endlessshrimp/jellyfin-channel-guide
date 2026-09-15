@@ -64,6 +64,7 @@
     };
     // never shown: anything that sounds a siren or an alarm
     const ALARMING = /\bsiren|\balarm/i;
+    const HARDWARE_SETTING = /audio output|output (hardware )?mode/i;
     // buttons left out: the ones that restart, reset or identify a device
     const RISKY_BUTTON = /restart|reboot|reset|factory|shut ?down|power ?off|format|erase|delete|unpair|identify|update|firmware/i;
     const RISKY_BUTTON_CLASS = ['restart', 'identify', 'update'];
@@ -766,10 +767,15 @@
     // any case): a place for things that aren't in use.
     const HIDDEN_ROOMS = ['unused'];
 
-    // An entity Home Assistant only remembers: its integration isn't running
-    // (a disconnected SmartThings fridge, a sync box whose integration
-    // fails), so it can't come back by itself. Left out, with its device.
-    const gone = (id) => { const s = states[id]; return !s || !!(s.attributes && s.attributes.restored); };
+    // An entity Home Assistant only remembers (its integration isn't running).
+    // SmartThings appliances like that (the disconnected fridge, the oven, the
+    // old TVs) are left out, with their devices; anything else (the Hue Sync
+    // Box) stays, dimmed as unavailable, so it's clear it's there but down.
+    const gone = (id) => {
+        const s = states[id];
+        if (!s) return true;
+        return !!(s.attributes && s.attributes.restored) && platformOf.get(id) === 'smartthings';
+    };
     const isGroup = (id) => { const a = (states[id] && states[id].attributes) || {}; return Array.isArray(a.entity_id) || !!a.is_hue_group; };
 
     // Players: one card per real player. The same speaker or TV often comes
@@ -815,7 +821,9 @@
             if (RISKY_BUTTON.test(label) || ALARMING.test(label) || RISKY_BUTTON_CLASS.includes(a.device_class)) return null;
             return owner ? 'extra' : 'auto';
         }
-        if (d === 'select' || d === 'number') return owner && !ALARMING.test(label) ? 'extra' : null;
+        // hardware settings a stray press could break (a WiiM's audio output
+        // can silence the amp) stay in Home Assistant
+        if (d === 'select' || d === 'number') return owner && !ALARMING.test(label) && !HARDWARE_SETTING.test(label) ? 'extra' : null;
         if (d === 'sensor' && GLANCE_SENSOR[a.device_class]) return 'glance';
         if (d === 'binary_sensor' && GLANCE_BINARY[a.device_class]) return 'glance';
         return null;
