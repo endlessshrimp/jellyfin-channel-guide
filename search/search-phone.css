@@ -980,3 +980,119 @@
 
     .hs-phone.sp-docked .sp-group-rows { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- Get it: Sonarr and Radarr (the chip and flag are shared/arr.css) ---------- */
+
+.hs-phone .sp-arrnote {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 6px 6px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--homer-faint);
+}
+
+.hs-phone .sp-arrnote .material-icons { font-size: 20px; }
+
+.hs-phone .sp-kind-arr { flex-wrap: wrap; }
+
+.hs-phone .sp-arr-flag:empty { display: none; }
+.hs-phone .sp-arr-flag { margin-top: 5px; }
+.hs-phone .sp-arr-flag .homer-arr-flag,
+.hs-phone .sp-arr-line .homer-arr-flag { font-size: 12.5px; }
+.hs-phone .sp-arr-flag .homer-arr-flag::before,
+.hs-phone .sp-arr-line .homer-arr-flag::before { width: 8px; height: 8px; }
+
+/* an open Get it row: its status, what it's about, the get buttons */
+.hs-phone .sp-arr-more:empty { display: none; }
+
+.hs-phone .sp-arr-more {
+    flex: 0 0 100%;
+    padding: 4px 2px 2px;
+}
+
+.hs-phone .sp-kind-arr.open { background: var(--homer-cell-hi); border-color: rgba(160, 200, 255, 0.25); }
+
+.hs-phone .sp-arr-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    font-family: var(--homer-font-cond);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--homer-dim);
+}
+
+.hs-phone .sp-arr-status .homer-arr-chip { font-size: 12.5px; padding: 3px 9px; }
+
+.hs-phone .sp-arr-desc {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #c5d2e2;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hs-phone .sp-arr-acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.hs-phone .sp-arr-btn,
+.hs-phone .sp-arr-get {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--homer-line-strong);
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--homer-text);
+    font-family: var(--homer-font);
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.hs-phone .sp-arr-btn {
+    min-height: 40px;
+    padding: 0 14px 0 10px;
+    border-radius: 10px;
+    font-size: 14.5px;
+}
+
+.hs-phone .sp-arr-btn .material-icons,
+.hs-phone .sp-arr-get .material-icons { color: var(--homer-sports); font-size: 20px; }
+
+/* under a library show's title: a small one */
+.hs-phone .sp-arr-line:empty { display: none; }
+.hs-phone .sp-arr-line { margin-top: 6px; }
+
+.hs-phone .sp-arr-get {
+    min-height: 30px;
+    padding: 0 10px 0 6px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.hs-phone .sp-arr-get .material-icons { font-size: 17px; }
+
+.hs-phone .sp-arr-btn.armed,
+.hs-phone .sp-arr-get.armed {
+    background: var(--homer-sports);
+    border-color: transparent;
+    color: #03101f;
+}
+
+.hs-phone .sp-arr-btn.armed .material-icons,
+.hs-phone .sp-arr-get.armed .material-icons { color: #03101f; }
+
+.hs-phone .sp-toast.confirm.arr { background: rgba(9, 38, 24, 0.97); box-shadow: 0 0 0 1px rgba(51, 209, 122, 0.7), 0 12px 30px rgba(0, 0, 0, 0.55); }
+.hs-phone .sp-toast.confirm.arr .sp-toast-hint { background: var(--homer-sports); color: #03101f; }
+.hs-phone .sp-toast.got { box-shadow: 0 0 0 1px rgba(51, 209, 122, 0.6), 0 12px 30px rgba(0, 0, 0, 0.55); }

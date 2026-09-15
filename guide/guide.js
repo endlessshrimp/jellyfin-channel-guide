@@ -8,8 +8,8 @@
  *
  * Remote/keyboard: arrows move (◀▶ past the edge pages through time), OK/Enter
  * watches the channel (or records a program that hasn't started), R records the
- * selected program (R twice cancels a recording), N comes back to now,
- * Esc/Back closes.
+ * selected program (R twice cancels a recording), E gets a show's new episodes
+ * through Sonarr (shared/arr.js; E twice), N comes back to now, Esc/Back closes.
  *
  * The guide's data and actions (channels, listings, recordings, watching) are
  * in guide/guide-model.js. This file draws the TV layout; on a phone
@@ -751,6 +751,8 @@
             }
             if (p.ParentIndexNumber && p.IndexNumber) meta.appendChild(el('span', 'cg-chip', `S${p.ParentIndexNumber} E${p.IndexNumber}`));
             if (p.OfficialRating) meta.appendChild(el('span', 'cg-chip', esc(p.OfficialRating)));
+            const arrHint = arrHintFor(cell); // E: get new episodes (Sonarr)
+            if (arrHint) meta.appendChild(arrHint);
             $('.cg-info-desc').textContent = gap === 'loading' ? 'Loading the listings for this time…'
                 : gap === 'failed' ? 'The listings for this time didn\'t load. The guide will try again.'
                     : unknown ? 'No listing information from this channel\'s guide.'
@@ -907,6 +909,111 @@
         const record = () => {
             const cur = current();
             if (cur) toggleRecord(cur.row, cur.cell, 'key');
+        };
+
+        // ---------- Get new episodes (Sonarr, through shared/arr.js) ----------
+        // E on a show looks it up in Sonarr by name; the first press says which
+        // show it found and asks, a second E within a few seconds gets every new
+        // episode of it from now on. The program's info says what E will do.
+        const arrShowy = (cell) => !!window.HomerArr && !!cell && !cell.unknown && !!cell.p && !cell.gap
+            && !cell.p.IsMovie && !cell.p.IsSports && (cell.p.IsSeries || !cell.p.IsNews) && !PLACEHOLDER.test(cell.p.Name || '');
+        const arrFound = new Map(); // norm(title) -> Sonarr's show, or null when it has none
+        let arrAsking = ''; // norm(title) being looked up
+        let arrView = null; // the show the last E was about (for the confirm's words)
+        const arrRun = window.HomerArr ? window.HomerArr.runner({
+            hint: 'Press E again',
+            update: () => { if (guide === self) reshow(); },
+            toast: (msg) => {
+                if (msg.kind !== 'confirm') {
+                    toast(msg.text, msg.kind === 'err' ? 'err' : msg.kind === 'ok' ? 'arr got' : '', msg.ms);
+                    return;
+                }
+                const v = arrView || {};
+                const about = [v.network, v.year].filter(Boolean).join(', ');
+                showToast(`<span class="cg-toast-q"><span>Get new episodes of </span><span class="cg-toast-name">${esc(v.title || msg.name)}</span><span>${about ? ` (${esc(about)})` : ''}?</span></span>`
+                    + '<span class="cg-toast-hint">Press <span class="cg-key">E</span>again</span>', 'confirm arr', msg.ms);
+            }
+        }) : null;
+        // A show that stays highlighted a moment is looked up quietly, so its
+        // info can say "Getting new episodes" (or drop the E for one that's ended)
+        let arrDwell = 0;
+        const arrLookSoon = (name) => {
+            clearTimeout(arrDwell);
+            arrDwell = setTimeout(async () => {
+                const cur = current();
+                if (guide !== self || !cur || !cur.cell || !cur.cell.p || cur.cell.p.Name !== name || arrAsking) return;
+                const k = window.HomerArr.norm(name);
+                if (arrFound.has(k)) return;
+                try {
+                    arrFound.set(k, await window.HomerArr.findShow(name));
+                } catch {
+                    return; // E tries again, out loud
+                }
+                if (guide === self) reshow();
+            }, 1500);
+        };
+        const arrHintFor = (cell) => {
+            if (!arrRun || !arrShowy(cell)) return null;
+            const A = window.HomerArr;
+            const k = A.norm(cell.p.Name);
+            if (arrAsking === k) return el('span', 'homer-arr-hint asking', 'Looking in Sonarr…');
+            if (!arrFound.has(k)) arrLookSoon(cell.p.Name);
+            const found = arrFound.get(k);
+            if (found === null) return null; // Sonarr has no show by that name
+            const v = found ? A.latest(found) : null;
+            const a = v ? A.actions(v).find((x) => x.id === 'new') : A.ACTIONS.new;
+            if (v && !a) return v.added ? el('span', '', A.chipHtml(v)).firstChild : null; // getting it already, or it's ended
+            if (v && arrRun.armed(a, v)) return el('span', 'homer-arr-hint confirming', 'Press <span class="cg-key">E</span>again to get new episodes');
+            return el('span', 'homer-arr-hint', '<span class="cg-key">E</span>Get new episodes');
+        };
+        const getNewEpisodes = async () => {
+            const cur = current();
+            const cell = cur && cur.cell;
+            if (!arrRun || !arrShowy(cell)) return;
+            const A = window.HomerArr;
+            const name = cell.p.Name;
+            const k = A.norm(name);
+            if (arrAsking) {
+                toast(`Still looking in Sonarr…`);
+                return;
+            }
+            if (!arrFound.has(k)) {
+                arrAsking = k;
+                reshow();
+                toast(`Looking for ${name} in Sonarr…`, '', 20000);
+                let v;
+                try {
+                    v = await A.findShow(name);
+                } catch (err) {
+                    console.warn('[Channel Guide] Sonarr lookup failed:', err);
+                }
+                arrAsking = '';
+                if (guide !== self) return;
+                if (v === undefined) {
+                    toast('Couldn\'t reach Sonarr. Try again in a minute', 'err');
+                    reshow();
+                    return;
+                }
+                arrFound.set(k, v);
+                if (!v) {
+                    toast(`Sonarr doesn't know a show called ${name}`, 'err');
+                    reshow();
+                    return;
+                }
+            }
+            const v = arrFound.get(k) ? A.latest(arrFound.get(k)) : null;
+            if (!v) {
+                toast(`Sonarr doesn't know a show called ${name}`, 'err');
+                return;
+            }
+            const a = A.actions(v).find((x) => x.id === 'new');
+            if (!a) {
+                toast(v.newEpisodes ? `Already getting new episodes of ${v.title}` : `${v.title} has ended: no new episodes to get`);
+                reshow();
+                return;
+            }
+            arrView = v;
+            arrRun.press(a, v);
         };
 
         // ---------- Input ----------
@@ -1265,11 +1372,11 @@
                 clearFilter();
                 return;
             }
-            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G', 'n', 'N'];
+            const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Backspace', 'GoBack', 'BrowserBack', 'r', 'R', 'g', 'G', 'n', 'N', 'e', 'E'];
             if (!handled.includes(k)) return;
             ev.preventDefault();
             ev.stopImmediatePropagation();
-            if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R' || k === 'n' || k === 'N')) return;
+            if (ev.repeat && (k === 'Enter' || k === 'r' || k === 'R' || k === 'n' || k === 'N' || k === 'e' || k === 'E')) return;
             if (!rows.length && !['Escape', 'Backspace', 'GoBack', 'BrowserBack', 'g', 'G'].includes(k)) return;
             touched = true;
             lastPointerAt = 0; // the keys have the highlight now
@@ -1281,6 +1388,7 @@
             else if (k === 'ArrowLeft') moveTime(-1);
             else if (k === 'Enter') ok();
             else if (k === 'r' || k === 'R') record();
+            else if (k === 'e' || k === 'E') getNewEpisodes();
             else if (k === 'n' || k === 'N') backToNow();
             else close();
         };
@@ -1404,6 +1512,8 @@
                 if (touchMq && touchMq.removeEventListener) touchMq.removeEventListener('change', syncTouch);
                 offTouch();
                 if (armed) clearTimeout(armed.timer);
+                if (arrRun) arrRun.dispose();
+                clearTimeout(arrDwell);
                 detachModel();
                 root.remove();
             }

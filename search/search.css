@@ -815,3 +815,52 @@
     border-color: rgba(255, 59, 59, 0.5);
     color: #ff8a8a;
 }
+
+/* ---------- Get it: Sonarr and Radarr (the chip and flag are shared/arr.css) ---------- */
+
+/* still asking them: a quiet line where the group will go */
+.hs-arrnote {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 14px 24px 12px;
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--faint);
+}
+
+.hs-arrnote .material-icons {
+    font-size: 26px;
+    animation: hs-arr-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes hs-arr-breathe {
+    50% { opacity: 0.3; }
+}
+
+/* a Get it row's poster falls back to a letter, like the library's */
+.hs-kind-arr .hs-thumb.poster span { font-size: 24px; }
+
+.hs-zone-list .hs-row.sel .homer-arr-flag { color: #fff; }
+
+/* the get buttons: the "get it" green icon; asking for the second press, all green */
+.hs-btn-arr .material-icons { color: var(--homer-sports); }
+.hs-btn-arr.focus .material-icons { color: #fff; }
+
+.hs-btn-arr.armed,
+.hs-btn-arr.armed.focus {
+    background: var(--homer-sports);
+    border-color: transparent;
+    color: #03101f;
+    box-shadow: 0 0 0 3px #fff, 0 10px 30px rgba(51, 209, 122, 0.5);
+}
+
+.hs-btn-arr.armed .material-icons { color: #03101f; }
+
+.hs-key.arr { color: var(--homer-sports); }
+
+/* toasts: done (green), and a question waiting for the second press */
+.hs-toast.got { box-shadow: 0 0 0 1px rgba(51, 209, 122, 0.6), 0 16px 40px rgba(0, 0, 0, 0.55); }
+.hs-toast.confirm { box-shadow: 0 0 0 2px var(--homer-sports), 0 16px 40px rgba(0, 0, 0, 0.55); }
+.hs-toast .homer-arr-again { background: var(--homer-sports); color: #03101f; }

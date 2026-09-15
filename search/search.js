@@ -13,8 +13,14 @@
  * the right. Movies, shows and episodes open their HOMER details screen;
  * channels and programs play the channel.
  *
- * Remote/keyboard: arrows move, OK/Enter acts, / edits the search, Esc/Back
- * goes back, H goes Home.
+ * Then "Get it": shows and movies Sonarr and Radarr can get that aren't in the
+ * library (shared/arr.js, window.HomerArr). It's looked up once typing has
+ * settled and joins the list when it answers, without holding up the rest.
+ * A library show that Sonarr isn't getting new episodes of offers that too.
+ * Getting something takes a second press (OK, or E for new episodes).
+ *
+ * Remote/keyboard: arrows move, OK/Enter acts, E gets new episodes of a show,
+ * / edits the search, Esc/Back goes back, H goes Home.
  *
  * On a phone (shared/layout.js) the screen is search/search-phone.js instead,
  * drawn from the same search, cache and Back memory (see createPhone).
@@ -346,6 +352,8 @@
         return {
             reset() { set(0, false); },
             refresh() { set(pos, false); },
+            pos: () => pos,
+            to(p) { set(p, false); },
             reveal(start, size, animate = true) {
                 if (start < pos) set(start, animate);
                 else if (start + size > pos + viewSize()) set(start + size - viewSize(), animate);
@@ -443,7 +451,7 @@
         const uid = server.UserId;
         const term = encodeURIComponent(q);
         const scope = route.parentId ? `&ParentId=${encodeURIComponent(route.parentId)}` : '';
-        const vodFields = 'Overview,PrimaryImageAspectRatio,Genres,OfficialRating,ProductionYear,PremiereDate,EndDate,Status,ChildCount,DateCreated,Taglines';
+        const vodFields = 'Overview,PrimaryImageAspectRatio,Genres,OfficialRating,ProductionYear,PremiereDate,EndDate,Status,ChildCount,DateCreated,Taglines,ProviderIds';
         const url = (g) => {
             if (g.key === 'channels') return `/Items?userId=${uid}&searchTerm=${term}&IncludeItemTypes=TvChannel&Recursive=true&Fields=Overview&EnableImageTypes=Primary&ImageTypeLimit=1&Limit=${g.limit}`;
             // The server ignores start/end filters on search, so the whole match
@@ -483,6 +491,50 @@
             }
             return { key: g.key, label: g.label, items, more, failed: !res };
         });
+    };
+
+    // ---------- Get it (Sonarr and Radarr, through shared/arr.js) ----------
+
+    const ARR_SETTLE_MS = 650; // the arrs are asked once typing has stopped this long
+    const arr = () => window.HomerArr || null;
+    // what a search may offer to get: a library's search button scopes it
+    const arrKinds = (route) => {
+        const ct = String(route.collectionType || '').toLowerCase();
+        if (ct === 'movies') return ['movie'];
+        if (ct === 'tvshows') return ['show'];
+        if (ct === 'livetv') return [];
+        return ['show', 'movie'];
+    };
+    // A library show's Tvdb id, for asking Sonarr about it
+    const tvdbOf = (it) => (it && it.Type === 'Series' && it.ProviderIds && it.ProviderIds.Tvdb ? Number(it.ProviderIds.Tvdb) : 0);
+    // The "Get it" group for a search's results: what Sonarr and Radarr have that
+    // the library doesn't. Shows found On TV that aren't in the library are
+    // looked up by their own name too (Sonarr's search can miss them for a
+    // loose term), and lead the group.
+    const arrGroup = async (route, q, list, signal) => {
+        const A = arr();
+        const kinds = arrKinds(route);
+        if (!A || !kinds.length) return null;
+        const library = [];
+        for (const g of list || []) if (g.key === 'movies' || g.key === 'series') library.push(...g.items);
+        const libShows = new Set(library.filter((it) => it.Type === 'Series').map((it) => A.norm(it.Name)));
+        const onTv = new Map(); // norm(name) -> { name, n, movie }
+        for (const g of list || []) {
+            if (g.key !== 'programs') continue;
+            for (const p of g.items) {
+                if (!p.Name || p.IsSports || p.IsNews || PLACEHOLDER.test(p.Name)) continue;
+                const k = A.norm(p.Name);
+                if (!k || libShows.has(k)) continue;
+                onTv.set(k, { name: p.Name, n: ((onTv.get(k) || {}).n || 0) + 1, movie: !!p.IsMovie, year: p.IsMovie ? p.ProductionYear : 0 });
+            }
+        }
+        const byCount = [...onTv.values()].sort((a, b) => b.n - a.n);
+        // shows on TV are looked up by name; movies on TV (by name and year) only lead
+        const titles = byCount.filter((t) => !t.movie).map((t) => t.name);
+        const prefer = byCount.filter((t) => t.movie).map((t) => ({ title: t.name, kind: 'movie', year: t.year }));
+        const res = await A.getIt(q, { library, titles, prefer, signal });
+        const items = res.items.filter((v) => kinds.includes(v.kind));
+        return { key: 'arr', label: 'Get it', items, more: res.more };
     };
 
     // ---------- The screen ----------
@@ -562,12 +614,13 @@
 
         const toastEl = $('.hs-toast');
         let toastTimer = 0;
-        const toast = (msg, kind = '') => {
-            toastEl.innerHTML = `<span class="hs-toast-text">${esc(msg)}</span>`;
+        const showToast = (html, kind = '', ms = 3200) => {
+            toastEl.innerHTML = html;
             toastEl.className = 'hs-toast show' + (kind ? ' ' + kind : '');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => { toastEl.className = 'hs-toast'; }, 3200);
+            toastTimer = setTimeout(() => { toastEl.className = 'hs-toast'; }, ms);
         };
+        const toast = (msg, kind = '') => showToast(`<span class="hs-toast-text">${esc(msg)}</span>`, kind);
 
         // ----- recording (the guide's model: one request at a time, never twice) -----
         let recModel = null;
@@ -651,6 +704,58 @@
             else toast('Couldn\'t cancel that recording', 'err');
         };
 
+        // ----- Get it: Sonarr and Radarr (shared/arr.js) -----
+        let arrVia = 'OK'; // the key that pressed a get action, for "Press OK again"
+        // a get action's toast: the question with its "press again", or a message
+        const arrToast = (m) => {
+            if (m.kind === 'confirm') {
+                showToast(`<span class="hs-toast-text homer-arr-q">${esc(m.question)}</span><span class="homer-arr-again">${esc(m.hint)}</span>`, 'confirm', m.ms);
+            } else {
+                showToast(`<span class="hs-toast-text">${esc(m.text)}</span>`, m.kind === 'err' ? 'err' : m.kind === 'ok' ? 'got' : '', m.ms || 3200);
+            }
+        };
+        // a show or movie changed (an add, a fresh status): its row's flag and the panel
+        const refreshArr = () => {
+            if (!alive) return;
+            const A = arr();
+            for (const r of rows) {
+                if (r.kind !== 'arr' || !r.el) continue;
+                const f = r.el.querySelector('.hs-row-flag');
+                if (f) f.innerHTML = A ? A.flagHtml(r.it) : '';
+            }
+            const r = current();
+            if (r && (r.kind === 'arr' || r.kind === 'series')) showInfo(r);
+        };
+        const arrRun = arr() ? arr().runner({ hint: () => `Press ${arrVia} again`, toast: arrToast, update: refreshArr }) : null;
+        const offArr = arr() ? arr().onChange(refreshArr) : () => {};
+        const arrPress = (a, v, via) => {
+            if (!arrRun || !a || !v) return;
+            arrVia = via;
+            arrRun.press(a, v);
+        };
+        // A library show's Sonarr status: asked for once (when it's highlighted,
+        // or among a search's first shows), then from shared/arr.js's cache.
+        const askedSeries = new Set();
+        const seriesArr = (it) => {
+            const id = tvdbOf(it);
+            return id && arr() ? arr().peekStatus({ tvdbId: id }) : null;
+        };
+        const wantSeries = (it) => {
+            const id = tvdbOf(it);
+            if (!id || !arr() || askedSeries.has(id)) return;
+            askedSeries.add(id);
+            arr().status({ tvdbId: id }).then(refreshArr).catch(() => { /* not in Sonarr's reach */ });
+        };
+        // a get action as a button: its label says when it's waiting for the second press
+        const arrAct = (a, v) => ({
+            id: 'arr-' + a.id,
+            icon: arrRun.busy(v) ? 'hourglass_empty' : a.icon,
+            label: arrRun.busy(v) ? 'Asking…' : arrRun.label(a, v),
+            arr: a,
+            view: v,
+            armed: arrRun.armed(a, v)
+        });
+
         const input = $('.hs-search-input');
         const rowsView = $('.hs-rows');
         const inner = $('.hs-rows-inner');
@@ -683,6 +788,15 @@
         let debounceTimer = 0;
         let searchToken = 0;
         let controller = null;
+        let lastTypeAt = 0; // the last keystroke in the box, for asking the arrs once typing settles
+        let baseResults = []; // the last search's Jellyfin groups (results adds Get it)
+        let arrFor = null; // { q, group } once Sonarr and Radarr have answered for query q
+        let arrQ = null; // the query they're being asked about
+        let arrList = null; // its Jellyfin results, once they're in
+        let arrSettled = false; // typing has settled on arrQ
+        let arrPending = false;
+        let arrTimer = 0;
+        let arrCtl = null;
 
         const current = () => rows[sel] || null;
         const memKey = () => route.key + '|' + routeQuery;
@@ -728,8 +842,8 @@
             const title = $('.hs-title');
             title.textContent = info.title || '';
             title.classList.toggle('long', (info.title || '').length > 28);
-            $('.hs-meta').innerHTML = (info.chips || []).filter((c) => c && c.text)
-                .map((c) => `<span class="hs-chip${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`).join('');
+            $('.hs-meta').innerHTML = (info.chips || []).filter((c) => c && (c.text || c.html))
+                .map((c) => c.html || `<span class="hs-chip${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`).join('');
             const desc = $('.hs-desc');
             if (info.descHtml) desc.innerHTML = info.descHtml;
             else desc.textContent = info.desc || '';
@@ -750,7 +864,13 @@
 
         const actionsFor = (r) => {
             if (!r) return [];
-            if (r.kind === 'series') return [{ id: 'open', icon: 'video_library', label: 'Episodes' }];
+            if (r.kind === 'series') {
+                const list = [{ id: 'open', icon: 'video_library', label: 'Episodes' }];
+                const v = arrRun && seriesArr(r.it);
+                if (v) list.push(...arr().actions(v, { inLibrary: true }).map((a) => arrAct(a, v)));
+                return list;
+            }
+            if (r.kind === 'arr') return arrRun ? arr().actions(r.it).map((a) => arrAct(a, r.it)) : [];
             if (r.kind === 'movies' || r.kind === 'episodes') return [{ id: 'open', icon: 'info', label: 'Details' }];
             if (r.kind === 'channels') return [{ id: 'watch', icon: 'live_tv', label: 'Watch' }];
             if (r.kind === 'programs') {
@@ -766,7 +886,7 @@
         };
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
-            $('.hs-actions').innerHTML = actions.map((a, i) => `<div class="hs-btn${i === act ? ' cur' : ''}${i === act && zone === 'actions' ? ' focus' : ''}" role="button" data-i="${i}">
+            $('.hs-actions').innerHTML = actions.map((a, i) => `<div class="hs-btn${a.arr ? ' hs-btn-arr' : ''}${a.armed ? ' armed' : ''}${i === act ? ' cur' : ''}${i === act && zone === 'actions' ? ' focus' : ''}" role="button" data-i="${i}">
                 <span class="material-icons" aria-hidden="true">${a.icon}</span><span>${esc(a.label)}</span></div>`).join('');
         };
 
@@ -785,6 +905,10 @@
                 if (r.kind === 'series') {
                     chips.push({ text: yearsOf(it) }, { text: it.OfficialRating });
                     if (it.ChildCount) chips.push({ text: plural(it.ChildCount, 'season') });
+                    // whether Sonarr is getting its new episodes
+                    wantSeries(it);
+                    const v = seriesArr(it);
+                    if (v) chips.unshift({ html: arr().chipHtml(v, { inLibrary: true }) });
                 } else {
                     chips.push({ text: it.ProductionYear ? String(it.ProductionYear) : '' }, { text: it.OfficialRating }, { text: runtime(it) });
                 }
@@ -832,6 +956,29 @@
                     barLeft: it.SeriesName || '',
                     barRight,
                     progress: pctOf(it)
+                };
+            } else if (r.kind === 'arr') {
+                const A = arr();
+                const v = A.latest(it);
+                const show = v.kind === 'show';
+                chips.push({ html: A.chipHtml(v) });
+                if (show) {
+                    chips.push({ text: v.status === 'continuing' && v.year ? `Since ${v.year}` : v.status === 'upcoming' ? 'Coming soon' : v.year ? String(v.year) : '' });
+                    if (v.seasons) chips.push({ text: plural(v.seasons, 'season') });
+                    if (v.status === 'ended') chips.push({ text: 'Ended' });
+                } else {
+                    chips.push({ text: v.year ? String(v.year) : '' }, { text: v.runtime ? fmtMins(v.runtime) : '' });
+                    if (v.status === 'announced' || v.status === 'inCinemas') chips.push({ text: v.status === 'inCinemas' ? 'In theaters' : 'Not out yet', cls: 'soon' });
+                }
+                info = {
+                    kicker: `<b>${show ? 'TV SHOW' : 'MOVIE'}</b>${esc((show ? v.network : v.studio) || '')}`,
+                    title: v.title,
+                    chips,
+                    desc: v.overview || '',
+                    art: A.img(v.fanart, 'art') || null,
+                    poster: A.img(v.poster, 'poster') || null,
+                    barLeft: show ? 'Sonarr' : 'Radarr',
+                    barRight: A.detailText(v)
                 };
             } else if (r.kind === 'channels') {
                 const p = it.CurrentProgram && !PLACEHOLDER.test(it.CurrentProgram.Name || '') && airing(it.CurrentProgram) ? it.CurrentProgram : null;
@@ -889,6 +1036,8 @@
                 if (actions.length > 1) items.push({ key: '◀▶', label: 'Options' });
                 const a = actions[zone === 'actions' ? act : 0];
                 if (a) items.push({ key: 'OK', label: a.label, action: 'ok' });
+                const getNew = actions.find((x) => x.arr && x.arr.id === 'new');
+                if (getNew && getNew !== a) items.push({ key: 'E', label: getNew.label, action: 'arr-new', cls: 'arr' });
                 const r = current();
                 if (r && r.kind === 'programs' && !(a && a.id === 'record')) {
                     const st = recState(r.it);
@@ -899,7 +1048,7 @@
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' }, { key: 'ESC', label: 'Back', action: 'back' });
             $('.hs-legend').innerHTML = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
-                : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hs-key">${i.key}</span>${esc(i.label)}</span>`)).join('');
+                : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hs-key${i.cls ? ' ' + i.cls : ''}">${i.key}</span>${esc(i.label)}</span>`)).join('');
         };
 
         // ----- zones -----
@@ -934,7 +1083,20 @@
         };
 
         // ----- rows -----
+        // a Get it row: the poster, what it is, and Sonarr's or Radarr's word on it
+        const arrRowHtml = (r) => {
+            const A = arr();
+            const v = A.latest(r.it);
+            const poster = A.img(v.poster, 'thumb');
+            const sub = v.kind === 'show'
+                ? ['TV show', v.status === 'continuing' && v.year ? `Since ${v.year}` : v.year, v.network, v.seasons ? plural(v.seasons, 'season') : '']
+                : ['Movie', v.year, v.runtime ? fmtMins(v.runtime) : '', v.studio];
+            return `<div class="hs-thumb poster">${poster ? `<img data-src="${esc(poster)}" alt="">` : `<span>${esc((v.title || '?').slice(0, 1))}</span>`}</div>
+                <div class="hs-row-text"><div class="hs-row-title">${esc(v.title)}</div><div class="hs-row-sub">${esc(sub.filter(Boolean).join(' · '))}</div></div>
+                <div class="hs-row-flag">${A.flagHtml(v)}</div>`;
+        };
         const rowHtml = (r) => {
+            if (r.kind === 'arr') return arrRowHtml(r);
             const it = r.it;
             let thumb = '';
             let sub = '';
@@ -994,7 +1156,7 @@
             return e;
         };
 
-        const rowKey = (r) => r && r.kind + ':' + r.it.Id;
+        const rowKey = (r) => r && (r.kind === 'arr' && arr() ? 'arr:' + arr().key(r.it) : r.kind + ':' + r.it.Id);
 
         const select = (i, { scroll = true } = {}) => {
             if (!rows[i]) return;
@@ -1008,7 +1170,7 @@
                 // the first result of a group brings its heading into view too
                 const top = g.head && g.start === i ? g.head.offsetTop : r.el.offsetTop - 8;
                 // the last result brings the On TV note under it into view too
-                const below = i === rows.length - 1 && noteEl ? noteEl : r.el;
+                const below = i === rows.length - 1 && noteEl && noteEl.offsetTop > r.el.offsetTop ? noteEl : r.el;
                 scroller.reveal(top, below.offsetTop + below.offsetHeight + 12 - top);
             }
             showInfo(r);
@@ -1068,7 +1230,16 @@
             // nothing still to come on TV: say so under the results
             const note = filter === 'all' && rows.length ? tvNote(results) : null;
             noteEl = note ? el('div', 'hs-tvnote', `<span class="material-icons" aria-hidden="true">live_tv</span><div><b>${esc(note.text)}</b>${note.sub ? `<span>${esc(note.sub)}</span>` : ''}</div>`) : null;
-            if (noteEl) inner.appendChild(noteEl);
+            // (above Get it: it's about what's on TV)
+            if (noteEl) {
+                const arrHead = groups.find((g) => g.key === 'arr');
+                if (arrHead && arrHead.head) inner.insertBefore(noteEl, arrHead.head);
+                else inner.appendChild(noteEl);
+            }
+            // Sonarr and Radarr are still looking: say so where Get it will go
+            if (filter === 'all' && rows.length && arrPending) {
+                inner.appendChild(el('div', 'hs-arrnote', '<span class="material-icons" aria-hidden="true">hourglass_empty</span><span>Looking in Sonarr and Radarr…</span>'));
+            }
             // All plus one chip per kind of result; a lone kind is just its label
             const total = found.reduce((a, g) => a + g.items.length, 0);
             chips = found.length > 1
@@ -1090,8 +1261,11 @@
             build(null); // a new filter starts at its top
         };
 
+        // the Jellyfin groups, and Get it when Sonarr and Radarr have answered for this query
+        const withArr = (list) => (arrFor && arrFor.q === query && arrFor.group && arrFor.group.items.length ? list.concat([arrFor.group]) : list);
         const render = (list, keepKey) => {
-            results = list;
+            baseResults = list;
+            results = withArr(list);
             $('.hs-search-count').textContent = countText();
             groupScroller.reset();
             build(keepKey);
@@ -1103,9 +1277,11 @@
                 } else {
                     // nothing anywhere; a show that was on TV earlier says when
                     const note = tvNote(list);
-                    setState(`<b>Nothing found for “${esc(query)}”</b>`
-                        + (note && note.sub ? `<span>${esc(note.text)}. ${esc(note.sub)}.</span>` : '')
-                        + '<span>Try fewer letters, or another spelling.</span>');
+                    setState(arrPending
+                        ? `<b>Nothing in your library for “${esc(query)}”</b><span>Looking in Sonarr and Radarr…</span>`
+                        : `<b>Nothing found for “${esc(query)}”</b>`
+                            + (note && note.sub ? `<span>${esc(note.text)}. ${esc(note.sub)}.</span>` : '')
+                            + '<span>Try fewer letters, or another spelling.</span>');
                 }
                 showInfo(null);
                 if (zone !== 'search') setZone('list');
@@ -1117,10 +1293,85 @@
             if (rows.some((r) => r.kind === 'programs')) loadTimers();
         };
 
+        // ----- Get it: asking Sonarr and Radarr, once typing has settled -----
+        const stopArr = () => {
+            clearTimeout(arrTimer);
+            if (arrCtl) arrCtl.abort();
+            arrCtl = null;
+            arrQ = null;
+            arrList = null;
+            arrSettled = false;
+            arrPending = false;
+        };
+        // Get it joins the list where it is: same result highlighted, same scroll
+        const showArr = () => {
+            if (status !== 'ready') return; // the next render() picks it up
+            if (!rows.length) {
+                render(baseResults, null);
+                return;
+            }
+            const keepKey = rowKey(current());
+            const pos = scroller.pos();
+            const a = act;
+            results = withArr(baseResults);
+            $('.hs-search-count').textContent = countText();
+            build(keepKey);
+            scroller.to(pos);
+            act = a;
+            drawActions();
+            updateLegend();
+        };
+        const askArr = async () => {
+            if (!arrSettled || !arrList || arrCtl) return;
+            const q = arrQ;
+            const ctl = new AbortController();
+            arrCtl = ctl;
+            let group = null;
+            try {
+                group = await arrGroup(route, q, arrList, ctl.signal);
+            } catch (err) {
+                if (ctl.signal.aborted) return;
+                console.warn('[HOMER Search] Sonarr/Radarr:', err);
+            }
+            if (!alive || ctl.signal.aborted || arrQ !== q) return;
+            arrCtl = null;
+            arrQ = null;
+            arrList = null;
+            arrSettled = false;
+            arrPending = false;
+            arrFor = { q, group };
+            showArr();
+        };
+        // a new query: the arrs are asked about it once typing has stopped for
+        // a moment (and its Jellyfin results are in, for what to leave out)
+        const armArr = (q) => {
+            if (arrQ === q) return;
+            stopArr();
+            const A = arr();
+            if (!A || !arrKinds(route).length || (arrFor && arrFor.q === q)) return;
+            arrQ = q;
+            arrPending = true;
+            arrTimer = setTimeout(() => {
+                if (!alive || arrQ !== q) return;
+                arrSettled = true;
+                A.lookup(q).catch(() => { /* getIt says so */ }); // start them on it now
+                // and the first few library shows' Sonarr status, for their panels
+                const shows = (baseResults.find((g) => g.key === 'series') || { items: [] }).items;
+                if (query === q) shows.slice(0, 6).forEach(wantSeries);
+                askArr();
+            }, Math.max(0, lastTypeAt + ARR_SETTLE_MS - Date.now()));
+        };
+        const listForArr = (q, list) => {
+            if (arrQ !== q) return;
+            arrList = list;
+            askArr();
+        };
+
         // ----- searching -----
         const showIdle = () => {
             status = 'idle';
             clearTimeout(debounceTimer);
+            stopArr();
             if (controller) controller.abort();
             query = '';
             results = [];
@@ -1145,6 +1396,7 @@
             if (controller) controller.abort();
             controller = new AbortController();
             const signal = controller.signal;
+            armArr(q);
             const ckey = `${route.key}|${q.toLowerCase()}`;
             let list = force ? null : cacheGet(ckey);
             if (!list) {
@@ -1163,6 +1415,7 @@
                 } catch (err) {
                     if (signal.aborted || !alive || token !== searchToken) return;
                     console.error('[HOMER Search]', err);
+                    stopArr();
                     status = 'error';
                     root.classList.remove('hs-busy');
                     results = [];
@@ -1177,6 +1430,7 @@
             status = 'ready';
             root.classList.remove('hs-busy');
             render(list, keepKey);
+            listForArr(q, list);
         };
         const retry = () => runSearch(input.value, { force: true });
 
@@ -1198,6 +1452,7 @@
 
         input.addEventListener('input', () => {
             wantList = false;
+            lastTypeAt = Date.now();
             clearTimeout(debounceTimer);
             const text = input.value;
             debounceTimer = setTimeout(() => runSearch(text), text.trim() ? DEBOUNCE_MS : 0);
@@ -1216,6 +1471,10 @@
             if (!a || !r) return;
             const it = r.it;
             memory.set(memKey(), { query, key: rowKey(r), filter, at: Date.now() });
+            if (a.arr) {
+                arrPress(a.arr, a.view, 'OK');
+                return;
+            }
             if (a.id === 'open') {
                 go(detailsHash(it.Id));
                 return;
@@ -1282,6 +1541,15 @@
                 if (r && r.kind === 'programs') {
                     stop(ev);
                     if (!ev.repeat) toggleRecord(r.it);
+                    return;
+                }
+            }
+            // E: get new episodes of the highlighted show (a second E does it)
+            if ((k === 'e' || k === 'E') && (zone === 'list' || zone === 'actions')) {
+                const a = actions.find((x) => x.arr && x.arr.id === 'new');
+                if (a) {
+                    stop(ev);
+                    if (!ev.repeat) arrPress(a.arr, a.view, 'E');
                     return;
                 }
             }
@@ -1379,6 +1647,10 @@
             else if (a === 'retry') retry();
             else if (a === 'ok') run(zone === 'actions' ? actions[act] : actions[0]);
             else if (a === 'record') { const r = current(); if (r && r.kind === 'programs') toggleRecord(r.it); }
+            else if (a === 'arr-new') {
+                const x = actions.find((y) => y.arr && y.arr.id === 'new');
+                if (x) arrPress(x.arr, x.view, 'E');
+            }
         };
 
         document.addEventListener('keydown', onKey, true);
@@ -1470,6 +1742,9 @@
                 clearTimeout(debounceTimer);
                 clearTimeout(toastTimer);
                 clearInterval(clockTimer);
+                stopArr();
+                if (arrRun) arrRun.dispose();
+                offArr();
                 wxDetach();
                 if (controller) controller.abort();
                 document.removeEventListener('keydown', onKey, true);
@@ -1549,6 +1824,10 @@
         goHome,
         detailsHash,
         watchChannel,
+        // Get it: what Sonarr and Radarr can get for a search (shared/arr.js)
+        arrKinds: arrKinds(route),
+        arrGroup: (q, list, signal) => arrGroup(route, q, list, signal),
+        tvdbOf,
         util: {
             esc, fmtTime, fmtMins, plural, runtime, posOf, played, pctOf, minsLeft, epCode, yearsOf,
             startOf, endOf, airing, elapsedPct, chNum, posterUrl, stillUrl, logoUrl, PLACEHOLDER

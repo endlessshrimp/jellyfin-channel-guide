@@ -36,6 +36,7 @@
     css('shared/weather.css', 'homer-weather');
     css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
+    css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
     js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
@@ -43,6 +44,7 @@
     js('shared/skip.js'); // commercial skip in the full-screen player
     js('shared/weather.js');
     js('shared/logos.js'); // before the screens: they hand it their channel logos
+    js('shared/arr.js'); // before the screens: Sonarr and Radarr through HOMER's NAS helper
     js('guide/guide-model.js'); // the guide's channels, listings and recordings
     js('guide/guide.js');
     js('guide/guide-phone.js'); // the guide's phone layout
