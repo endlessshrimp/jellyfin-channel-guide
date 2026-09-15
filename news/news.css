@@ -142,7 +142,6 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    height: 356px;
     min-width: 0;
     border-radius: 16px;
     background: rgba(14, 28, 50, 0.92);
@@ -175,6 +174,8 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     overflow: hidden;
+    min-height: calc(3 * 1.12em); /* every card in a row the same height */
+    flex: none;
 }
 
 .hb-news .hn-card .hn-meta { margin-top: auto; font-size: 20px; }
@@ -188,12 +189,14 @@
     background:
         linear-gradient(180deg, rgba(47, 140, 255, 0.12), transparent 42%);
     border-top: 5px solid rgba(111, 211, 255, 0.4);
+    min-height: 330px;
 }
 
 .hb-news .hn-card.text h3 {
     font-size: 32px;
     line-height: 1.12;
     -webkit-line-clamp: 5;
+    min-height: 0;
 }
 
 .hb-news .hn-card.text .hn-sum {
@@ -351,7 +354,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 50% 1fr;
+    grid-template-columns: min(50%, 640px) 1fr;
     gap: 32px;
 }
 

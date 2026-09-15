@@ -159,7 +159,7 @@
 
     // Not news, or not news for a TV: puzzles, quizzes, opinion, shopping,
     // podcasts, "watch live" promos.
-    const JUNK_TITLE = /^(quiz|the (mini )?crossword|wordle|connections|spelling bee|sudoku|strands|horoscope|letters?\b|opinion\b|watch live|listen\b|podcast\b|newsletter\b|the morning:|your .* briefing)|\b(deals?|coupon|promo code)s?\b.*\b(sale|off|today)\b|\bhints?\b.*\b(wordle|connections|strands)\b|join our readers|we want to (hear|answer|know)|tell us (about|what|how)|share your (story|thoughts|photos)|send us your/i;
+    const JUNK_TITLE = /^(quiz|the (mini )?crossword|wordle|connections|spelling bee|sudoku|strands|horoscope|letters?\b|opinion\b|watch live|listen\b|podcast\b|newsletter\b|the morning:|your .* briefing)|\b(deals?|coupon|promo code)s?\b.*\b(sale|off|today)\b|\bhints?\b.*\b(wordle|connections|strands)\b|\btv(\/radio)? listings\b|\blottery (numbers|results)\b|join our readers|we want to (hear|answer|know)|tell us (about|what|how)|share your (story|thoughts|photos)|send us your/i;
     // (sport too: the Sports Hub has it; BBC's front page mixes it in)
     const JUNK_LINK = /\/(opinion|opinions|crosswords|games|puzzles|podcasts|live-video|shopping|deals|coupons|commentisfree|sport|sports)\//i;
 
