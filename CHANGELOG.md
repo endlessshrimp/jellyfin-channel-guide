@@ -50,6 +50,12 @@
   top of the picture) and the video jumps once they stop, so a whole break is
   one jump. It replaces Jellyfin's fast-forward button; ◀ still goes back 10
   seconds. Not on live TV.
+- Back from a channel you tuned in the guide goes back to the guide, where
+  you were in it, with the video docked in the screen you opened the guide
+  over; Back again leaves the guide. (It used to go Home.) Show and movie
+  pages already came back to themselves.
+- Esc on a guide opened over a screen closes just the guide; the screen
+  underneath no longer also goes back a step.
 
 ## v0.3.18
 
