@@ -39,6 +39,7 @@
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
     js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
     js('shared/player.js'); // every screen plays through it
+    js('shared/skip.js'); // commercial skip in the full-screen player
     js('shared/weather.js');
     js('shared/logos.js'); // before the screens: they hand it their channel logos
     js('guide/guide-model.js'); // the guide's channels, listings and recordings
