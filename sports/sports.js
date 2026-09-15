@@ -242,8 +242,8 @@
             const mine = g.home.fav ? g.home : g.away;
             const them = g.home.fav ? g.away : g.home;
             const homeGame = g.home.fav;
-            const c1 = hex(g.away.color) || '#1a2a44';
-            const c2 = hex(g.home.color) || '#1a2a44';
+            const c1 = hex((g.homeFirst ? g.home : g.away).color) || '#1a2a44';
+            const c2 = hex((g.homeFirst ? g.away : g.home).color) || '#1a2a44';
             card.style.setProperty('--c1', c1);
             card.style.setProperty('--c2', c2);
             const kind = tg.live ? 'Live' : tg.next ? 'Next' : 'Last';
@@ -259,7 +259,8 @@
                 mid = `<div class="sp-match-day">${esc(day === 'Today' ? (g.start.getHours() >= 17 ? 'Tonight' : 'Today') : day)}</div>
                        <div class="sp-match-time">${esc(/TBD/.test(g.status) ? 'TBD' : fmt.time(g.start))}</div>`;
             } else {
-                mid = `<div class="sp-match-score"><span class="${g.away.winner ? 'w' : ''}">${esc(g.away.score)}</span><i>–</i><span class="${g.home.winner ? 'w' : ''}">${esc(g.home.score)}</span></div>
+                const [l, r] = g.homeFirst ? [g.home, g.away] : [g.away, g.home];
+                mid = `<div class="sp-match-score"><span class="${l.winner ? 'w' : ''}">${esc(l.score)}</span><i>–</i><span class="${r.winner ? 'w' : ''}">${esc(r.score)}</span></div>
                        <div class="sp-match-status ${g.state}">${g.state === 'in' ? '<i></i>' : ''}${esc(g.status)}</div>`;
             }
             const tv = g.channel
@@ -284,9 +285,9 @@
                     <span class="sp-match-standing">${esc(standing)}</span>
                 </div>
                 <div class="sp-match-mid">
-                    ${side(g.away)}
+                    ${side(g.homeFirst ? g.home : g.away)}
                     <div class="sp-match-center">${mid}<div class="sp-match-at">${homeGame ? 'vs' : 'at'} ${esc(them.short || them.abbr)}</div></div>
-                    ${side(g.home)}
+                    ${side(g.homeFirst ? g.away : g.home)}
                 </div>
                 <div class="sp-match-foot">${lastLine}${tv}</div>`;
             void mine;
@@ -458,7 +459,7 @@
         };
 
         const renderSoccer = (ctx) => {
-            scoresSection(ctx, 'epl', { title: 'Premier League', limit: 20 });
+            scoresSection(ctx, 'epl', { title: 'Premier League', limit: 12 });
             liveSection(ctx, 'Premier League table', async (body, s) => {
                 const groups = await D.standings('epl');
                 body.innerHTML = '';
@@ -513,6 +514,21 @@
                     items: pick.slice(0, 40).map((g) => HomerTicker.score(g, { act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }))
                 });
             });
+            // the favorites' own next (or live) game and last result, wherever
+            // they are (a cup game, next week's NFL game): into My Teams
+            const seen = new Set(segs.flatMap((sg) => sg.items.map((i) => i.key)));
+            const tgs = await Promise.all(D.FAVS.map((f) => D.teamGames(f).catch(() => null)));
+            const extra = [];
+            tgs.filter(Boolean).forEach((tg) => {
+                [tg.live, tg.next, tg.last].filter(Boolean).forEach((g) => {
+                    if (seen.has(g.id)) return;
+                    if (g === tg.last && now - g.start > 4 * 86400000) return; // an old result
+                    seen.add(g.id);
+                    if (g.state === 'in') live = true;
+                    extra.push(HomerTicker.score(g, { priority: true, act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }));
+                });
+            });
+            if (extra.length) segs.push({ label: 'My Teams', hidden: true, items: extra });
             D.noteLive(live);
             liveAny = live;
             // the headlines, as a crawl
@@ -549,6 +565,8 @@
                 refreshMs: 60000,
                 pageMs: 6000,
                 priorityLabel: 'My Teams',
+                stepLabel: 'Scores',
+                okLabel: 'Watch',
                 priorityEvery: 2
             }
         });

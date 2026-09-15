@@ -31,14 +31,14 @@
     // ---------- Leagues ----------
 
     const LEAGUES = {
-        mlb: { key: 'mlb', label: 'MLB', name: 'MLB', path: 'baseball/mlb', color: '#0a3a7e', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png' },
-        nfl: { key: 'nfl', label: 'NFL', name: 'NFL', path: 'football/nfl', color: '#013369', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png' },
-        cfb: { key: 'cfb', label: 'College FB', name: 'College Football', path: 'football/college-football', color: '#7a2a12', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/ncaa.png' },
-        epl: { key: 'epl', label: 'Premier League', name: 'Premier League', path: 'soccer/eng.1', color: '#3d195b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/23.png' },
-        ucl: { key: 'ucl', label: 'Champions League', name: 'Champions League', path: 'soccer/uefa.champions', color: '#0b1e5b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png' },
+        mlb: { key: 'mlb', label: 'MLB', name: 'MLB', path: 'baseball/mlb', color: '#0a3a7e', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/mlb.png' },
+        nfl: { key: 'nfl', label: 'NFL', name: 'NFL', path: 'football/nfl', color: '#013369', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nfl.png' },
+        cfb: { key: 'cfb', label: 'College FB', name: 'College Football', path: 'football/college-football', color: '#7a2a12', logo: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png' },
+        epl: { key: 'epl', label: 'Premier League', name: 'Premier League', path: 'soccer/eng.1', color: '#3d195b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png' },
+        ucl: { key: 'ucl', label: 'Champions League', name: 'Champions League', path: 'soccer/uefa.champions', color: '#0b1e5b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2.png' },
         nba: { key: 'nba', label: 'NBA', name: 'NBA', path: 'basketball/nba', color: '#1d428a', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png' },
-        nhl: { key: 'nhl', label: 'NHL', name: 'NHL', path: 'hockey/nhl', color: '#111111', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png' },
-        cbb: { key: 'cbb', label: 'College Hoops', name: 'College Basketball', path: 'basketball/mens-college-basketball', color: '#1a3b73', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/ncaa.png' }
+        nhl: { key: 'nhl', label: 'NHL', name: 'NHL', path: 'hockey/nhl', color: '#111111', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nhl.png' },
+        cbb: { key: 'cbb', label: 'College Hoops', name: 'College Basketball', path: 'basketball/mens-college-basketball', color: '#1a3b73', logo: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png' }
     };
 
     // the favorites, by league: ESPN's team id (and its abbreviation there)
@@ -174,6 +174,7 @@
             home,
             network,
             networks: nets.all,
+            homeFirst: /^soccer\//.test((LEAGUES[league] || {}).path || ''),
             short,
             channel: hit ? { number: hit.ch.Number, name: hit.ch.Name, ch: hit.ch } : null,
             note,

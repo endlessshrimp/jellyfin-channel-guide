@@ -21,8 +21,8 @@
  *
  *   const t = HomerTicker.create(el, { source, refreshMs, mode, pageMs,
  *                                      priorityLabel, priorityEvery });
- *   t.setSegments([{ label: 'MLB', color: '#2f8cff', logo: url, mode?,
- *                    items: [item, …] }]);
+ *   t.setSegments([{ label: 'MLB', color: '#2f8cff', logo: url, mode?, hidden?,
+ *                    items: [item, …] }]);   (hidden: its items only feed the priority segment)
  *   item = { html } | { text } plus optional { priority, act, key }
  *   HomerTicker.score(game) -> item   (game: see HomerHub.ui.scoreCard)
  *   HomerTicker.text(text, { tag, priority, act }) -> item
@@ -63,8 +63,10 @@
                 : g.network ? `<span class="hb-tk-net">${esc(g.network)}</span>` : '';
             status = `<span class="hb-tk-status">${esc(g.short || g.status || '')}</span>${net}`;
         }
-        const sep = pre ? '<span class="hb-tk-at">@</span>' : '';
-        const html = `<span class="hb-tk-game${g.priority ? ' fav' : ''}">${side(a, !pre, dimA)}${sep}${side(h, !pre, dimH)}${status}</span>`;
+        // soccer writes the home side first ("ARS v CHE")
+        const sep = pre ? `<span class="hb-tk-at">${g.homeFirst ? 'v' : '@'}</span>` : '';
+        const sides = g.homeFirst ? side(h, !pre, dimH) + sep + side(a, !pre, dimA) : side(a, !pre, dimA) + sep + side(h, !pre, dimH);
+        const html = `<span class="hb-tk-game${g.priority ? ' fav' : ''}">${sides}${status}</span>`;
         return { html, priority: !!(opts.priority ?? g.priority), act: opts.act || g.act || null, key: g.id };
     };
     // a line of text (a headline): an optional tag in front ("BREAKING", "RANGERS")
@@ -114,6 +116,7 @@
 
         const order = (segs) => {
             // priority items lead each segment, and get a segment of their own
+            // (a segment marked hidden only feeds the priority segment)
             const clean = segs.filter((s) => s && s.items && s.items.length).map((s) => Object.assign({}, s, {
                 items: [...s.items.filter((i) => i.priority), ...s.items.filter((i) => !i.priority)]
             }));
@@ -129,9 +132,10 @@
             const out = [];
             const favSeg = fav.length ? { label: cfg.priorityLabel, color: cfg.priorityColor, fav: true, items: fav } : null;
             if (favSeg) out.push(favSeg);
-            clean.forEach((s, k) => {
+            const shown = clean.filter((s) => !s.hidden);
+            shown.forEach((s, k) => {
                 out.push(s);
-                if (favSeg && cfg.priorityEvery > 0 && (k + 1) % cfg.priorityEvery === 0 && k < clean.length - 1) out.push(favSeg);
+                if (favSeg && cfg.priorityEvery > 0 && (k + 1) % cfg.priorityEvery === 0 && k < shown.length - 1) out.push(favSeg);
             });
             return out;
         };

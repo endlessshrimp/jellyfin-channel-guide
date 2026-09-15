@@ -34,8 +34,8 @@
  *     tv: { channel: '1300' },               // default channel number
  *     guide: { title, include(ch, info), groups: [{ key, label, test(ch, info), order? }] },
  *     tabs: [{ key, label, render(ctx) }],   // render may return a teardown fn
- *     ticker: { source(), refreshMs, mode, priorityLabel },
- *     onOpen(hub), onClose(hub)
+ *     ticker: { source(), refreshMs, mode, priorityLabel, stepLabel, okLabel },
+ *     onOpen(hub), onClose(hub), onBack(hub) -> true when it handled Back
  *   });
  *
  * window.HomerHub = { define, undefine, open, current, data, ui, fmt,
@@ -431,7 +431,8 @@
         // A game, normalized:
         //   { id, league, state: 'pre'|'in'|'post', status ('Final', 'Top 7th', '7:05 PM'),
         //     start (Date), network, channel ({ number, name, ch }), note, priority,
-        //     away / home: { abbr, name, short, logo, score, rank, record, winner, color } }
+        //     homeFirst (soccer: the home side on top), short (a shorter status),
+        //     away / home: { abbr, name, short, logo, logoFb, score, rank, record, winner, color } }
         scoreCard(g, { ok, big = false, league = '' } = {}) {
             const card = el('div', 'hb-score hb-focusable' + (big ? ' big' : '') + (g.state === 'in' ? ' live' : '') + (g.priority ? ' fav' : ''));
             const pre = g.state === 'pre';
@@ -448,7 +449,7 @@
             const a = g.away || {};
             const h = g.home || {};
             const net = g.channel
-                ? `<span class="hb-score-ch" title="Channel ${esc(g.channel.number)}">${icon('live_tv')}${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
+                ? `<span class="hb-score-ch" title="Channel ${esc(g.channel.number)}">${icon('live_tv')}<b>${esc(g.channel.number)}</b><span>${esc(g.network || g.channel.name)}</span></span>`
                 : g.network ? `<span class="hb-score-net">${esc(g.network)}</span>` : '';
             card.innerHTML = `
                 <div class="hb-score-top">
@@ -456,7 +457,7 @@
                     ${league ? `<span class="hb-score-league">${esc(league)}</span>` : ''}
                     ${net}
                 </div>
-                ${row(a, h)}${row(h, a)}
+                ${g.homeFirst ? row(h, a) + row(a, h) : row(a, h) + row(h, a)}
                 ${g.note ? `<div class="hb-score-note">${esc(g.note)}</div>` : ''}`;
             if (g.channel) card.dataset.okLabel = `Watch ${g.channel.name || ''}`.trim();
             if (ok) card._hbOk = ok;
@@ -561,7 +562,7 @@
                 <div class="hb-panel" data-hb-scroll><div class="hb-panel-in"></div></div>
             </div>
             <div class="hb-legend"></div>
-            <div class="hb-ticker hb-focusable" data-ok-label="Pause"></div>`;
+            <div class="hb-ticker hb-focusable"></div>`;
         document.body.appendChild(root);
         const $ = (s) => stage.querySelector(s);
 
@@ -627,7 +628,8 @@
                 else if (a.right > b.right) row.scrollLeft += (a.right - b.right) / k + 8;
             }
         };
-        const setFocus = (n, { scroll = true } = {}) => {
+        // hover: the mouse put it there (a tab it lands on doesn't switch; a click does)
+        const setFocus = (n, { scroll = true, hover = false } = {}) => {
             if (!n || !stage.contains(n)) return;
             if (focused === n) return;
             const was = focused;
@@ -641,7 +643,7 @@
             const mb = memoryBox(n);
             if (mb) memory.set(mb, n);
             if (scroll) reveal(n);
-            if (n._hbFocus) n._hbFocus();
+            if (n._hbFocus && !(hover && n.classList.contains('hb-tab'))) n._hbFocus();
             updateLegend();
         };
         const candidates = () => [...stage.querySelectorAll('.hb-focusable')].filter((n) => {
@@ -994,8 +996,11 @@
         function updateLegend() {
             const items = [{ key: '▲▼◀▶', label: 'Move' }];
             const okLabel = focused && focused.dataset.okLabel;
-            if (focused === tickerEl) items.push({ key: '◀▶', label: 'Scores' });
-            if (okLabel && focused !== tickerEl) items.push({ key: 'OK', label: okLabel, action: 'ok' });
+            if (focused === tickerEl && ticker) {
+                const tk = def.ticker || {};
+                items.push({ key: '◀▶', label: tk.stepLabel || 'More' });
+                if (ticker.actionable()) items.push({ key: 'OK', label: tk.okLabel || 'Watch', action: 'ok' });
+            } else if (okLabel) items.push({ key: 'OK', label: okLabel, action: 'ok' });
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             if (tabs.length > 1) items.push({ key: '[ ]', label: 'Sections', action: 'nexttab' });
             items.push('spacer',
@@ -1016,7 +1021,15 @@
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
             const k = ev.key;
             if (k === 'h' || k === 'H') { eat(ev); if (!ev.repeat) goHome(); return; }
-            if (BACK_KEYS.includes(k)) { eat(ev); if (!ev.repeat) goBack(); return; }
+            if (BACK_KEYS.includes(k)) {
+                eat(ev);
+                if (ev.repeat) return;
+                // the focused thing, then the hub, can take Back (an overlay of its own closing)
+                if (focused && focused._hbBack && safe(() => focused._hbBack(), false)) return;
+                if (def.onBack && safe(() => def.onBack(api_), false)) return;
+                goBack();
+                return;
+            }
             const dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
             if (dirs[k]) { eat(ev); move(dirs[k]); return; }
             if (k === 'Enter' || k === ' ') { eat(ev); if (!ev.repeat) ok(); return; }
@@ -1067,7 +1080,7 @@
         };
         const onMouse = (ev) => {
             const f = ev.target.closest && ev.target.closest('.hb-focusable');
-            if (f && stage.contains(f) && f !== focused && f !== tickerEl) setFocus(f, { scroll: false });
+            if (f && stage.contains(f) && f !== focused && f !== tickerEl) setFocus(f, { scroll: false, hover: true });
         };
         window.addEventListener('keydown', onKey, true);
         window.addEventListener('wheel', onWheel, { capture: true, passive: false });
@@ -1107,7 +1120,11 @@
             tickerEl._hbFocus = () => ticker.pause();
             tickerEl._hbBlur = () => ticker.resume();
             tickerEl._hbKey = (dir) => {
-                if (dir === 'left' || dir === 'right') { ticker.step(dir === 'right' ? 1 : -1); return true; }
+                if (dir === 'left' || dir === 'right') {
+                    ticker.step(dir === 'right' ? 1 : -1);
+                    updateLegend();
+                    return true;
+                }
                 return false;
             };
             tickerEl._hbOk = () => { if (!ticker.ok()) ticker.step(1); };
