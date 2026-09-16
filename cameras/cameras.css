@@ -115,6 +115,50 @@
     color: var(--dim);
 }
 
+/* A camera Home Assistant can't reach: the square says so, rather than
+   sitting there black. Same shape as a camera that isn't up yet, warmer text,
+   because this one is a fault and not a plan. */
+.hc-tile-down {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    text-align: center;
+    padding: 12px;
+    background: linear-gradient(180deg, rgba(6, 13, 26, 0.86), rgba(6, 13, 26, 0.96));
+    z-index: 3;
+}
+
+.hc-tile.down .hc-tile-down { display: flex; }
+.hc-tile.down .hc-tile-none { display: none; }
+/* the name and the room stay on top of it: they're half of what it has to say */
+.hc-tile.down .hc-tile-label { z-index: 4; }
+
+.hc-tile-down .material-icons {
+    font-size: 44px;
+    color: var(--needle);
+    margin-bottom: 4px;
+}
+
+.hc-tile-down b {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.hc-tile-down .hc-tile-seen {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+}
+
+.hc-tile-down .hc-tile-seen:empty { display: none; }
+
 .hc-tile-note,
 .hc-tile-badge {
     position: absolute;
@@ -260,6 +304,10 @@
 }
 
 .hc-view-none .material-icons { font-size: 64px; color: var(--faint); }
+.hc-view-main.hc-down .hc-view-none .material-icons { color: var(--needle); }
+.hc-view-main.hc-down .hc-view-none-say { font-size: 34px; font-weight: 700; color: var(--text); }
+.hc-view-none-seen { font-size: 22px; color: var(--dim); }
+.hc-view-none-seen:empty { display: none; }
 .hc-view-main.no-still:not(.has-still) .hc-view-none { display: flex; }
 .hc-view.live .hc-view-none,
 .hc-view.clip .hc-view-none { display: none; }
@@ -296,6 +344,21 @@
 }
 
 .hc-still-badge { color: var(--dim); }
+
+.hc-off-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--needle);
+}
 
 .hc-view-clipinfo {
     position: absolute;
@@ -389,6 +452,11 @@
 .hc-ctl.on .material-icons { color: var(--needle); }
 .hc-ctl.sel { box-shadow: var(--focus-ring); }
 
+/* a control of a device that's offline: still there, still reachable with the
+   remote and the mouse, but it says it can't be used rather than failing quietly */
+.hc-ctl.off-line { opacity: 0.45; }
+.hc-ctl.off-line .material-icons { color: var(--faint); }
+
 .hc-ctl-none {
     font-family: var(--cond);
     font-size: 21px;
@@ -435,9 +503,16 @@
     display: flex;
     gap: 16px;
     overflow-x: auto;
-    scrollbar-width: none;
+    /* thin, not hidden: with two dozen events and eight in view, a mouse needs
+       to see that the strip goes on */
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
     padding-bottom: 4px;
 }
+
+.hc-events-track::-webkit-scrollbar { height: 8px; }
+.hc-events-track::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+.hc-events-track::-webkit-scrollbar-track { background: transparent; }
 
 .hc-events-track::-webkit-scrollbar { display: none; }
 

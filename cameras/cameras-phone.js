@@ -56,7 +56,7 @@
                         <img alt="" draggable="false">
                         <video class="cp-one-live" muted playsinline></video>
                         <video class="cp-one-clip" playsinline controls></video>
-                        <div class="cp-one-none">${icon('videocam_off')}</div>
+                        <div class="cp-one-none">${icon('videocam_off')}<span class="cp-one-none-say"></span><span class="cp-one-none-seen"></span></div>
                         <div class="cp-one-badge"></div>
                     </div>
                     <div class="cp-one-name"></div>
@@ -106,9 +106,9 @@
                 ${e.clip ? '' : '<div class="cp-ev-sub">No clip</div>'}
             </div>`;
 
-        const stripHtml = (list, head) => `
-            <div class="cp-strip-head">${icon('history')}<span>${esc(head)}</span></div>
-            <div class="cp-strip">${list.length ? list.map(evHtml).join('') : '<div class="cp-strip-none">Nothing recorded yet.</div>'}</div>`;
+        const stripHtml = (list, head, why) => `
+            <div class="cp-strip-head">${icon('history')}<span>${esc(head)}</span>${why && list.length ? `<i>${esc(why)}</i>` : ''}</div>
+            <div class="cp-strip">${list.length ? list.map(evHtml).join('') : `<div class="cp-strip-none">${esc(why || 'Nothing recorded yet.')}</div>`}</div>`;
 
         const pumpThumbs = () => {
             while (thumbBusy < 2 && thumbQueue.length) {
@@ -140,11 +140,14 @@
             M.events(id, { fresh }).then((list) => {
                 if (!alive || evsFor !== id || !into.isConnected) return;
                 evs = list;
-                into.innerHTML = stripHtml(list, head);
+                // a camera that's away keeps its clips; the times from Home
+                // Assistant's history still stand, and the head says which
+                const why = M.trouble(id) || (list.length && !list.some((e) => e.clip) ? 'times only' : '');
+                into.innerHTML = stripHtml(list, head, why);
                 loadThumbs();
             }).catch(() => {
                 if (!alive || !into.isConnected) return;
-                into.innerHTML = stripHtml([], head).replace('Nothing recorded yet.', 'Couldn\'t read this camera\'s recordings.');
+                into.innerHTML = stripHtml([], head, 'Couldn\'t read this camera\'s recordings.');
             });
         };
 
@@ -159,6 +162,7 @@
             return `<div class="cp-row" data-i="${i}" data-cam="${esc(t.id)}" data-still-box role="button">
                 <img alt="" draggable="false">
                 <div class="cp-row-none">${icon('videocam_off')}</div>
+                <div class="cp-row-down">${icon('videocam_off')}<b>Camera unavailable</b><span class="cp-row-seen"></span></div>
                 <div class="cp-row-label">${t.doorbell ? icon('doorbell') : ''}<span>${esc(t.name)}</span>${roomTag(t) ? `<i>${esc(roomTag(t))}</i>` : ''}</div>
                 <div class="cp-row-note"></div>
             </div>`;
@@ -182,13 +186,19 @@
             paintWall();
         };
 
+        const seenText = (t) => (t && t.since ? `Last seen ${whenText(t.since)}` : 'Home Assistant can\'t reach it');
+
         const paintWall = () => {
             const h = HA();
             $$('.cp-row').forEach((r, i) => {
                 const note = r.querySelector('.cp-row-note');
                 const t = tiles[i];
                 if (!note || !t) return;
-                if (t.bellId && h) {
+                const down = !t.planned && !t.available;
+                r.classList.toggle('down', down);
+                const seen = r.querySelector('.cp-row-seen');
+                if (seen) seen.textContent = down ? seenText(t) : '';
+                if (t.bellId && h && !down) {
                     const last = h.lastRing(t.bellId);
                     note.textContent = last ? `Last ring ${agoText(last)}` : last === null ? 'No rings in a week' : '';
                 } else note.textContent = '';
@@ -207,7 +217,8 @@
                 else if (c.kind === 'privacy') { value = c.on ? 'On' : 'Off'; on = c.on; }
                 else if (c.kind === 'led') value = c.words[c.options.indexOf(c.state)] || c.state;
                 else if (c.kind === 'reply') value = c.options.length ? 'Play a message' : 'None set';
-                return `<button type="button" class="cp-ctl${on ? ' on' : ''}" data-c="${k}">${icon(c.icon)}<b>${esc(c.label)}</b><span>${esc(value)}</span></button>`;
+                if (!c.available) { value = 'Unavailable'; on = false; }
+                return `<button type="button" class="cp-ctl${on ? ' on' : ''}${c.available ? '' : ' off-line'}" data-c="${k}">${icon(c.icon)}<b>${esc(c.label)}</b><span>${esc(value)}</span></button>`;
             });
             if (bat != null) bits.push(`<div class="cp-bat">${icon(bat > 60 ? 'battery_full' : bat > 25 ? 'battery_5_bar' : 'battery_alert')}<b>Battery</b><span>${bat}%</span></div>`);
             return bits.join('');
@@ -225,6 +236,34 @@
             $('.cp-one-shot').classList.remove('clip');
         };
 
+        // The open camera's picture, when Home Assistant can't reach it: what's
+        // wrong and when it was last heard from, in place of a black rectangle.
+        // Called again whenever Home Assistant pushes, so it clears itself the
+        // moment the camera comes back.
+        let openDown = null; // what the open camera was last drawn as
+        const paintOpen = () => {
+            const t = tiles.find((x) => x.id === cam);
+            if (!cam || !t) return;
+            const down = !t.available;
+            const shot = $('.cp-one-shot');
+            shot.classList.toggle('cp-down', down);
+            if (down) shot.classList.add('no-still');
+            $('.cp-one-none-say').textContent = down ? 'Camera unavailable' : '';
+            $('.cp-one-none-seen').textContent = down ? seenText(t) : '';
+            const badge = $('.cp-one-badge');
+            if (down) badge.innerHTML = '<span class="cp-off-badge">Offline</span>';
+            if (openDown === down) return;
+            const was = openDown;
+            openDown = down;
+            // it came back while the camera was open: pick the picture up again
+            if (was === true && !down) {
+                shot.classList.remove('no-still');
+                badge.innerHTML = '<span class="cp-still-badge">Still</span>';
+                M.forget(cam);
+                loadEvents(cam, $('.cp-one-events'), 'Recent', true);
+            }
+        };
+
         const openCamera = (id) => {
             const t = tiles.find((x) => x.id === id);
             if (!id || !t) return;
@@ -232,9 +271,12 @@
             root.classList.add('cp-open');
             $('.cp-one-name').textContent = t.name;
             $('.cp-one-room').textContent = [roomTag(t), t.doorbell ? 'Doorbell' : ''].filter(Boolean).join(' · ');
-            $('.cp-one-badge').innerHTML = '<span class="cp-still-badge">Still</span>';
+            const down = !t.available;
             const shot = $('.cp-one-shot');
             shot.classList.remove('has-still', 'no-still');
+            $('.cp-one-badge').innerHTML = '<span class="cp-still-badge">Still</span>';
+            openDown = null;
+            paintOpen();
             if (stopOne) stopOne();
             stopOne = keepStill(shot.querySelector('img'), id, 2000);
             $('.cp-controls').innerHTML = controlsHtml();
@@ -242,7 +284,7 @@
             $('.cp-scroll').scrollTop = 0;
             stopLive();
             const h = HA();
-            if (h) {
+            if (h && !down) {
                 const run = h.playCamera(id, $('.cp-one-live'));
                 live = run;
                 run.started.then(() => {
@@ -260,6 +302,7 @@
             if (stopOne) { stopOne(); stopOne = null; }
             cam = '';
             evs = [];
+            openDown = null;
             root.classList.remove('cp-open');
             lastSig = '';
             sync();
@@ -286,6 +329,7 @@
         const runControl = (c) => {
             const h = HA();
             if (!h || !c) return;
+            if (!c.available) { toast(`${c.label} is unavailable while the camera is offline.`, 'err'); return; }
             if (c.kind === 'siren') h.toggle(c.id).then(() => toast(c.on ? 'Siren off' : 'Siren on')).catch(failed);
             else if (c.kind === 'privacy') h.toggle(c.id).then(() => toast(c.on ? 'Privacy mode off' : 'Privacy mode on')).catch(failed);
             else if (c.kind === 'led') {
@@ -351,7 +395,7 @@
                 lastSig = sig;
                 if (!cam) drawWall();
             } else paintWall();
-            if (cam) $('.cp-controls').innerHTML = controlsHtml();
+            if (cam) { $('.cp-controls').innerHTML = controlsHtml(); paintOpen(); }
         };
 
         const offHA = HA() ? HA().onChange(sync) : () => {};

@@ -212,6 +212,39 @@
     color: var(--faint);
 }
 
+/* A camera Home Assistant can't reach says so on its own row, so the column
+   never carries a black rectangle with no explanation. */
+.cp-phone .cp-row-down {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-align: center;
+    padding: 8px;
+    background: linear-gradient(180deg, rgba(6, 13, 26, 0.86), rgba(6, 13, 26, 0.96));
+    z-index: 3;
+}
+
+.cp-phone .cp-row.down .cp-row-down { display: flex; }
+.cp-phone .cp-row.down .cp-row-none { display: none; }
+/* the name and the room stay on top of it */
+.cp-phone .cp-row.down .cp-row-label { z-index: 4; }
+.cp-phone .cp-row-down .material-icons { font-size: 26px; color: var(--needle); }
+.cp-phone .cp-row-down b { font-size: 17px; color: var(--text); }
+
+.cp-phone .cp-row-down .cp-row-seen {
+    font-family: var(--cond);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+}
+
+.cp-phone .cp-row-down .cp-row-seen:empty { display: none; }
+
 /* ---------- The events strip ---------- */
 
 .cp-phone .cp-wall-events { margin: 2px 0 4px; }
@@ -230,6 +263,16 @@
 }
 
 .cp-phone .cp-strip-head .material-icons { font-size: 17px; color: var(--faint); }
+
+/* why the strip is showing times and no clips */
+.cp-phone .cp-strip-head i {
+    margin-left: auto;
+    font-style: normal;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: var(--faint);
+    text-align: right;
+}
 
 .cp-phone .cp-strip {
     display: flex;
@@ -382,7 +425,31 @@
 }
 
 .cp-phone .cp-one-shot.no-still:not(.has-still) .cp-one-none { display: grid; }
+.cp-phone .cp-one-none {
+    grid-auto-flow: row;
+    gap: 6px;
+    text-align: center;
+    padding: 10px;
+}
+
 .cp-phone .cp-one-none .material-icons { font-size: 38px; color: var(--faint); }
+.cp-phone .cp-one-shot.cp-down .cp-one-none .material-icons { color: var(--needle); }
+
+.cp-phone .cp-one-none-say {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.cp-phone .cp-one-none-seen {
+    font-family: var(--cond);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.cp-phone .cp-one-none-say:empty,
+.cp-phone .cp-one-none-seen:empty { display: none; }
 
 .cp-phone .cp-one-badge {
     position: absolute;
@@ -415,6 +482,20 @@
 }
 
 .cp-phone .cp-still-badge { color: var(--dim); }
+
+.cp-phone .cp-off-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 7px;
+    background: rgba(2, 5, 10, 0.72);
+    font-family: var(--cond);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--needle);
+}
 
 .cp-phone .cp-one-name {
     margin-top: 12px;
@@ -477,6 +558,10 @@
 
 .cp-phone .cp-ctl.on { background: var(--cell-hi); }
 .cp-phone .cp-ctl.on .material-icons { color: var(--needle); }
+
+/* a control of a device that's offline: it says so instead of failing quietly */
+.cp-phone .cp-ctl.off-line { opacity: 0.45; }
+.cp-phone .cp-ctl.off-line .material-icons { color: var(--faint); }
 
 /* ---------- Not connected, and the toast ---------- */
 

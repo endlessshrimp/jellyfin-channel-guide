@@ -407,6 +407,7 @@
             title,
             artist,
             art: active && (title || ta.entity_picture) ? h.pictureUrl(target) : '',
+            artId: target, // whose picture that is: the leader's, in a group
             source: active ? a.source || '' : '',
             sources: active && can('source') && Array.isArray(a.source_list) ? a.source_list : [],
             volume: a.volume_level != null ? Math.round(a.volume_level * 100) : null,
@@ -449,6 +450,29 @@
     const mediaButtonLabel = (M, key) => (key === 'play' ? (M.playing ? 'Pause' : 'Play') : key === 'mute' ? (M.muted ? 'Unmute' : 'Mute') : key === 'power' ? (M.off ? 'Turn on' : 'Turn off') : MEDIA_BUTTONS[key].label);
     const mediaButtonIcon = (M, key) => (key === 'play' ? (M.playing ? 'pause' : 'play_arrow') : key === 'mute' ? (M.muted ? 'volume_off' : 'volume_up') : MEDIA_BUTTONS[key].icon);
     const mediaLine = (M) => [M.stateText, M.source && !M.title ? M.source : '', M.group].filter(Boolean).join(' · ');
+    // The cover, once it has really loaded. Home Assistant's picture for a
+    // player is a proxy address that can answer with something the browser
+    // can't draw (an Apple TV's covers come back as HEIC), so ask
+    // shared/homeassistant.js for the first one that works and only then put
+    // it in — otherwise the row keeps its icon instead of a blank square.
+    const setArt = (box, M) => {
+        const img = box.querySelector('img');
+        if (img.dataset.src === M.art) return;
+        img.dataset.src = M.art;
+        box.classList.remove('has-art');
+        img.removeAttribute('src');
+        if (!M.art) return;
+        const want = M.art;
+        const draw = (url) => {
+            if (!url || img.dataset.src !== want) return;
+            img.onload = () => box.classList.add('has-art');
+            img.src = url;
+        };
+        const h = HA();
+        if (h && h.loadPicture) h.loadPicture(M.artId || M.id).then(draw, () => {});
+        else draw(want);
+    };
+
     const mediaTitle = (M) => [M.title, M.artist].filter(Boolean).join(' — ');
     // the remote's volume step: 5%
     const stepMedia = (M, d) => {
@@ -1135,13 +1159,7 @@
                     n.querySelector('.ho-vol .ho-bar i').style.width = (M.canVolume ? M.volume : 0) + '%';
                     n.querySelector('.ho-vol-v').textContent = M.canVolume ? (M.muted ? 'Muted' : M.volume + '%') : '';
                     n.querySelector('.ho-vol-icon').textContent = M.muted ? 'volume_off' : 'volume_up';
-                    const art = n.querySelector('.ho-art');
-                    const img = art.querySelector('img');
-                    if (img.dataset.src !== M.art) {
-                        img.dataset.src = M.art;
-                        art.classList.remove('has-art');
-                        if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
-                    }
+                    setArt(n.querySelector('.ho-art'), M);
                 } else if (row.kind === 'mbtns') {
                     const M = mediaInfo(row.id, r);
                     n.querySelectorAll('.ho-mbtn').forEach((c) => {
@@ -2077,7 +2095,7 @@
         goHome, goBack, goSettings, docked,
         // v0.3.19: bulbs' colors, outlets, players, fans, automations, at a glance
         domainOf, pretty, rgbCss, lightParts, bulbsLabel, SWATCHES, swatchesFor, swatchRgb, swatchNow, whiteGradient, hueGradient,
-        ENT_ICONS, entIcon, entInfo, entVerb, mediaInfo, mediaCards, mediaButtons, mediaButtonLabel, mediaButtonIcon, MEDIA_BUTTONS, mediaLine, mediaTitle,
+        ENT_ICONS, entIcon, entInfo, entVerb, mediaInfo, mediaCards, setArt, mediaButtons, mediaButtonLabel, mediaButtonIcon, MEDIA_BUTTONS, mediaLine, mediaTitle,
         stepMedia, mediaButton, fanInfo, fanText, optionInfo, numberInfo, numberText, glance, glanceHtml,
         // the remote (Apple TV, Samsung TV)
         REMOTE_KEYS, remoteKeyLabel, remoteKeyIcon, remoteName, remoteNowLine,
