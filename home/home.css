@@ -178,10 +178,15 @@
 .hm-menu.hm-menu-10 .hm-menu-item { height: 36px; font-size: 24px; }
 .hm-menu.hm-menu-10 .hm-menu-item .material-icons { font-size: 27px; }
 
-/* eleven (Cameras too, with Rooms): 11 × 33 + 10 × 3.7 = 400 */
+/* eleven (Music too, with Rooms): 11 × 33 + 10 × 3.7 = 400 */
 .hm-menu.hm-menu-11 { gap: calc(37px / 10); }
-.hm-menu.hm-menu-11 .hm-menu-item { height: 33px; font-size: 23px; gap: 14px; }
-.hm-menu.hm-menu-11 .hm-menu-item .material-icons { font-size: 25px; }
+.hm-menu.hm-menu-11 .hm-menu-item { height: 33px; font-size: 22px; padding: 0 18px; gap: 14px; }
+.hm-menu.hm-menu-11 .hm-menu-item .material-icons { font-size: 25px; width: 30px; }
+
+/* twelve (Cameras and Music, with Rooms): 12 × 30 + 11 × 3.4 = 397 */
+.hm-menu.hm-menu-12 { gap: calc(37px / 11); }
+.hm-menu.hm-menu-12 .hm-menu-item { height: 30px; font-size: 21px; padding: 0 16px; gap: 12px; }
+.hm-menu.hm-menu-12 .hm-menu-item .material-icons { font-size: 23px; width: 28px; }
 
 .hm-menu-item {
     height: 52px;

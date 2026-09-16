@@ -78,6 +78,7 @@
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/news"><span class="hmp-settings-pill">${icon('newspaper')}News</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/books"><span class="hmp-settings-pill">${icon('auto_stories')}Books</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/cameras"${window.HomerHA && window.HomerHA.isSetUp() ? '' : ' hidden'}><span class="hmp-settings-pill">${icon('videocam')}Cameras</span></button>
+                            <button type="button" class="hmp-settings hmp-hub" data-go="#/music"><span class="hmp-settings-pill">${icon('library_music')}Music</span></button>
                         </div>
                         <section class="hmp-hero loading" aria-label="On now">
                             <div class="hmp-art"><div class="hmp-art-logo"></div><span class="hmp-badge">Live</span></div>

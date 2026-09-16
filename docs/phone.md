@@ -230,7 +230,26 @@ copying:
   and each says what it will do rather than what it is (**Siren · Sound it**,
   **LED · Auto**). Nothing here needs a press-again confirm: none of them
   throws anything away.
+## Music: a player that outlives the screen
 
+`music/music-phone.js` is a sheet-based screen like Books', with one thing
+worth copying for anything that plays:
+
+- **The player isn't in the screen.** `music/music-model.js` owns the `<audio>`
+  element and the queue on `document.body`, so tearing down either layout (or
+  leaving `#/music` entirely) doesn't stop the music. `music/music-strip.js`
+  draws the now-playing strip on every *other* screen; on a phone it sits above
+  the tab bar (`.homer-chrome #mu-strip { bottom: calc(var(--homer-phone-tabs)
+  + 8px) }`) and the screen's own `.mup-mini` takes over inside Music.
+- **`pagehide` is not the page going away.** Jellyfin Web fires `pagehide` on
+  its own in-app navigations, so a player that stops on `pagehide` (Books does,
+  deliberately) stops every time you change screen. Music reports its position
+  on `pagehide` and only stops on `beforeunload`.
+- Both layouts read `HomerMusicModel.player.state()` and repaint from one
+  `onChange`; the phone's mini player and the TV's strip are the same state
+  drawn twice. A repaint arrives about four times a second, so anything the
+  finger is on (the queue list) is only redrawn when the track actually
+  changes.
 ## The shared TV shell: `shared/shell.css`
 
 The TV screens' stage, palette, top bar (brand and clock), key legend, toast,
@@ -250,6 +269,11 @@ what it does differently.
 - A hidden (automated) browser tab throttles timers to almost nothing and
   doesn't start video, so drive the iframe's timers yourself and fake the
   docked state (`HomerPlayer.docked`/`nowPlaying`) for screenshots.
+- It won't decode **audio** either: an `<audio>` element sits at
+  `readyState 0` / `networkState 2` for ever, even though the same URL fetches
+  fine (and `AudioContext.decodeAudioData` on the bytes works). To shoot Now
+  playing, wrap `HomerMusicModel.player.state` so it returns a position, and
+  fire a `seeked` event on `#homer-music-audio` to make the screen repaint.
 - To see a docked strip with a picture in it without playing anything, pin a
   stand-in: a `<video>` fed by a `canvas.captureStream()`, inside a
   `div.videoPlayerContainer.homer-pinned` at z-index 99995 over the preview's

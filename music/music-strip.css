@@ -1,0 +1,145 @@
+/*
+ * HOMER Music, the now-playing strip (music/music-strip.js). This one is
+ * loaded on every page, not only on #/music, because the strip shows up on
+ * every other screen. It's sized in viewport units, not stage pixels: it sits
+ * over screens whose stages are scaled by different amounts.
+ */
+
+#mu-strip {
+    position: fixed;
+    right: 2vh;
+    bottom: 9vh; /* clear of every screen's key legend */
+    z-index: 99994; /* under the guide (99997) and the docked video (99995) */
+    width: min(30vw, 380px);
+    min-width: 260px;
+    display: none;
+    align-items: center;
+    gap: 1.1vh;
+    padding: 1vh 1.2vh;
+    border-radius: 1.4vh;
+    overflow: hidden;
+    background: rgba(8, 18, 36, 0.94);
+    box-shadow:
+        0 0 0 1px var(--homer-line-strong, rgba(160, 190, 230, 0.24)),
+        0 2vh 5vh rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    font-family: var(--homer-font, "Barlow", sans-serif);
+    color: var(--homer-text, #f4f7fb);
+    cursor: pointer;
+    animation: mu-strip-in 240ms cubic-bezier(.2, .8, .2, 1);
+}
+
+#mu-strip.on { display: flex; }
+
+@keyframes mu-strip-in {
+    from { opacity: 0; transform: translateY(1.4vh); }
+    to { opacity: 1; transform: none; }
+}
+
+#mu-strip * { box-sizing: border-box; }
+
+.mu-strip-art {
+    flex: none;
+    width: 5.2vh;
+    height: 5.2vh;
+    border-radius: 0.8vh;
+    overflow: hidden;
+    background: #0a1628;
+    display: grid;
+    place-items: center;
+    color: var(--homer-faint, #5a6f89);
+    font-size: 3vh;
+}
+
+.mu-strip-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.mu-strip-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2vh;
+    line-height: 1.2;
+}
+
+.mu-strip-t {
+    font-size: 1.9vh;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mu-strip-a {
+    font-size: 1.6vh;
+    font-weight: 500;
+    color: var(--homer-dim, #8ea3bd);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mu-strip-btns { flex: none; display: flex; align-items: center; gap: 0.2vh; }
+
+.mu-strip-b {
+    width: 4.4vh;
+    height: 4.4vh;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: inherit;
+    font-size: 2.6vh;
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+.mu-strip-b:hover { background: rgba(255, 255, 255, 0.14); }
+.mu-strip-b .material-icons { font-size: inherit; line-height: 1; }
+
+.mu-strip-b.play {
+    background: #f4f7fb;
+    color: #06101e;
+    font-size: 3vh;
+}
+
+.mu-strip-b.play:hover { background: #fff; }
+
+/* the hairline of progress along the bottom edge */
+.mu-strip-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 0.4vh;
+    width: 0;
+    background: var(--homer-needle, #ffb020);
+    transition: width 400ms linear;
+}
+
+/* a bar that isn't moving shouldn't look like it's about to */
+#mu-strip:not(.playing) .mu-strip-bar { background: var(--homer-dim, #8ea3bd); }
+
+/* ---------- Phones: above the tab bar, full width ---------- */
+
+@media (max-width: 599px), (max-height: 599px) {
+    #mu-strip {
+        right: 10px;
+        left: 10px;
+        width: auto;
+        min-width: 0;
+        bottom: 10px;
+        gap: 10px;
+        padding: 8px;
+        border-radius: 14px;
+    }
+
+    .homer-chrome #mu-strip { bottom: calc(var(--homer-phone-tabs, 0px) + 8px); }
+    .mu-strip-art { width: 44px; height: 44px; border-radius: 8px; font-size: 24px; }
+    .mu-strip-t { font-size: 15px; }
+    .mu-strip-a { font-size: 13px; }
+    .mu-strip-b { width: 40px; height: 40px; font-size: 24px; }
+    .mu-strip-b.play { font-size: 28px; }
+    .mu-strip-bar { height: 3px; }
+}

@@ -37,6 +37,7 @@
     css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
+    css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/actions.js'); // before the screens: they register their actions with it
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
@@ -77,4 +78,8 @@
     js('books/books-model.js'); // the audiobooks (Jellyfin's Books library) and their player
     js('books/books.js'); // Books (#/books)
     js('books/books-phone.js'); // Books' phone layout
+    js('music/music-model.js'); // the music (Jellyfin's Music library) and its player
+    js('music/music-strip.js'); // the music's now-playing strip on every other screen
+    js('music/music.js'); // Music (#/music)
+    js('music/music-phone.js'); // Music's phone layout
 })();
