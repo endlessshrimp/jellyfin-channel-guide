@@ -178,6 +178,11 @@
 .hm-menu.hm-menu-10 .hm-menu-item { height: 36px; font-size: 24px; }
 .hm-menu.hm-menu-10 .hm-menu-item .material-icons { font-size: 27px; }
 
+/* eleven (Music too, with Rooms): 11 × 33 + 10 × 3.7 = 400 */
+.hm-menu.hm-menu-11 { gap: calc(37px / 10); }
+.hm-menu.hm-menu-11 .hm-menu-item { height: 33px; font-size: 22px; padding: 0 18px; gap: 14px; }
+.hm-menu.hm-menu-11 .hm-menu-item .material-icons { font-size: 25px; width: 30px; }
+
 .hm-menu-item {
     height: 52px;
     display: flex;

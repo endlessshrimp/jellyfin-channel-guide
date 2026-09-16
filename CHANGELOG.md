@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+- **Music** (`#/music`, Home's **Music** item): your own music from Jellyfin's
+  Music library, on the TV, and it **keeps playing while you browse HOMER**.
+  - The player (`music/music-model.js`) owns its own `<audio>` element on
+    `document.body` and is loaded by `homer.js` on every page, not by the
+    screen, so leaving `#/music` doesn't stop it. Every other screen gets a
+    now-playing strip in the corner (`music/music-strip.js`) with the cover,
+    the track, a hairline of progress and ◀◀ ▶ ▶▶; it hides itself on the Music
+    screen, under the guide and in full-screen video. The media keys work from
+    anywhere while something is loaded, and the Actions strip gains Play/Pause,
+    Next track and Music.
+  - **Browse** is a column down the left — whatever the focus is on, its cover
+    big, who it's by, and Play / Shuffle / Instant Mix — beside a wall of album
+    art, with tabs for Recently Added, Artists, Albums, Songs, Playlists and
+    Genres. An album or playlist page lists every track (the one playing lit);
+    an artist or genre page lists their albums.
+  - **Instant Mix** is Jellyfin's `/Items/{id}/InstantMix` — "radio from this"
+    — on an album, an artist, a genre or a track (**I**).
+  - **Now playing**: the cover, the track, artist and album, where you are,
+    what's next, and **synced lyrics** from `/Audio/{id}/Lyrics` — the line
+    you're on lit and scrolling, with the rest faded past the panel's edges.
+    Plain lyrics show unlit. The right column switches to **Up next**, the
+    queue, and OK on a row jumps to it.
+  - Shuffle keeps the album's own order beside it, so turning shuffle off puts
+    the record back in order where you are; repeat is off / all / one; volume,
+    shuffle and repeat are kept per device. Playback is reported to Jellyfin
+    (`/Sessions/Playing`, `/Progress`, `/Stopped`, with the queue), so the
+    server knows what's playing.
+  - Starting music stops HOMER's video; starting a video pauses the music.
+  - **Keys:** arrows and OK; Space or **P** play/pause; **N** / **B** change
+    track; **S** shuffle; **R** repeat; **I** Instant Mix; **+** / **−**
+    volume; ◀ ▶ on the progress bar seek 10 s and on the volume pill change the
+    volume; Esc goes back a view, then back a screen, and the music carries on.
+  - **A phone layout** (`music/music-phone.js`): chips, the art two across,
+    sheets for an album or an artist, a mini player above the tab bar, and Now
+    playing with a volume slider and the lyrics.
+  - Empty library: the screen says so and how to fix it, the way Books does.
+  - **Not gapless.** The next track is preloaded while the current one
+    finishes, so the join is short, but the two aren't stitched
+    sample-accurate.
+- **Fixed:** Jellyfin Web fires `pagehide` on its own in-app navigations, so a
+  player that stops on `pagehide` stops every time you change screen. The music
+  player reports its position on `pagehide` and only stops on `beforeunload`.
+  (Books stops on leaving on purpose, and is unchanged.)
+- Home's menu takes an eleventh item (`hm-menu-11`).
+
 ## v0.4.3
 
 Two things a Siri Remote couldn't do, and one it couldn't reach.

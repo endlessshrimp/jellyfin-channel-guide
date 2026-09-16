@@ -1,0 +1,417 @@
+/*
+ * HOMER Music, phone layout (music/music-phone.js). Scoped to .mu-phone; the
+ * palette comes from #mu-root in music.css, and shared/phone.css puts the
+ * screen between the phone's top bar and tab bar.
+ */
+
+#mu-root.mu-phone {
+    --wash: 47, 140, 255;
+    background: linear-gradient(180deg, #061126 0%, var(--homer-bg0, #02050a) 85%);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    font-size: 16px;
+}
+
+:where(.mu-phone) button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+}
+
+.mup-wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(420px 360px at 20% 0%, rgba(var(--wash), 0.42), transparent 70%),
+        radial-gradient(360px 300px at 100% 20%, rgba(var(--wash), 0.18), transparent 70%);
+    transition: background 600ms ease;
+}
+
+.mup-scroll {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px calc(12px + var(--homer-phone-right, 0px)) 28px calc(12px + var(--homer-phone-left, 0px));
+}
+
+.mup-has-mini .mup-scroll { padding-bottom: 96px; }
+
+/* ---------- The chips ---------- */
+
+.mup-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scrollbar-width: none;
+}
+
+.mup-chips::-webkit-scrollbar { display: none; }
+
+.mup-chip {
+    flex: none;
+    min-height: 40px;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--line, rgba(160, 190, 230, 0.12));
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dim, #8ea3bd);
+    white-space: nowrap;
+}
+
+.mup-chip i { font-style: normal; font-size: 13px; opacity: 0.65; }
+.mup-chip.on { background: rgba(var(--wash), 0.35); border-color: rgba(var(--wash), 0.6); color: #fff; }
+
+/* ---------- The wall ---------- */
+
+.mup-grid.wall {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 14px;
+}
+
+.mup-card { display: block; width: 100%; }
+
+.mup-card-art {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(10, 22, 44, 0.9);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mup-card.artist .mup-card-art { border-radius: 50%; }
+
+.mup-card-t {
+    display: block;
+    margin-top: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mup-card-s {
+    display: block;
+    font-size: 13px;
+    color: var(--dim, #8ea3bd);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mup-card.artist .mup-card-t,
+.mup-card.artist .mup-card-s { text-align: center; }
+
+/* ---------- The song list ---------- */
+
+.mup-song,
+.mup-track {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 56px;
+    padding: 6px 4px;
+    border-radius: 10px;
+}
+
+.mup-song + .mup-song,
+.mup-track + .mup-track { border-top: 1px solid var(--line, rgba(160, 190, 230, 0.12)); }
+
+.mup-song-art {
+    flex: none;
+    width: 46px;
+    height: 46px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: rgba(10, 22, 44, 0.9);
+}
+
+.mup-song-t,
+.mup-track-t {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mup-song-t b,
+.mup-track-t b { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mup-song-t i,
+.mup-track-t i { font-style: normal; font-size: 13px; color: var(--dim, #8ea3bd); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mup-song-d,
+.mup-track-d { flex: none; font-size: 13px; color: var(--dim, #8ea3bd); font-variant-numeric: tabular-nums; }
+
+.mup-track-n {
+    flex: none;
+    width: 30px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--faint, #5a6f89);
+    font-variant-numeric: tabular-nums;
+}
+
+.mup-track-n .material-icons { font-size: 20px; }
+.mup-track.here { background: rgba(255, 176, 32, 0.12); }
+.mup-track.here .mup-track-n,
+.mup-track.here .mup-track-t b { color: var(--needle, #ffb020); }
+
+/* ---------- Sheets ---------- */
+
+.mup-sheet {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: none;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(8, 18, 36, 0.98), rgba(2, 5, 10, 0.99));
+}
+
+.mup-open-page .mup-page,
+.mup-open-playing .mup-playing { display: flex; }
+
+.mup-bar {
+    flex: none;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 0 4px;
+    border-bottom: 1px solid var(--line, rgba(160, 190, 230, 0.12));
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.mup-bar span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mup-back {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+}
+
+.mup-sheet-scroll,
+.mup-np {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px calc(14px + var(--homer-phone-right, 0px)) 28px calc(14px + var(--homer-phone-left, 0px));
+}
+
+.mup-has-mini .mup-sheet-scroll { padding-bottom: 96px; }
+
+/* a page's head */
+.mup-page-head { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+.mup-page-art {
+    width: min(58vw, 240px);
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(10, 22, 44, 0.9);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.mup-page-art.round { border-radius: 50%; }
+
+.mup-page-head h1 {
+    margin: 16px 0 0;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.mup-page-sub { margin-top: 4px; font-size: 16px; font-weight: 600; color: rgba(244, 247, 251, 0.8); }
+
+.mup-page-meta {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 14px;
+    font-size: 13px;
+    color: var(--dim, #8ea3bd);
+}
+
+.mup-page-acts { margin: 18px 0 6px; display: flex; gap: 10px; }
+
+.mup-btn {
+    min-height: 46px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong, rgba(160, 190, 230, 0.24));
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.mup-btn.primary { background: #f4f7fb; color: #06101e; border-color: transparent; }
+.mup-btn .material-icons { font-size: 22px; }
+.mup-page-body { margin-top: 14px; }
+.mup-page-body.wall { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 14px; }
+
+/* ---------- Now playing ---------- */
+
+.mup-np { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+.mup-np-art {
+    width: min(76vw, 320px);
+    aspect-ratio: 1;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(10, 22, 44, 0.9);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6), 0 0 90px rgba(var(--wash), 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.mup-np-t { margin: 20px 0 0; font-size: 22px; font-weight: 800; line-height: 1.2; }
+.mup-np-a { margin-top: 4px; font-size: 15px; color: var(--dim, #8ea3bd); }
+.mup-np-seek { width: 100%; margin-top: 22px; }
+
+.mup-np-track {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.mup-np-track b { display: block; height: 100%; background: var(--needle, #ffb020); }
+
+.mup-np-times {
+    margin-top: 6px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--dim, #8ea3bd);
+    font-variant-numeric: tabular-nums;
+}
+
+.mup-np-times i { font-style: normal; }
+
+.mup-np-ctl {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mup-rb {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 26px;
+}
+
+.mup-rb.big { width: 68px; height: 68px; background: #f4f7fb; color: #06101e; font-size: 38px; }
+.mup-rb.set { color: var(--needle, #ffb020); background: rgba(255, 176, 32, 0.16); }
+.mup-rb .material-icons { font-size: inherit; }
+
+.mup-np-vol {
+    margin-top: 18px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    color: var(--dim, #8ea3bd);
+}
+
+.mup-np-vol input { flex: 1; accent-color: var(--needle, #ffb020); height: 28px; }
+.mup-np-next { margin-top: 14px; font-size: 13px; color: var(--faint, #5a6f89); }
+
+.mup-lyrics { margin-top: 26px; width: 100%; text-align: center; }
+
+.mup-lyr {
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 5px 0;
+    color: rgba(244, 247, 251, 0.34);
+    transition: color 260ms ease;
+}
+
+.mup-lyrics:not(.synced) .mup-lyr { color: rgba(244, 247, 251, 0.8); font-weight: 500; font-size: 17px; }
+.mup-lyr.past { color: rgba(244, 247, 251, 0.22); }
+.mup-lyr.on { color: #fff; }
+
+/* ---------- The mini player ---------- */
+
+.mup-mini {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    min-height: 62px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 14px;
+    background: rgba(12, 26, 48, 0.96);
+    box-shadow: 0 0 0 1px rgba(var(--wash), 0.5), 0 12px 30px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    z-index: 3;
+}
+
+.mup-has-mini .mup-mini { display: flex; }
+
+.mup-mini-art { width: 46px; height: 46px; flex: none; border-radius: 8px; overflow: hidden; background: #0a1628; }
+.mup-mini-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mup-mini-t b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mup-mini-t i { font-style: normal; font-size: 13px; color: var(--dim, #8ea3bd); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mup-mini-b { width: 44px; height: 44px; flex: none; display: grid; place-items: center; font-size: 28px; }
+.mup-mini-b .material-icons { font-size: inherit; }
+.mup-mini-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--needle, #ffb020); }
+
+/* ---------- States ---------- */
+
+.mup-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 80px 20px;
+    text-align: center;
+}
+
+#mu-root.mu-phone[data-state] .mup-state { display: flex; }
+#mu-root.mu-phone:not([data-state]) .mup-state,
+#mu-root.mu-phone[data-state=""] .mup-state { display: none; }
+.mup-state b { font-size: 20px; font-weight: 800; }
+.mup-state span { font-size: 15px; line-height: 1.45; color: var(--dim, #8ea3bd); }
+
+.mup-note {
+    grid-column: 1 / -1;
+    padding: 18px 4px;
+    font-size: 15px;
+    color: var(--dim, #8ea3bd);
+}

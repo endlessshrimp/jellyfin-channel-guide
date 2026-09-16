@@ -235,6 +235,55 @@ top with its chapter ruler, your shelf below, a book page with every chapter,
 and a listening screen (chapter and 30-second skips, speed, sleep timer).
 Progress is saved in Jellyfin. **P** or Play/Pause pauses anywhere.
 
+## Music
+
+Your own music from Jellyfin's Music library (`#/music`, Home's **Music**
+item), and it **keeps playing while you browse HOMER** — the player lives
+outside the screens, so leaving Music doesn't stop it. Every other screen gets
+a small now-playing strip in the corner with the cover, the track and
+◀◀ ▶ ▶▶; clicking it goes back to Now playing.
+
+![The Music screen](docs/screenshots/music-browse.jpg)
+
+- **Browse** is a column down the left — whatever the focus is on, its cover
+  big, who it's by, and **Play**, **Shuffle** and **Instant Mix** — beside a
+  wall of album art. Tabs across it: Recently Added, Artists, Albums, Songs,
+  Playlists, Genres.
+- **An album** (or a playlist): the cover large and every track, the one
+  playing lit. OK on a track starts there.
+- **An artist** (or a genre): their albums, with Play all / Shuffle / Instant
+  Mix for the lot.
+- **Instant Mix** is Jellyfin's own "radio from this" (`/Items/{id}/InstantMix`)
+  and works on an album, an artist, a genre or a track. **I** starts one from
+  whatever the focus is on.
+- **Now playing**: the cover, the track, artist and album, where you are,
+  what's next, and the **lyrics** — the line you're on lit and scrolling when
+  the file has timings (an `.lrc` beside it, or lyrics in its tags). Plain
+  lyrics show unlit. The right column switches between **Lyrics** and
+  **Up next** (the queue; OK on a row jumps to it).
+
+![Now playing, with synced lyrics](docs/screenshots/music-lyrics.jpg)
+
+- **Shuffle** keeps the album's own order beside it, so turning shuffle off
+  puts the record back in order where you are. **Repeat** is off / all / one.
+- Playback is reported to Jellyfin like any other client
+  (`/Sessions/Playing`, `/Progress`, `/Stopped`, with the queue), so the server
+  knows what's playing and play counts land.
+- **Starting music stops HOMER's video; starting a video pauses the music.**
+- Not gapless. The next track is preloaded while the current one finishes, so
+  the join is short, but the two aren't stitched sample-accurate.
+
+**Keys on the Music screen:** arrows move and OK selects; **Space** or **P**
+plays and pauses; **N** and **B** change track; **S** shuffles; **R** cycles
+repeat; **I** starts an Instant Mix; **+** and **−** are the volume; **Esc**
+goes back a view, then back a screen (the music keeps playing). On Now playing,
+◀ ▶ on the progress bar seeks 10 seconds and on the volume pill changes the
+volume. The media keys (Play/Pause, Next, Previous) work from any HOMER screen
+while something is loaded.
+
+Nothing is stored outside Jellyfin except the volume, shuffle and repeat, which
+are kept per device.
+
 ## Getting shows and movies (Sonarr and Radarr)
 
 - Search's **Get it** group lists shows and movies you don't have. OK on one
@@ -317,11 +366,13 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 | **Rooms** | Color (**C**) for the light you're on, Full screen (**F**) |
 | **Home** | Search (**/**), Full screen (**F**) |
 | **Weather**, **Books** | Try again when something failed; Books adds Play/Pause (**P**) |
+| **Music** | Play/Pause (**P**), Next track, Shuffle (**S**), Repeat (**R**), Instant Mix (**I**), Now playing |
+| **Anywhere, with music loaded** | Play/Pause music, Next track, and **Music** to go back to it |
 | **A recording playing full screen** | Skip 30s (**S**) |
 
 A **swipe up** on the Siri Remote's clickpad runs the screen's one main action
 without the strip: **Skip 30s** in the full-screen player, **Search** on the
-Search screen, **Play/Pause** in Books, and from anywhere else — Home included
+Search screen, **Play/Pause** in Books and in Music, and from anywhere else — Home included
 — it opens the **Guide**. A **swipe down** closes the Actions strip, or the
 quick controls panel if that's what's up; with nothing open it does nothing.
 
@@ -376,6 +427,15 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   locked, or HOMER has been in the background, for 3 minutes, so a phone in a
   pocket doesn't hold one of the provider's two streams. A recording or a
   movie just stays paused.
+- **Music** on a phone: chips for Recently Added / Artists / Albums / Songs /
+  Playlists / Genres, the art two across, and a sheet for an album (its tracks)
+  or an artist (their albums) with Play / Shuffle / Mix. A **mini player** sits
+  above the tab bar whenever something is loaded — tap it for the full Now
+  playing, with the cover, the controls, a volume slider and the lyrics. The
+  mini player follows the music onto every other HOMER screen too.
+
+![Music on a phone](docs/screenshots/music-phone.jpg)
+
 - Home, Movies, TV Shows, Search, Recordings, Settings and Weather don't have
   their phone layouts yet: they show their TV layout, shrunk to fit between
   the bars.
@@ -422,6 +482,7 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **Page Up / Page Down** | Jump a screen of channels |
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
 | **M** | The **Actions** strip: what this screen can do right now, each with its own key (arrows move, OK runs, Esc closes). Holding OK on an Apple TV's Siri Remote does the same |
+| **Play/Pause, Next, Previous** | The music (`#/music`), from any HOMER screen while something is loaded |
 | **L** | Quick controls for Home Assistant's lights, scenes, players and thermostat, over whatever's playing (once Home Assistant is connected) |
 | **Esc / Backspace / G** | Close the guide |
 
