@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+- **HOMER's own loading screen, instead of Jellyfin's "Page not found."**
+  Opening one of HOMER's own pages after a reload — `#/weather`, `#/rooms`,
+  `#/cameras`, `#/sports`, `#/news`, `#/books`, `#/music`, `#/playing` — showed
+  Jellyfin's 404 first. Jellyfin Web routes long before HOMER's files land, it
+  knows none of those addresses, so it painted its own "Page not found" (and
+  titled the tab that) until HOMER drew over it. Warm that was about a second
+  and a half; cold, or on the Apple TV, where the web view starts empty every
+  launch, it was long enough to read.
+  - `homer.js` now claims the page in its first few lines, before a single one
+    of HOMER's ~65 files has been asked for: `<html>` gets `homer-booting`,
+    which blanks Jellyfin's page to HOMER's ground. That is the whole of the
+    fix's timing — the claim happens the instant the injector's script runs,
+    and everything else can take as long as it likes.
+  - `shared/loading.js` (new, loaded first) draws what goes over the top: the
+    HOMER mark, the screen's name and a quiet pulse on HOMER's backdrop, sized
+    for a phone, a desktop and a TV. It brings itself down the moment a screen
+    root is up and showing, a frame later so there's no blank in between, and
+    it goes if the address leaves HOMER's pages. It carries its own styles and
+    leans on no other HOMER module, because it runs before any of them exist.
+  - **It is never left behind.** If nothing has drawn after fifteen seconds it
+    says so — "Couldn't open Sports", "HOMER didn't finish loading this
+    screen" — with **Try again** and **Home**. Arrows move between the two and
+    Back/Esc goes Home, so the Apple TV's remote can get out of it too.
+  - **The tab says the screen's name**, and keeps saying it. Jellyfin sets
+    "Page not found" whenever it routes one of HOMER's addresses, which is why
+    Weather sat under that title even after it had drawn; the name is put back
+    now, not just at the start.
+  - Moving between HOMER's own screens is usually instant, so there the
+    loading screen waits 200ms before showing itself: a screen that draws
+    straight away never flickers, and one held up (its stylesheet still
+    coming) is covered.
+  - On a phone it sits between HOMER's bars, the way every phone screen does,
+    so the top bar and tab bar stay usable. On a cold load there are no bars
+    yet and it simply fills the window.
+  - An address that was never HOMER's is left alone, so Jellyfin's real 404
+    still answers for it.
+
 ## v0.4.10
 
 - **Now Playing on a phone:** "Nothing is playing" no longer sits under the

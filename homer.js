@@ -30,6 +30,40 @@
         document.head.appendChild(s);
     };
 
+    // ---------- Claiming the page ----------
+    // Jellyfin Web routes long before HOMER's files land, and it knows none of
+    // HOMER's own pages, so it paints its "Page not found" over the second or
+    // two the rest of this file spends loading — longer cold, and every launch
+    // in the Apple TV app. Nothing below has been fetched yet, so the claim is
+    // made here, in the one file the injector runs, and it is the whole of it:
+    // <html> gets homer-booting, blanking Jellyfin's page to HOMER's ground.
+    // shared/loading.js (first in the list below) draws HOMER's loading screen
+    // over that and takes both down when the screen is up; it owns the class
+    // from the moment it loads, and the screen names with it. An address that
+    // isn't one of HOMER's is left alone, so Jellyfin's real 404 still answers.
+    const OURS = /^#\/(weather|rooms|cameras|sports|news|books|music|playing)(\?|$)/;
+    if (!document.getElementById('homer-booting-css')) {
+        const boot = document.createElement('style');
+        boot.id = 'homer-booting-css';
+        boot.textContent = `
+            html.homer-booting { background: #02050a !important; }
+            html.homer-booting .skinHeader,
+            html.homer-booting .skinBody,
+            html.homer-booting .mainDrawer,
+            html.homer-booting .mainDrawerHandle,
+            html.homer-booting .backdropContainer,
+            html.homer-booting .docspinner { visibility: hidden !important; }`;
+        document.head.appendChild(boot); // always: shared/loading.js uses it too
+    }
+    if (OURS.test(location.hash)) {
+        document.documentElement.classList.add('homer-booting');
+        // never blank the page for good: if shared/loading.js never arrives,
+        // give Jellyfin back whatever it was going to show
+        setTimeout(() => {
+            if (!window.HomerLoading) document.documentElement.classList.remove('homer-booting');
+        }, 30000);
+    }
+
     css('shared/tokens.css', 'homer-tokens');
     css('shared/shell.css', 'homer-shell'); // the TV screens' shared stage, top bar and legend
     css('skin/skin.css', 'homer-skin');
@@ -38,6 +72,7 @@
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
     css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
+    js('shared/loading.js'); // first of all: HOMER's loading screen, over Jellyfin's 404
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/menu.js'); // before the screens: Home and Now Playing draw its menu
     js('shared/actions.js'); // before the screens: they register their actions with it

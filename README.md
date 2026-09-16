@@ -632,6 +632,25 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   have the screens.
 
 ![Now Playing on a phone](docs/screenshots/playing-phone.jpg)
+## While a screen opens
+
+Jellyfin Web doesn't know HOMER's own addresses (`#/weather`, `#/rooms`,
+`#/cameras`, `#/sports`, `#/news`, `#/books`, `#/music`, `#/playing`), so
+opening one after a reload used to show Jellyfin's "Page not found" until
+HOMER had loaded. HOMER now covers that with its own loading screen — the mark,
+the screen you asked for, and a quiet pulse — from the moment the script runs
+until the screen is drawn. On a phone it sits between HOMER's bars.
+
+![HOMER's loading screen](docs/screenshots/loading-screen.jpg)
+
+If nothing draws within fifteen seconds it says so rather than spinning, with
+**Try again** and **Home** (arrows move between them, Back or Esc goes Home).
+
+![Couldn't open Weather](docs/screenshots/loading-late.jpg)
+
+An address that isn't one of HOMER's is left alone, so Jellyfin's own
+"Page not found" still answers for it.
+
 ## Install
 
 The guide is a script, so it needs the
