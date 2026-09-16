@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.8
 
 - **Now Playing** (`#/playing`, the menu's **Now Playing** item): everything
   playing anywhere in the house on one screen, with the controls for it. No
