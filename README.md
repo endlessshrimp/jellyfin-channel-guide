@@ -216,7 +216,7 @@ Once Home Assistant is connected, **Cameras** (Home's menu, after Rooms, or
 the **Cameras** chip on Home on a phone) puts every camera in the house on one
 wall and the doorbell's rings where you can see them.
 
-![The camera wall](screenshots/cameras-wall.jpg)
+![The camera wall](docs/screenshots/cameras-wall.jpg)
 
 - **The wall.** One tile per camera, the doorbell first and twice the size.
   Every tile shows a still that refreshes every few seconds; the tile you're
@@ -227,7 +227,7 @@ wall and the doorbell's rings where you can see them.
   beside it, and a strip of what it saw underneath. **▲▼** moves between the
   three, **◀▶** along a row.
 
-  ![The doorbell's page](screenshots/cameras-doorbell.jpg)
+  ![The doorbell's page](docs/screenshots/cameras-doorbell.jpg)
 
 - **The controls** are whatever the camera really has, found on its own
   Home Assistant device: **Siren**, **Quick reply** (plays the camera's first
@@ -472,7 +472,7 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   then the other cameras and the placeholders. Tap a camera to open it — live
   view, its controls, its own Recent strip — and **‹ Cameras** to come back.
 
-  ![Cameras on a phone](screenshots/cameras-phone.png)
+  ![Cameras on a phone](docs/screenshots/cameras-phone.png)
 
 - Every HOMER screen has a phone layout of its own now — the guide, Home,
   Movies and TV Shows with their details pages, Search, Recordings, Settings,
