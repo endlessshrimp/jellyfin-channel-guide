@@ -21,7 +21,9 @@
  * - The guide lists the hub's channels (a filter on the lineup), in groups,
  *   with what's on now (and its progress) and next. OK tunes one into the TV
  *   window; F goes full screen.
- * - Tabs switch the content area; each tab's render(ctx) fills it.
+ * - Tabs switch the content area; each tab's render(ctx) fills it. ▲ from the
+ *   top of the content goes up into the tab row, ◀▶ run along it without
+ *   switching anything, OK opens a tab and ▼ comes back to where it left.
  * - The ticker (shared/ticker.js) runs along the bottom.
  * - On a phone (for a hub with phone: true): a column between HOMER's bars (the video strip on top while
  *   something plays, with ✕; the tabs, with Channels last for the guide; the
@@ -608,6 +610,7 @@
 
         // ----- focus (spatial, like Home) -----
         let focused = null;
+        let tabReturn = null; // where the focus was before it went up into the tabs
         const memory = new Map(); // a [data-hb-memory] container -> its last focused item
         const scroller = (n) => n && n.parentElement && n.parentElement.closest('[data-hb-scroll]');
         const scrollerX = (n) => n && n.parentElement && n.parentElement.closest('[data-hb-scroll-x]');
@@ -640,7 +643,7 @@
                 else if (a.right > b.right) row.scrollLeft += (a.right - b.right) / k + 8;
             }
         };
-        // hover: the mouse put it there (a tab it lands on doesn't switch; a click does)
+        // hover: the mouse put it there, so nothing acts on it (a click does)
         const setFocus = (n, { scroll = true, hover = false } = {}) => {
             if (!n || !stage.contains(n)) return;
             if (focused === n) return;
@@ -651,11 +654,15 @@
             }
             focused = n;
             n.classList.add('hb-focus');
+            // the tab row is a zone of its own: coming up into it remembers
+            // where from, so ▼ goes back to the very thing it left
+            if (n.closest('.hb-tabs')) { if (was && !was.closest('.hb-tabs')) tabReturn = was; }
+            else tabReturn = null;
             if (panel.contains(n)) lastKey = n.dataset.key || null;
             const mb = memoryBox(n);
             if (mb) memory.set(mb, n);
             if (scroll) reveal(n);
-            if (n._hbFocus && !(hover && n.classList.contains('hb-tab'))) n._hbFocus();
+            if (n._hbFocus && !hover) n._hbFocus();
             updateLegend();
         };
         const candidates = () => [...stage.querySelectorAll('.hb-focusable')].filter((n) => {
@@ -922,7 +929,9 @@
         }] : []);
         let tabIndex = -1;
         let tabCleanup = [];
-        let tabTimer = 0;
+        // the tab row remembers the tab you're on, so coming back up into it
+        // lands there and not on whichever tab the focus wandered past
+        const rememberTab = () => { if (tabEls[tabIndex]) memory.set(tabsEl, tabEls[tabIndex]); };
         const tabEls = tabs.map((t, k) => {
             const b = el('div', 'hb-tab hb-focusable', `${t.icon ? icon(t.icon) : ''}<span>${esc(t.label)}</span>`);
             b.dataset.okLabel = 'Open';
@@ -932,10 +941,16 @@
                 const first = candidates().find((n) => panel.contains(n));
                 if (first) setFocus(first);
             };
-            // landing on a tab shows it (after a beat, so arrowing across is quick)
-            b._hbFocus = () => {
-                clearTimeout(tabTimer);
-                tabTimer = setTimeout(() => showTab(k), 260);
+            // Moving along the row doesn't switch anything — OK does — so ▼
+            // can drop back out to the row and column the focus came up from.
+            // (Without that, a remote could only look at the tabs by changing
+            // them, and there'd be nothing to come back to.)
+            b._hbKey = (dir) => {
+                if (dir !== 'down') return false;
+                if (!tabReturn || !stage.contains(tabReturn) || tabReturn.closest('.hb-tabs')) return false;
+                rememberTab();
+                setFocus(tabReturn);
+                return true;
             };
             tabsEl.appendChild(b);
             return b;
@@ -978,12 +993,12 @@
         };
         let lastKey = null;
         const showTab = (k, { force = false } = {}) => {
-            clearTimeout(tabTimer);
             if (k === tabIndex && !force) return;
             tabCleanup.forEach((fn) => safe(fn));
             tabCleanup = [];
             tabIndex = k;
             tabEls.forEach((b, i) => b.classList.toggle('on', i === k));
+            rememberTab();
             if (tabs[k]) lastTabs.set(def.id, tabs[k].key);
             panelIn.innerHTML = '';
             panel.scrollTop = 0;
@@ -1160,6 +1175,22 @@
             root.classList.add('hb-no-ticker');
         }
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // What the hub's own keys do, for a remote that hasn't got them. Both
+        // hubs get it from here, under their own name.
+        const tabLabel = (k) => (tabs.length ? tabs[(k + tabs.length) % tabs.length].label : '');
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const out = [];
+            if (tabs.length > 1) {
+                out.push(
+                    { id: 'nexttab', key: ']', icon: 'chevron_right', label: 'Next section', sub: tabLabel(tabIndex + 1), run: () => focusTab(tabIndex + 1) },
+                    { id: 'prevtab', key: '[', icon: 'chevron_left', label: 'Previous section', sub: tabLabel(tabIndex - 1), run: () => focusTab(tabIndex - 1) }
+                );
+            }
+            if (docked()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: fullscreen });
+            return out;
+        }, { id: def.id, title: def.title || def.id }) : () => {};
+
         // ----- open -----
         const minuteTimer = setInterval(() => { guide.tick(); paintTv(); }, 30000);
         guide.load().catch((err) => {
@@ -1204,13 +1235,13 @@
             teardown() {
                 alive = false;
                 if (def.onClose) safe(() => def.onClose(api_));
+                offActions();
                 tabCleanup.forEach((fn) => safe(fn));
                 hubPolls.forEach((p) => p.stop());
                 cleanups.forEach((fn) => safe(fn));
                 if (ticker) ticker.destroy();
                 clearInterval(clockTimer);
                 clearInterval(minuteTimer);
-                clearTimeout(tabTimer);
                 clearTimeout(toastTimer);
                 safe(wxDetach);
                 window.removeEventListener('keydown', onKey, true);

@@ -1050,12 +1050,15 @@
 
 /* ---------- Channel categories ---------- */
 
+/* the padding is room for a focused chip's ring, which would otherwise be
+   clipped; the chips themselves still start at the stage's 72px margin */
 .cg-cats {
     position: absolute;
-    left: 72px;
-    right: 72px;
-    top: 484px;
+    left: 66px;
+    right: 66px;
+    top: 478px;
     height: 46px;
+    padding: 6px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1173,3 +1176,99 @@
 
 .cg-brand.homer-home:hover .cg-brand-mark::before { display: none; }
 .cg-brand.homer-home:hover .cg-brand-mark .material-icons { display: block; }
+
+/* ---------- A chip the remote is on ---------- */
+/* The categories and the country switch are one row the arrows can move into
+   (▲ off the top channel). The focused chip gets HOMER's focus ring; the one
+   that's applied keeps its filled look, so "where I am" and "what's on" stay
+   telling apart at ten feet. */
+
+.cg-cat.foc,
+.cg-country.foc {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
+}
+
+.cg-cat.foc .cg-cat-num { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.cg-cat.foc .cg-cat-count,
+.cg-country.foc .cg-cat-count { color: rgba(255, 255, 255, 0.85); }
+
+.cg-cat.on.foc,
+.cg-country.on.foc {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    color: #fff;
+}
+
+.cg-country.on.foc .cg-cat-count { color: rgba(255, 255, 255, 0.85); }
+
+/* ---------- Large ---------- */
+/* The same guide for a couch instead of a desk: four channels instead of five,
+   two hours of listings instead of three, and the titles, channel names and
+   numbers about 40% bigger. Everything else — the info panel, the preview and
+   its now/next bar, the legend — keeps its place, so nothing spills out of the
+   1080-tall stage at 1600x900 or at 1920x1080. (guide.js: SIZES.) */
+
+/* The filter chips keep Standard's size: there are eight categories and five
+   countries, and at Large they would run off the end of a 1920-wide stage.
+   They're reachable with the arrows now (and carry a focus ring that reads
+   from the couch), which is what actually made them usable from a remote. */
+#cg-root.cg-large .cg-cats { top: 466px; }
+
+#cg-root.cg-large .cg-grid { top: 536px; }
+
+#cg-root.cg-large .cg-timebar { height: 56px; }
+#cg-root.cg-large .cg-rows { top: 56px; }
+#cg-root.cg-large .cg-slot { font-size: 26px; }
+#cg-root.cg-large .cg-timebar-day { font-size: 20px; }
+
+/* 4 rows x 98px = the 392px the grid has for them (guide.js SIZES.large.rowH) */
+#cg-root.cg-large .cg-row { height: 98px; }
+
+#cg-root.cg-large .cg-chan {
+    gap: 12px;
+    padding: 0 16px 0 20px;
+}
+
+#cg-root.cg-large .cg-chan-num {
+    width: 80px;
+    font-size: 36px;
+}
+
+#cg-root.cg-large .cg-chan .cg-logo-chip {
+    height: 62px;
+    width: 168px;
+}
+
+#cg-root.cg-large .cg-chan .cg-logo-chip img {
+    max-height: 46px;
+    max-width: 146px;
+}
+
+#cg-root.cg-large .cg-chan-fallback { font-size: 24px; }
+
+#cg-root.cg-large .cg-prog { padding: 11px 18px 0 20px; }
+#cg-root.cg-large .cg-prog-title { font-size: 32px; }
+
+#cg-root.cg-large .cg-prog-sub {
+    margin-top: 4px;
+    font-size: 24px;
+}
+
+#cg-root.cg-large .cg-rec-btn {
+    height: 46px;
+    font-size: 20px;
+}
+
+#cg-root.cg-large .cg-legend { font-size: 21px; }
+
+#cg-root.cg-large .cg-key {
+    height: 34px;
+    min-width: 38px;
+    font-size: 18px;
+}
+
+/* narrower than 16:9: the legend has less room, so it tightens like Standard's */
+#cg-root.cg-large.cg-compact .cg-legend { gap: 20px; font-size: 18px; }
+#cg-root.cg-large.cg-compact .cg-key { height: 30px; font-size: 16px; }

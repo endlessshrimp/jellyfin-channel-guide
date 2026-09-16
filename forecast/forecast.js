@@ -1194,6 +1194,17 @@
         window.addEventListener('resize', fit);
         stage.addEventListener('click', onClick);
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // Nothing on this screen moves, so there are only the two things the
+        // legend ever offers; with neither of them the strip skips Weather
+        // and shows the Guide, Home and the quick controls on their own.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const out = [];
+            if (feed.status() === 'error') out.push({ id: 'retry', icon: 'refresh', label: 'Try again', run: () => ok() });
+            if (docked()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: fullscreen });
+            return out;
+        }, { id: 'weather', title: 'Weather' }) : () => {};
+
         syncDocked();
         feed.start();
 
@@ -1202,6 +1213,7 @@
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
+                offActions();
                 feed.stop();
                 radar.teardown();
                 window.removeEventListener('keydown', onKey, true);

@@ -272,9 +272,77 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
   browser's floating window brings the guide up behind it.
 - Over a full-screen video, the preview window shows the live picture of what
   you're watching.
+- **Two sizes** (Settings → **Guide size**). **Standard** is five channels and
+  three hours of listings at a time. **Large** is four channels and two hours,
+  with the titles, channel names and numbers about 40% bigger — the same guide
+  read from a couch instead of a desk. Changing it redraws the open guide where
+  it stands, on the same channel and program; nothing reloads. HOMER's Apple TV
+  app starts on Large, a browser on Standard, and a choice you make yourself
+  always wins (it's kept per device).
+- **The filter chips are part of the arrows.** **▲** off the top channel moves
+  up into the category and country row, **◀ ▶** run along it, **OK** picks and
+  **▼** drops back onto the program you left. **[ ]**, **1–8** and **C** still
+  do the same thing from the grid, so nothing changes if you have a keyboard.
 - Scales a fixed 1920×1080 layout to fit any window, the way a TV UI does.
 - Uses your existing Jellyfin sign-in. There's nothing to configure and no
   separate account or API key.
+
+Standard and Large, both on a 1920×1080 stage:
+
+![The guide at Standard size](docs/screenshots/guide-standard.jpg)
+
+![The guide at Large size](docs/screenshots/guide-large.jpg)
+
+## Actions, for a remote with no letter keys
+
+HOMER's shortcuts are letters, and an Apple TV's Siri Remote hasn't got any. So
+every screen can put what it offers on screen: **hold OK** on the Siri Remote
+for about half a second, or press **M** on a keyboard, and an **Actions** strip
+comes up over the screen with the things that screen can do right now — each
+with its name, its icon and its letter, so the strip teaches the shortcut
+rather than replacing it. Arrows move, **OK** runs it, **Back/Esc** closes.
+
+![The Actions strip over the guide](docs/screenshots/actions-strip.jpg)
+
+What's in it depends on where you are, and always ends with the three that work
+anywhere: **Guide**, **Home** and **Quick controls**.
+
+| Screen | Its own actions |
+| --- | --- |
+| **Guide** | Record / Cancel / Stop (**R**), Get new episodes (**E**), Back to now (**N**, while now is off screen), Filters (**▲**), Next category (**[ ]**), Next country (**C**), Filter channels (**/**), Exit guide |
+| **Search** | What OK does on the highlighted result, Record (**R**), Get new episodes (**E**), Result group (**▲**), Search (**/**) |
+| **Movies / TV Shows** | What OK does on the highlighted title, Sort (**▲**), Filter (**/**) |
+| **Recordings** | What OK does on the highlighted recording, Next tab (**[ ]**), All recordings (**◀**, inside a show) |
+| **Sports / News** | Next section (**]**), Previous section (**[**), Full screen (**F**, while the video is docked) |
+| **Rooms** | Color (**C**) for the light you're on, Full screen (**F**) |
+| **Home** | Search (**/**), Full screen (**F**) |
+| **Weather**, **Books** | Try again when something failed; Books adds Play/Pause (**P**) |
+| **A recording playing full screen** | Skip 30s (**S**) |
+
+A **swipe up** on the Siri Remote's clickpad runs the screen's one main action
+without the strip: **Skip 30s** in the full-screen player, **Search** on the
+Search screen, **Play/Pause** in Books, and from anywhere else — Home included
+— it opens the **Guide**. A **swipe down** closes the Actions strip, or the
+quick controls panel if that's what's up; with nothing open it does nothing.
+
+The Apple TV app sends these as DOM events on `window`, so anything else that
+drives HOMER can too:
+
+```js
+window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action: 'menu' } }));      // the strip
+window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action: 'swipe-up' } }));  // the main action
+window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action: 'swipe-down' } })); // close what's open
+```
+
+A screen registers what it offers with `shared/actions.js`
+(`HomerActions.provide(...)`); its header comment is the contract.
+
+## Settings
+
+**Settings** (Home → Settings, `#/mypreferencesmenu`) replaces Jellyfin Web's
+preference pages with a cable-box style screen. Audio language, Subtitles and
+Subtitle language are saved to your Jellyfin account; **Streaming quality**,
+**Guide size**, **Weather location** and **Home Assistant** are per device.
 
 ## On a phone
 
@@ -350,8 +418,10 @@ aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 | **/** | Filter by channel name/number or show title (Esc clears) |
 | **[ ] / 1–8** | Switch channel category: All, Favorites, Local, News, Sports, Movies, Kids, Entertainment |
 | **C** | Switch country: All, USA, UK, Canada, France, Other (combines with the category) |
+| **▲ from the top channel** | Move up into the guide's filter chips: **◀ ▶** along them, **OK** picks, **▼** back to the program you left. Search, Movies, TV Shows, Recordings and the Sports/News hubs reach their own chip and tab rows the same way |
 | **Page Up / Page Down** | Jump a screen of channels |
 | **H** | Go to Home (a playing channel keeps playing in Home's preview) |
+| **M** | The **Actions** strip: what this screen can do right now, each with its own key (arrows move, OK runs, Esc closes). Holding OK on an Apple TV's Siri Remote does the same |
 | **L** | Quick controls for Home Assistant's lights, scenes, players and thermostat, over whatever's playing (once Home Assistant is connected) |
 | **Esc / Backspace / G** | Close the guide |
 

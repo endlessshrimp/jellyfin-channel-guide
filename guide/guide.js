@@ -6,10 +6,17 @@
  * header and binds the "g" key. It runs inside the signed-in Jellyfin Web page
  * and uses that session's API access.
  *
- * Remote/keyboard: arrows move (◀▶ past the edge pages through time), OK/Enter
- * watches the channel (or records a program that hasn't started), R records the
+ * Remote/keyboard: arrows move (◀▶ past the edge pages through time, ▲ off the
+ * top channel goes up into the filter chips and ▼ comes back), OK/Enter watches
+ * the channel (or records a program that hasn't started), R records the
  * selected program (R twice cancels a recording), E gets a show's new episodes
- * through Sonarr (shared/arr.js; E twice), N comes back to now, Esc/Back closes.
+ * through Sonarr (shared/arr.js; E twice), N comes back to now, M puts up the
+ * Actions strip (shared/actions.js) for a remote with no letter keys, Esc/Back
+ * closes.
+ *
+ * Size: Standard draws five channels and three hours at a time, Large four and
+ * two with everything about 40% bigger, for a TV across the room. Settings
+ * picks (HOMER Settings → Guide size); the Apple TV app starts on Large.
  *
  * The guide's data and actions (channels, listings, recordings, watching) are
  * in guide/guide-model.js. This file draws the TV layout; on a phone
@@ -35,8 +42,6 @@
         : `https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v${VERSION}/guide/`;
     const QUERY = (scriptSrc.match(/\?.*$/) || [''])[0];
 
-    const WINDOW_MIN = 180; // one screen of the grid
-    const PAGE_MIN = WINDOW_MIN / 2; // ◀▶ past the edge moves at least half a screen
     const SLOT_MIN = 30;
     const MIN_MS = 60000;
     // The stage is always 1080 tall and as wide as the window's shape allows
@@ -45,10 +50,35 @@
     const MIN_STAGE_W = 1600;
     const SIDE = 72;
     const CHAN_COL = 300;
-    const ROW_H = 76;
-    const VISIBLE_ROWS = 5;
     const PLACEHOLDER = /\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/;
     const BTN_CLASS = 'headerChannelGuideButton';
+
+    // ---------- Guide size ----------
+    // Standard is the guide as it has always been: five channels and three
+    // hours of listings at a time. Large draws four channels and two hours,
+    // with the titles, channel names and numbers about 40% bigger — the same
+    // guide read from a couch instead of a desk. guide.css does the sizes
+    // (#cg-root.cg-large); these are the numbers the layout counts in.
+    //
+    // The Apple TV app starts on Large and a browser on Standard, but a choice
+    // made in Settings always wins and is kept on this device. (The phone
+    // layout draws itself and isn't affected.)
+    const SIZE_KEY = 'homer-guide-size';
+    const SIZES = {
+        standard: { key: 'standard', label: 'Standard', window: 180, rowH: 76, rows: 5 },
+        large: { key: 'large', label: 'Large', window: 120, rowH: 98, rows: 4 }
+    };
+    const sizeDefault = () => (window.HOMER_TVAPP ? 'large' : 'standard');
+    // what Settings saved, or '' when it has never been asked
+    const sizeSaved = () => {
+        try {
+            const v = localStorage.getItem(SIZE_KEY);
+            return SIZES[v] ? v : '';
+        } catch {
+            return '';
+        }
+    };
+    const sizeNow = () => sizeSaved() || sizeDefault();
 
     // ---------- Jellyfin session ----------
 
@@ -303,11 +333,40 @@
         ensureCss().then(() => { if (guide === next) next.show(); });
     };
 
+    // Settings changed the guide size: draw the open guide again at the new
+    // size, on the same channel and time, so nothing has to be reloaded.
+    const setSize = (key) => {
+        if (!SIZES[key]) return false;
+        const before = sizeNow();
+        try {
+            localStorage.setItem(SIZE_KEY, key);
+        } catch { /* storage blocked: this session only */ }
+        if (key === before || !guide || guide.phone) return true;
+        const server = getServer();
+        const g = guide;
+        const at = g.state();
+        g.teardown();
+        guide = null;
+        if (!server || !model) return true;
+        guide = draw(server, at);
+        const next = guide;
+        ensureCss().then(() => { if (guide === next) next.show(); });
+        return true;
+    };
+
     const createGuide = (server, state) => {
         const m = model; // channels, listings and recordings (guide-model.js)
         const { CATEGORIES, COUNTRIES } = M();
+        // the size this guide was drawn at; it never changes under itself
+        // (setSize draws a new one instead)
+        const SIZE = SIZES[sizeNow()] || SIZES.standard;
+        const WINDOW_MIN = SIZE.window; // one screen of the grid
+        const PAGE_MIN = WINDOW_MIN / 2; // ◀▶ past the edge moves at least half a screen
+        const ROW_H = SIZE.rowH;
+        const VISIBLE_ROWS = SIZE.rows;
         const root = el('div');
         root.id = 'cg-root';
+        root.classList.toggle('cg-large', SIZE.key === 'large');
         root.style.visibility = 'hidden'; // until guide.css has loaded
         const stage = el('div');
         stage.id = 'cg-stage';
@@ -348,15 +407,19 @@
                 <div class="cg-rows"><div class="cg-rows-inner"></div><div class="cg-needle"></div><div class="cg-empty"></div></div>
             </div>
             <div class="cg-legend">
-                <span><span class="cg-key">▲▼</span>Channels</span>
-                <span><span class="cg-key">◀▶</span>Time</span>
-                <span data-action="now" class="cg-legend-now" hidden><span class="cg-key">N</span>Back to now</span>
-                <span data-action="ok" class="cg-legend-ok"><span class="cg-key">OK</span><span class="cg-legend-ok-label">Watch</span></span>
-                <span class="cg-legend-rec"><span class="cg-key rec">R</span><span class="cg-legend-rec-label">Record</span></span>
-                <span data-action="search"><span class="cg-key">/</span>Filter</span>
-                <span data-action="cat-next"><span class="cg-key">[ ]</span>Category</span>
-                <span data-action="country-next"><span class="cg-key">C</span>Country</span>
+                <span class="cg-legend-grid"><span class="cg-key">▲▼</span>Channels</span>
+                <span class="cg-legend-grid"><span class="cg-key">◀▶</span>Time</span>
+                <span data-action="now" class="cg-legend-now cg-legend-grid" hidden><span class="cg-key">N</span>Back to now</span>
+                <span data-action="ok" class="cg-legend-ok cg-legend-grid"><span class="cg-key">OK</span><span class="cg-legend-ok-label">Watch</span></span>
+                <span class="cg-legend-rec cg-legend-grid"><span class="cg-key rec">R</span><span class="cg-legend-rec-label">Record</span></span>
+                <span data-action="search" class="cg-legend-grid"><span class="cg-key">/</span>Filter</span>
+                <span data-action="cat-next" class="cg-legend-grid"><span class="cg-key">[ ]</span>Category</span>
+                <span data-action="country-next" class="cg-legend-grid"><span class="cg-key">C</span>Country</span>
+                <span class="cg-legend-cats" hidden><span class="cg-key">◀▶</span>Filters</span>
+                <span class="cg-legend-cats" hidden><span class="cg-key">OK</span>Choose</span>
+                <span class="cg-legend-cats" hidden><span class="cg-key">▼</span>Channels</span>
                 <span class="spacer"></span>
+                <span data-action="actions"><span class="cg-key">M</span>Actions</span>
                 <span data-action="home"><span class="cg-key">H</span>Home</span>
                 <span data-action="close"><span class="cg-key">ESC</span>Exit guide</span>
             </div>`;
@@ -472,6 +535,12 @@
         let rows = [];
         let order = []; // indices of the rows currently shown (all of them unless filtering)
         let sel = { row: 0, col: 0 };
+        // Where the remote is: the channel grid, or the row of filter chips
+        // above it. ▲ off the top channel goes up into the chips, ▼ comes back
+        // to the same program. (The keyboard's [ ] and C still work from
+        // either zone, so nothing changes for a keyboard.)
+        let zone = 'grid'; // grid | cats
+        let catFocus = 0;
         const vpos = (r) => order.indexOf(r);
         fit(); // after `rows` exists: fit() relayouts the grid when the width changes
         // programId -> Jellyfin timer (the model keeps them)
@@ -594,6 +663,7 @@
             // program, which shows its ● button; a second tap watches.
             cell.addEventListener('click', () => {
                 touched = true;
+                leaveCats(); // a click on a program is back in the grid
                 const c = rowData.cells.indexOf(cellData);
                 const again = sel.row === rowData.i && sel.col === c;
                 select(rowData.i, c, { scroll: false });
@@ -810,8 +880,15 @@
         const recLabel = $('.cg-legend-rec-label');
         const recItem = $('.cg-legend-rec');
         const nowItem = $('.cg-legend-now');
+        // the grid's hints and the filter row's swap places with the zone
+        const legendGrid = [...stage.querySelectorAll('.cg-legend .cg-legend-grid')];
+        const legendCats = [...stage.querySelectorAll('.cg-legend .cg-legend-cats')];
         const recVerb = (c) => (!isSet(c) ? 'Record' : recordingNow(c) ? 'Stop recording' : 'Cancel recording');
         const updateLegend = () => {
+            const inCats = zone === 'cats';
+            legendGrid.forEach((x) => { x.hidden = inCats; });
+            legendCats.forEach((x) => { x.hidden = !inCats; });
+            if (inCats) return;
             nowItem.hidden = nowInView();
             const cur = current();
             const c = cur && cur.cell;
@@ -1040,7 +1117,11 @@
 
         const step = (d) => {
             const v = vpos(sel.row) + d;
-            if (v < 0 || v >= order.length) return;
+            if (v < 0) {
+                enterCats(); // off the top channel: up into the filter chips
+                return;
+            }
+            if (v >= order.length) return;
             select(order[v], nearestCol(order[v]));
         };
 
@@ -1310,6 +1391,50 @@
             const cb = ev.target.closest('.cg-country');
             if (cb) setCountry(cb.dataset.country);
         });
+        // The categories and the country switch are one row of chips. Without a
+        // keyboard there was no way to reach them, so they're part of the
+        // arrows now: ▲ off the top channel moves up into the row, ◀▶ run
+        // along it, OK picks, and ▼ (or Back) drops straight back onto the
+        // program you left.
+        const catChips = () => [...catBar.querySelectorAll('.cg-cat, .cg-country')];
+        const markChips = () => {
+            catChips().forEach((b, i) => {
+                const on = zone === 'cats' && i === catFocus;
+                b.classList.toggle('foc', on);
+                // the row is wider than the stage on a 16:9 screen: slide the
+                // focused chip into view rather than leaving it off the end
+                if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            });
+        };
+        const enterCats = () => {
+            const chips = catChips();
+            if (!chips.length || zone === 'cats') return;
+            zone = 'cats';
+            catFocus = Math.max(0, chips.findIndex((b) => b.classList.contains('on'))); // start on what's applied
+            markChips();
+            updateLegend();
+        };
+        const leaveCats = () => {
+            if (zone !== 'cats') return;
+            zone = 'grid';
+            catBar.scrollLeft = 0; // the row goes back to how it sits when nobody's in it
+            markChips();
+            updateLegend();
+        };
+        const moveChip = (d) => {
+            const chips = catChips();
+            if (!chips.length) return;
+            catFocus = Math.max(0, Math.min(chips.length - 1, catFocus + d));
+            markChips();
+        };
+        const runChip = () => {
+            const b = catChips()[catFocus];
+            if (!b) return;
+            if (b.dataset.cat) setCategory(b.dataset.cat);
+            else if (b.dataset.country) setCountry(b.dataset.country); // rebuilds the row
+            markChips();
+        };
+
         const clearFilter = () => {
             searchInput.value = '';
             applyFilter('');
@@ -1340,6 +1465,17 @@
                 } else {
                     ev.stopImmediatePropagation();
                 }
+                return;
+            }
+            // up in the filter row: the arrows and OK belong to the chips
+            if (zone === 'cats' && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(k)) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                if (ev.repeat && (k === 'Enter' || k === ' ')) return;
+                if (k === 'ArrowLeft') moveChip(-1);
+                else if (k === 'ArrowRight') moveChip(1);
+                else if (k === 'Enter' || k === ' ') runChip();
+                else if (k !== 'ArrowUp') leaveCats(); // nothing above the filters
                 return;
             }
             if (k === '[' || k === ']') {
@@ -1423,7 +1559,51 @@
             else if (action === 'country-next') cycleCountry();
             else if (action === 'close') close();
             else if (action === 'home') goHome();
+            else if (action === 'actions' && window.HomerActions) window.HomerActions.open();
         };
+
+        // ---------- The Actions strip (shared/actions.js) ----------
+        // What this guide can do right now, for a remote with no letter keys:
+        // held OK on the Apple TV remote (or M) puts these up as a strip. Every
+        // one of them is a key that already works here.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const cur = current();
+            const c = cur && cur.cell;
+            const name = c && !c.unknown && c.p ? c.p.Name : '';
+            const nextCat = CATEGORIES[(CATEGORIES.findIndex((x) => x.key === category) + 1) % CATEGORIES.length];
+            const nextCountry = COUNTRIES[(COUNTRIES.findIndex((x) => x.key === country) + 1) % COUNTRIES.length];
+            const list = [
+                {
+                    id: 'record',
+                    key: 'R',
+                    icon: 'fiber_manual_record',
+                    label: c ? recVerb(c) : 'Record',
+                    sub: name,
+                    run: record,
+                    disabled: !c || !recordable(c)
+                }
+            ];
+            if (arrRun) {
+                list.push({
+                    id: 'arr-new',
+                    key: 'E',
+                    icon: 'library_add',
+                    label: 'Get new episodes',
+                    sub: arrShowy(c) ? name : '',
+                    run: getNewEpisodes,
+                    disabled: !arrShowy(c)
+                });
+            }
+            if (!nowInView()) list.push({ id: 'now', key: 'N', icon: 'schedule', label: 'Back to now', run: backToNow });
+            list.push(
+                { id: 'filters', key: '▲', icon: 'tune', label: 'Filters', sub: 'Category and country', run: enterCats },
+                { id: 'category', key: '[ ]', icon: 'category', label: 'Next category', sub: nextCat ? nextCat.label : '', run: () => cycleCategory(1) },
+                { id: 'country', key: 'C', icon: 'public', label: 'Next country', sub: nextCountry ? nextCountry.label : '', run: cycleCountry },
+                { id: 'search', key: '/', icon: 'search', label: 'Filter channels', run: focusSearch },
+                { id: 'close', key: 'ESC', icon: 'close', label: 'Exit guide', run: () => close() }
+            );
+            return list;
+        }, { id: 'guide', title: 'Guide' }) : () => {};
 
         document.addEventListener('keydown', onKey, true);
         window.addEventListener('resize', fit);
@@ -1500,6 +1680,7 @@
                 };
             },
             teardown() {
+                offActions();
                 clearInterval(mirrorTimer);
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('resize', fit);
@@ -1716,6 +1897,11 @@
         version: VERSION,
         open,
         close,
+        // Guide size, for Settings: the choices, which one is in use, and
+        // setting one (which redraws an open guide where it stands).
+        sizes: () => Object.values(SIZES).map((s) => ({ value: s.key, label: s.label })),
+        size: sizeNow,
+        setSize,
         destroy() {
             close();
             forget();

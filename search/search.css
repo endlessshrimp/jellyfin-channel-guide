@@ -144,10 +144,11 @@
 
 .hs-gchip.on span { color: rgba(255, 255, 255, 0.8); }
 
+/* the chip the remote is on: HOMER's focus ring, so it reads from the couch */
 .hs-gchip.focus {
     background: var(--focus-fill);
     color: #fff;
-    box-shadow: 0 0 0 3px #fff, 0 6px 20px rgba(47, 140, 255, 0.55);
+    box-shadow: var(--focus-ring);
 }
 
 .hs-gchip.focus span { color: rgba(255, 255, 255, 0.85); }

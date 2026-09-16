@@ -38,6 +38,7 @@
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
     js('shared/layout.js'); // first: TV or phone layout, and touch
+    js('shared/actions.js'); // before the screens: they register their actions with it
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
     js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
     js('shared/player.js'); // every screen plays through it

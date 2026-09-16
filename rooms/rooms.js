@@ -1959,6 +1959,25 @@
             updateLegend();
         };
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // C (a bulb's colors) is the only letter Rooms binds of its own, and F
+        // only means anything while a video is docked here; the strip is asked
+        // fresh each time, so `sub` can name the light the focus is on.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const out = [];
+            const row = zone === 'room' ? rows[ri] : null;
+            const L = row && row.kind === 'light' ? lightInfo(row.id, room()) : null;
+            const colorable = !!(L && L.color && !L.unavailable);
+            if (L) {
+                out.push({
+                    id: 'color', key: 'C', icon: 'palette', label: 'Color',
+                    sub: L.name, run: () => openPicker(L.id), disabled: !colorable || !!picker
+                });
+            }
+            if (docked()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: fullscreen });
+            return out;
+        }, { id: 'rooms', title: 'Rooms' }) : () => {};
+
         setZone('list');
         syncDocked();
         sync();
@@ -1981,6 +2000,7 @@
             teardown() {
                 alive = false;
                 offHA();
+                offActions();
                 stopStills();
                 stopLive();
                 window.removeEventListener('keydown', onKey, true);

@@ -624,6 +624,16 @@
         stage.addEventListener('click', onClick);
         stage.addEventListener('mouseover', onOver);
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // Home's own two keys. The Guide, Home and the quick controls come from
+        // the strip itself, and no main action here on purpose: a swipe up on
+        // the remote should open the Guide, which is what it does without one.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const out = [{ id: 'search', key: '/', icon: 'search', label: 'Search', run: focusSearch }];
+            if (previewing()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: goFullscreen });
+            return out;
+        }, { id: 'home', title: 'Home' }) : () => {};
+
         const self = {
             show() { root.style.visibility = ''; },
             // redraw the On Now / Now watching panel, keeping focus sensible
@@ -634,6 +644,7 @@
                 if (inHero) setFocus($('.hm-hero-actions').firstChild, { scroll: false });
             },
             teardown() {
+                offActions();
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });

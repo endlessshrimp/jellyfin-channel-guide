@@ -11,6 +11,9 @@
  *   Subtitles           user Configuration.SubtitleMode (server)
  *   Subtitle language   user Configuration.SubtitleLanguagePreference (server)
  *   Streaming quality   Jellyfin Web's per-device max bitrate (localStorage)
+ *   Guide size          Standard or Large: how big the channel guide draws
+ *                       (ChannelGuide.setSize, localStorage; the Apple TV app
+ *                       starts on Large)
  *   Weather location    where the clock's weather comes from (HomerWeather, localStorage)
  *   Home Assistant      Connect (Home Assistant's own sign-in), the address, and
  *                       Disconnect, which asks for a second OK (HomerHA, localStorage)
@@ -302,6 +305,9 @@
 
     const wx = () => window.HomerWeather || null;
     const ha = () => window.HomerHA || null;
+    // the guide (guide/guide.js), for the Guide size choice; it isn't there when
+    // Settings is used on its own
+    const CG = () => (window.ChannelGuide && typeof window.ChannelGuide.setSize === 'function' ? window.ChannelGuide : null);
 
     // Home Assistant: what this device's connection is, as a choice list
     const HA_STATUS = {
@@ -438,6 +444,19 @@
                 save: async (value) => writeQuality(value)
             },
             {
+                id: 'guidesize', icon: 'grid_view', label: 'Guide size', scope: 'device',
+                desc: 'How big the channel guide draws on this device. Large shows four channels and two hours at a time instead of five and three, with bigger titles and channel names — easier to read from a couch. The Apple TV app starts on Large.',
+                options: () => (CG() ? CG().sizes().map((o) => Object.assign({
+                    sub: o.value === 'large'
+                        ? 'Four channels, two hours, bigger type'
+                        : 'Five channels, three hours'
+                }, o)) : []),
+                current: () => (CG() ? CG().size() : ''),
+                matches: (o, v) => o.value === v,
+                // an open guide redraws itself at the new size; nothing reloads
+                save: async (value) => { if (CG()) CG().setSize(value); }
+            },
+            {
                 id: 'weather', icon: 'wb_sunny', label: 'Weather location', scope: 'device',
                 desc: () => 'Where the temperature next to the clock comes from.'
                     + (wx() && !wx().canUseDevice()
@@ -477,8 +496,10 @@
                 matches: () => false
             }
         ];
+        // a setting whose screen isn't loaded doesn't show at all
+        const offered = (s) => s.id !== 'guidesize' || !!CG();
         m.all = SETTINGS;
-        m.visible = SETTINGS.slice();
+        m.visible = SETTINGS.filter(offered);
         m.scope = (s) => SCOPES[s.scope] || SCOPES.device;
         m.desc = (s) => (typeof s.desc === 'function' ? s.desc() : s.desc);
         m.valueLabel = (s) => {
@@ -512,7 +533,7 @@
                 if (m.inNetwork == null && endpoint && typeof endpoint.IsInNetwork === 'boolean') m.inNetwork = endpoint.IsInNetwork;
                 // Jellyfin Web hides the quality choice from accounts that can't transcode
                 m.canTranscode = !(user.Policy && user.Policy.EnableVideoPlaybackTranscoding === false);
-                m.visible = SETTINGS.filter((s) => s.id !== 'quality' || m.canTranscode);
+                m.visible = SETTINGS.filter((s) => offered(s) && (s.id !== 'quality' || m.canTranscode));
                 m.user = user;
                 m.info = info;
                 m.status = 'ready';

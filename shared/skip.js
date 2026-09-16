@@ -9,6 +9,9 @@
  * The jump goes through Jellyfin's own player (the Seek command its server
  * sends), so its position, progress and transcoding stay right.
  *
+ * It's also the main action in the Actions strip (shared/actions.js) while
+ * that player is up, so a swipe up on the Apple TV remote skips a break.
+ *
  * window.HomerSkip = { skip(count), destroy, version }
  */
 (() => {
@@ -141,6 +144,18 @@
     };
     const btnTimer = setInterval(syncButton, 500);
 
+    // ---------- The Actions strip (shared/actions.js) ----------
+
+    // Skip is the one thing to do while a recording plays full screen, so it's
+    // the main action there: a swipe up on the remote jumps 30 seconds without
+    // opening the strip. Everywhere else this offers nothing, so the swipe
+    // falls through to the Guide and the screen in front keeps the strip.
+    const offActions = window.HomerActions ? window.HomerActions.provide(() => (
+        inPlayer() && seekable()
+            ? [{ id: 'skip', key: 'S', icon: 'fast_forward', label: 'Skip 30s', main: true, run: () => skip(1) }]
+            : []
+    ), { id: 'skip', title: 'Playing' }) : () => {};
+
     // ---------- Styles ----------
 
     const style = document.createElement('style');
@@ -199,6 +214,7 @@
         version: VERSION,
         skip,
         destroy() {
+            offActions();
             clearInterval(btnTimer);
             clearTimeout(settleTimer);
             clearTimeout(hudTimer);

@@ -869,6 +869,14 @@
         };
 
         // ----- input -----
+        // what P does: pause or resume the book that's loaded, or start the one
+        // whose page you're on
+        const togglePlay = () => {
+            const P = player();
+            if (P.state().book) P.toggle();
+            else if (view === 'book' && M().book(bookId)) listen(M().book(bookId), null);
+            if (view === 'shelf') drawHero();
+        };
         const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
         const onKey = (ev) => {
             wake();
@@ -882,9 +890,7 @@
             if (k === 'p' || k === 'P' || k === 'MediaPlayPause' || k === 'MediaPlay' || k === 'MediaPause') {
                 eat(ev);
                 if (ev.repeat) return;
-                if (P.state().book) P.toggle();
-                else if (view === 'book' && M().book(bookId)) listen(M().book(bookId), null);
-                if (view === 'shelf') drawHero();
+                togglePlay();
                 return;
             }
             if (k === 'MediaTrackNext') { eat(ev); P.chapterJump(1); return; }
@@ -968,6 +974,27 @@
             remembered.shelf = 'a:main';
             render();
         };
+        // ----- the Actions strip (shared/actions.js) -----
+        // Play/Pause is what you reach for on Books, so it's the main action: a
+        // swipe up on the remote does it without opening the strip.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const out = [];
+            if (root.dataset.state === 'error') out.push({ id: 'retry', icon: 'refresh', label: 'Try again', run: () => reload() });
+            const s = player().state();
+            const start = !s.book && view === 'book' ? M().book(bookId) : null;
+            out.push({
+                id: 'play',
+                key: 'P',
+                icon: s.playing ? 'pause' : 'play_arrow',
+                label: s.book && s.playing ? 'Pause' : 'Play',
+                sub: s.book ? s.book.title : start ? start.title : '',
+                main: true,
+                run: togglePlay,
+                disabled: !s.book && !start
+            });
+            return out;
+        }, { id: 'books', title: 'Books' }) : () => {};
+
         startView();
         syncDocked();
         reload();
@@ -977,6 +1004,7 @@
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
+                offActions();
                 // leaving Books pauses the book (Jellyfin gets told where you are)
                 safe(() => player().pause());
                 offModel();

@@ -884,6 +884,32 @@
             }
         };
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // The same things this screen's keys do, for a remote that hasn't got any
+        // letters or brackets. Asked for fresh each time the strip opens, so it can
+        // name what the remote is on. A cancel or delete still isn't offered from
+        // the list, for the same reason OK isn't: it takes going to its button.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const list = [];
+            const e = current();
+            const primary = zone === 'actions' ? actions[act] : (e && (e.kind === 'rec' || e.kind === 'group') ? actions[0] : null);
+            if (e && primary) {
+                list.push({
+                    id: 'ok',
+                    key: 'OK',
+                    icon: primary.icon,
+                    label: isArmed(primary) ? 'Confirm' : primary.label.replace(/ · \d+$/, ''),
+                    sub: [e.title, e.episode].filter(Boolean).join(' · '),
+                    disabled: busy,
+                    run: () => (zone === 'actions' ? run(actions[act]) : okInList())
+                });
+            }
+            const next = TABS[(TABS.findIndex((t) => t.id === tab) + 1) % TABS.length];
+            list.push({ id: 'tab', key: '[ ]', icon: 'tab', label: 'Next tab', sub: next.label, run: () => switchTab(1) });
+            if (folder) list.push({ id: 'up', key: '◀', icon: 'folder', label: 'All recordings', run: closeFolder });
+            return list;
+        }, { id: 'recordings', title: 'Recordings' }) : () => {};
+
         // ----- input -----
         const eat = (ev) => {
             ev.preventDefault();
@@ -927,7 +953,7 @@
             if (zone === 'tabs') {
                 if (k === 'ArrowLeft') switchTab(-1);
                 else if (k === 'ArrowRight') switchTab(1);
-                else if ((k === 'ArrowDown' || k === 'Enter') && rows.length) setZone('list');
+                else if ((k === 'ArrowDown' || k === 'Enter' || k === ' ') && rows.length) setZone('list'); // back on the recording it left
                 return;
             }
             if (!rows.length) {
@@ -1073,6 +1099,7 @@
             setTab(id) { if (TABS.some((t) => t.id === id)) setTab(id); },
             teardown() {
                 alive = false;
+                offActions();
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);

@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+Two things a Siri Remote couldn't do, and one it couldn't reach.
+
+- **Guide size: Standard or Large** (Settings → **Guide size**). Standard is
+  the guide as it was — five channels and three hours of listings at a time.
+  Large is four channels and two hours, with the titles, channel names and
+  numbers about 40% bigger, for a TV across the room; the info panel, the
+  preview and its now/next bar, and the legend keep their places, so nothing
+  spills out of the stage at 1600x900 or 1920x1080. Changing it redraws an open
+  guide where it stands, on the same channel and program — nothing reloads.
+  - Large by default in HOMER's Apple TV app (`window.HOMER_TVAPP`), Standard
+    in a browser; a choice made in Settings always wins and is kept per device
+    (`homer-guide-size`). The phone guide is unaffected.
+- **An Actions strip, for a remote with no letter keys** (`shared/actions.js`).
+  Holding **OK** on the Siri Remote for about half a second — or **M** on a
+  keyboard — puts up a strip of what the screen on top can do right now, each
+  action with its name, its icon and the letter it teaches. Arrows move, OK
+  runs, Back/Esc closes. Every screen registers its own real keys with it
+  (`HomerActions.provide`), so the strip never offers anything the keyboard
+  couldn't already do; it always ends with Guide, Home and Quick controls.
+  - A **swipe up** on the clickpad runs the screen's one main action without
+    the strip: Skip 30s in the full-screen player, Search on Search,
+    Play/Pause in Books, and the Guide from everywhere else. A **swipe down**
+    closes the strip, or the quick controls panel.
+  - The Apple TV app fires `homer-tv` CustomEvents on `window`
+    (`menu`, `swipe-up`, `swipe-down`); HOMER only listens.
+- **Filter chips and tab rows are part of the arrows now**, everywhere they
+  appear, since a remote can't press the letter that used to be the only way
+  in. **▲** off the top of the grid or list moves up into the row, **◀ ▶** run
+  along it, **OK** picks and **▼** drops back onto exactly what you left.
+  - The guide's category and country chips (**C** and **[ ]** still work), and
+    the guide's row slides a chip into view when it sits past the end of a
+    16:9 screen.
+  - The Sports and News hub tabs, fixed once in `shared/hub.js`: arrowing onto
+    a tab no longer switches to it — **OK** does — so you can look along the
+    row and come back down. **[ ]**, Page Up/Down and 1–9 are unchanged.
+  - Search's result groups, the Movies and TV Shows sort switch and
+    Recordings' tabs already had a focus zone; they now take Space as OK and
+    use HOMER's shared focus ring. On those three the chip still applies as
+    the remote moves onto it, which is how they have always worked.
+  - The focused chip uses HOMER's focus ring and stays telling apart from the
+    one that's applied.
+- Nothing changes for a keyboard beyond the new **M**.
+
 ## v0.4.2
 
 - **A real remote for an Apple TV or a Samsung TV** (Rooms → the player's

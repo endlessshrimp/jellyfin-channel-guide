@@ -659,6 +659,31 @@
             searchInput.select();
         };
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // The same things this screen's keys do, for a remote that hasn't got any
+        // letters. Asked for fresh each time the strip opens, so it can name the
+        // title the remote is on.
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const list = [];
+            const it = current();
+            const primary = actions[zone === 'actions' ? act : 0];
+            if (it && primary) {
+                list.push({ id: 'ok', key: 'OK', icon: primary.icon, label: primary.label, sub: it.Name || '', run: () => run(primary) });
+            }
+            if (rows.length) {
+                list.push({
+                    id: 'sort',
+                    key: '▲',
+                    icon: 'sort',
+                    label: 'Sort',
+                    sub: sortMode === 'added' ? 'Recently added' : 'A–Z',
+                    run: () => setZone('sort')
+                });
+            }
+            list.push({ id: 'filter', key: '/', icon: 'search', label: isTv ? 'Filter shows' : 'Filter movies', sub: query || '', run: focusSearch });
+            return list;
+        }, { id: 'library', title: isTv ? 'TV Shows' : 'Movies' }) : () => {};
+
         // ----- input -----
         const retry = () => {
             if (status !== 'error') return;
@@ -822,6 +847,7 @@
             teardown() {
                 alive = false;
                 clearTimeout(nextUpTimer);
+                offActions();
                 shell.teardown();
             }
         };

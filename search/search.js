@@ -1081,6 +1081,13 @@
             if (sel < 0) select(0);
             setZone('list');
         };
+        // the chip row, on the chip in effect: ▲ from the top of the results, and
+        // where the Actions strip's "Result group" goes (a remote has no letter keys)
+        const toGroups = () => {
+            if (chips.length < 2) return;
+            csel = chipOn();
+            setZone('groups');
+        };
 
         // ----- rows -----
         // a Get it row: the poster, what it is, and Sonarr's or Radarr's word on it
@@ -1578,10 +1585,8 @@
                 if (k === 'ArrowDown') step(1);
                 else if (k === 'ArrowUp') {
                     if (sel <= 0) {
-                        if (chips.length > 1) {
-                            csel = chipOn();
-                            setZone('groups');
-                        } else focusSearch();
+                        if (chips.length > 1) toGroups();
+                        else focusSearch();
                     } else step(-1);
                 } else if (k === 'PageDown') groupStep(1);
                 else if (k === 'PageUp') groupStep(-1);
@@ -1606,7 +1611,7 @@
                     csel = clamp(csel + (k === 'ArrowRight' ? 1 : -1), 0, chips.length - 1);
                     setFilter(chips[csel].key);
                     markGroups();
-                } else if (k === 'ArrowDown' || k === 'Enter') setZone('list');
+                } else if (k === 'ArrowDown' || k === 'Enter' || k === ' ') setZone('list'); // back on the result it left
                 else if (k === 'ArrowUp') focusSearch();
             }
         };
@@ -1699,6 +1704,42 @@
             if (b) run(actions[Number(b.dataset.i)]);
         });
 
+        // ----- the Actions strip (shared/actions.js) -----
+        // The same things this screen's letter keys do, for a remote that hasn't
+        // got any. Asked for fresh each time the strip opens, so it can name what
+        // the remote is on.
+        const selName = () => {
+            const r = current();
+            if (!r) return '';
+            return r.kind === 'arr' && arr() ? (arr().latest(r.it).title || '') : (r.it.Name || '');
+        };
+        const offActions = window.HomerActions ? window.HomerActions.provide(() => {
+            const list = [];
+            const r = current();
+            const primary = actions[zone === 'actions' ? act : 0];
+            if (r && primary) {
+                list.push({ id: 'ok', key: 'OK', icon: primary.icon, label: primary.label, sub: selName(), run: () => run(primary) });
+            }
+            if (r && r.kind === 'programs') {
+                const st = recState(r.it);
+                list.push({
+                    id: 'record',
+                    key: 'R',
+                    icon: st ? 'cancel' : 'fiber_manual_record',
+                    label: st === 'recording' ? 'Stop recording' : st ? 'Cancel recording' : 'Record',
+                    sub: selName(),
+                    run: () => toggleRecord(r.it)
+                });
+            }
+            const getNew = actions.find((x) => x.arr && x.arr.id === 'new');
+            if (getNew) list.push({ id: 'arr-new', key: 'E', icon: getNew.icon, label: getNew.label, sub: selName(), run: () => arrPress(getNew.arr, getNew.view, 'E') });
+            if (chips.length > 1) {
+                list.push({ id: 'group', key: '▲', icon: 'filter_list', label: 'Result group', sub: (chips[chipOn()] || {}).label || '', run: toGroups });
+            }
+            list.push({ id: 'search', key: '/', icon: 'search', label: 'Search', sub: query || '', main: true, run: focusSearch });
+            return list;
+        }, { id: 'search', title: 'Search' }) : () => {};
+
         // don't leave a Jellyfin control underneath focused (Space/Enter would hit it)
         const ae = document.activeElement;
         if (ae && ae !== document.body && !root.contains(ae) && typeof ae.blur === 'function') ae.blur();
@@ -1745,6 +1786,7 @@
                 stopArr();
                 if (arrRun) arrRun.dispose();
                 offArr();
+                offActions();
                 wxDetach();
                 if (controller) controller.abort();
                 document.removeEventListener('keydown', onKey, true);

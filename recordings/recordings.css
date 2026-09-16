@@ -161,9 +161,12 @@
     color: #fff;
 }
 
+/* the tab the remote is on: HOMER's focus ring, so it reads from the couch
+   (the tabs follow the remote, so the tab in effect and the one under it are
+   the same tab) */
 .hr-tab.focus {
     background: var(--focus-fill);
-    box-shadow: 0 0 0 3px #fff, 0 6px 20px rgba(47, 140, 255, 0.55);
+    box-shadow: var(--focus-ring);
 }
 
 .hr-tab-n {

@@ -438,7 +438,10 @@
     box-shadow: var(--focus-ring);
 }
 
-.hb-tab.hb-focus::after { display: none; }
+/* the tab you're on keeps its underline while the focus is on it, so a tab
+   the remote is only looking at reads differently from the one that's open */
+.hb-tab.hb-focus:not(.on)::after { display: none; }
+.hb-tab.on.hb-focus::after { background: #fff; }
 
 .hb-panel {
     flex: 1;

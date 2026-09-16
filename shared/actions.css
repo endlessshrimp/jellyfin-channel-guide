@@ -1,0 +1,213 @@
+/*
+ * HOMER Actions strip (shared/actions.js): the screen's letter shortcuts as
+ * tiles a remote can move through. Drawn in the same 1080-tall units as the
+ * screens' stages and scaled to the window, so it reads the same at 1600x900
+ * and at 1920x1080 — and at ten feet.
+ */
+
+#hk-root {
+    position: fixed;
+    inset: 0;
+    z-index: 100001; /* over every screen and the guide (99999), under the quick panel (100002) */
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    color: var(--homer-text, #f4f7fb);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+#hk-root[hidden] { display: none; }
+
+#hk-root .hk-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.86) 0%, rgba(2, 5, 10, 0.55) 40%, rgba(2, 5, 10, 0) 100%);
+    opacity: 0;
+    transition: opacity 180ms ease;
+}
+
+#hk-root.show .hk-scrim { opacity: 1; }
+
+#hk-root .hk-strip {
+    position: relative;
+    width: fit-content;
+    max-width: min(calc(1776px * var(--hk-s, 1)), calc(100vw - 32px));
+    margin-bottom: calc(44px * var(--hk-s, 1));
+    padding: calc(24px * var(--hk-s, 1)) calc(28px * var(--hk-s, 1)) calc(20px * var(--hk-s, 1));
+    border-radius: calc(20px * var(--hk-s, 1));
+    background: rgba(9, 20, 38, 0.95);
+    box-shadow:
+        0 0 0 1px var(--homer-line-strong, rgba(160, 190, 230, 0.24)),
+        0 24px 70px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    transform: translateY(calc(24px * var(--hk-s, 1)));
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+#hk-root.show .hk-strip {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#hk-root .hk-head {
+    display: flex;
+    align-items: center;
+    gap: calc(10px * var(--hk-s, 1));
+    margin-bottom: calc(18px * var(--hk-s, 1));
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(24px * var(--hk-s, 1));
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-dim, #8ea3bd);
+}
+
+#hk-root .hk-head .material-icons {
+    font-size: calc(26px * var(--hk-s, 1));
+    color: var(--homer-accent, #2f8cff);
+}
+
+#hk-root .hk-where {
+    color: var(--homer-text, #f4f7fb);
+    letter-spacing: 0.04em;
+}
+
+#hk-root .hk-where:not(:empty)::before {
+    content: "·";
+    margin: 0 calc(10px * var(--hk-s, 1)) 0 calc(2px * var(--hk-s, 1));
+    color: var(--homer-faint, #5a6f89);
+}
+
+#hk-root .hk-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(14px * var(--hk-s, 1));
+}
+
+/* A tile reads top to bottom: what it is, what it's called, what it will act
+   on — with the key it teaches in the corner, so the strip trains the
+   keyboard instead of replacing it. */
+#hk-root .hk-item {
+    position: relative;
+    flex: 0 0 auto;
+    width: calc(344px * var(--hk-s, 1));
+    min-height: calc(148px * var(--hk-s, 1));
+    padding: calc(18px * var(--hk-s, 1)) calc(20px * var(--hk-s, 1)) calc(16px * var(--hk-s, 1));
+    border: 0;
+    border-radius: calc(14px * var(--hk-s, 1));
+    background: var(--homer-cell, rgba(20, 36, 60, 0.78));
+    box-shadow: inset 0 0 0 1px var(--homer-line, rgba(160, 190, 230, 0.12));
+    color: var(--homer-text, #f4f7fb);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+#hk-root .hk-icon {
+    display: block;
+    font-size: calc(36px * var(--hk-s, 1));
+    color: var(--homer-accent-2, #6fd3ff);
+}
+
+#hk-root .hk-label {
+    display: block;
+    margin-top: calc(10px * var(--hk-s, 1));
+    font-size: calc(26px * var(--hk-s, 1));
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#hk-root .hk-sub {
+    display: block;
+    margin-top: calc(3px * var(--hk-s, 1));
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(20px * var(--hk-s, 1));
+    font-weight: 600;
+    color: var(--homer-dim, #8ea3bd);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#hk-root .hk-key {
+    position: absolute;
+    right: calc(18px * var(--hk-s, 1));
+    top: calc(18px * var(--hk-s, 1));
+    display: inline-grid;
+    place-items: center;
+    min-width: calc(40px * var(--hk-s, 1));
+    height: calc(36px * var(--hk-s, 1));
+    padding: 0 calc(10px * var(--hk-s, 1));
+    border-radius: calc(9px * var(--hk-s, 1));
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    font-size: calc(20px * var(--hk-s, 1));
+    font-weight: 700;
+    color: var(--homer-text, #f4f7fb);
+}
+
+/* the ones that work on any screen, behind this screen's own */
+#hk-root .hk-item.shared { background: rgba(12, 24, 44, 0.6); }
+#hk-root .hk-item.shared .hk-icon { color: var(--homer-dim, #8ea3bd); }
+
+#hk-root .hk-item.off {
+    opacity: 0.4;
+    cursor: default;
+}
+
+#hk-root .hk-item.sel {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
+    transform: translateY(calc(-2px * var(--hk-s, 1)));
+}
+
+#hk-root .hk-item.sel .hk-icon,
+#hk-root .hk-item.sel .hk-sub { color: #fff; }
+
+#hk-root .hk-item.sel .hk-key {
+    background: rgba(0, 0, 0, 0.28);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+#hk-root .hk-legend {
+    display: flex;
+    gap: calc(30px * var(--hk-s, 1));
+    margin-top: calc(18px * var(--hk-s, 1));
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(19px * var(--hk-s, 1));
+    font-weight: 600;
+    color: var(--homer-dim, #8ea3bd);
+}
+
+#hk-root .hk-legend .hk-key {
+    position: static;
+    margin-right: calc(10px * var(--hk-s, 1));
+    height: calc(30px * var(--hk-s, 1));
+    min-width: calc(34px * var(--hk-s, 1));
+    font-size: calc(16px * var(--hk-s, 1));
+}
+
+/* ---------- On a phone ---------- */
+
+#hk-root.phone .hk-strip {
+    width: auto;
+    left: 0;
+    right: 0;
+    margin: 0 12px 12px;
+    padding: 16px 16px 12px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#hk-root.phone .hk-items { gap: 10px; }
+
+#hk-root.phone .hk-item {
+    width: 100%;
+    min-height: 64px;
+}
