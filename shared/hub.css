@@ -1351,3 +1351,64 @@ img.hb-broken { visibility: hidden; }
 .hb-phone .hb-tk-paused { display: none !important; }
 
 .hb-phone .hb-toast { top: 12px; font-size: 15px; max-width: 90%; white-space: normal; }
+
+/* ---------- Large channel rows (Settings → Guide size) ----------
+   The same setting the guide uses (ChannelGuide.size; shared/hub.js reads it
+   and marks the root .hb-large). Everything here is about 40% bigger than
+   Standard, so a hub reads from the couch; the list is the same height, so it
+   shows about three and a half channels instead of five and scrolls for the
+   rest. Nothing else on the screen moves, and a phone is never affected. */
+
+.hb-root.hb-large:not(.hb-phone) .hb-now {
+    height: 52px;
+    font-size: 28px;
+}
+
+.hb-root.hb-large:not(.hb-phone) .hb-now-live { font-size: 20px; padding: 5px 12px; }
+.hb-root.hb-large:not(.hb-phone) .hb-now-left { font-size: 24px; }
+.hb-root.hb-large:not(.hb-phone) .hb-now-hint { font-size: 25px; }
+.hb-root.hb-large:not(.hb-phone) .hb-now-bar { width: 84px; height: 7px; }
+
+.hb-root.hb-large:not(.hb-phone) .hb-guide-head {
+    height: 54px;
+    font-size: 24px;
+}
+
+.hb-root.hb-large:not(.hb-phone) .hb-guide-head small { font-size: 21px; }
+
+.hb-root.hb-large:not(.hb-phone) .hb-guide-group {
+    height: 44px;
+    padding-top: 14px;
+    font-size: 20px;
+}
+
+/* 98px, the row height the guide's Large uses */
+.hb-root.hb-large:not(.hb-phone) .hb-row { height: 98px; }
+
+.hb-root.hb-large:not(.hb-phone) .hb-row-logo {
+    width: 118px;
+    height: 64px;
+    border-radius: 11px;
+}
+
+.hb-root.hb-large:not(.hb-phone) .hb-row-logo img {
+    max-width: 98px;
+    max-height: 48px;
+}
+
+.hb-root.hb-large:not(.hb-phone) .hb-logo-fallback { font-size: 17px; }
+
+.hb-root.hb-large:not(.hb-phone) .hb-row-num {
+    width: 78px;
+    font-size: 29px;
+}
+
+.hb-root.hb-large:not(.hb-phone) .hb-row-title { font-size: 33px; }
+.hb-root.hb-large:not(.hb-phone) .hb-row-live { font-size: 19px; padding: 3px 8px; }
+.hb-root.hb-large:not(.hb-phone) .hb-row-next { font-size: 26px; }
+.hb-root.hb-large:not(.hb-phone) .hb-row-eye .material-icons { font-size: 34px; }
+
+.hb-root.hb-large:not(.hb-phone) .hb-row-bar {
+    left: 158px;
+    height: 4px;
+}

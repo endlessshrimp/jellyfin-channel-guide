@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **The hubs' channel lists follow Guide size.** The list of channels under
+  the TV window in **Sports** and **News** was too small to read from across
+  the room. At **Large** (Settings → **Guide size**, the same setting the guide
+  uses) its rows are 98px instead of 70px, with the channel name, number and
+  the now/next line about 40% bigger — about three and a half channels at a
+  time instead of five, scrolling for the rest. **Standard** is unchanged.
+  Changing the setting changes an open hub straight away, as it does an open
+  guide (`guide/guide.js` announces it; `shared/hub.js` listens, and checks
+  again on its own tick). Nothing else on the screen moves: the TV window, the
+  tabs, the legend and the ticker keep their places at 1920x1080 and at
+  1600x900, and a phone is unaffected.
+
 ## v0.4.3
 
 Two things a Siri Remote couldn't do, and one it couldn't reach.

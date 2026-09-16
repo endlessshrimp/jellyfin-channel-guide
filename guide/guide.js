@@ -341,6 +341,12 @@
         try {
             localStorage.setItem(SIZE_KEY, key);
         } catch { /* storage blocked: this session only */ }
+        if (key !== before) {
+            // the hubs' channel lists follow this too (shared/hub.js)
+            try {
+                window.dispatchEvent(new CustomEvent('homer-guide-size', { detail: { size: key } }));
+            } catch { /* no CustomEvent here: they'll pick it up on their own tick */ }
+        }
         if (key === before || !guide || guide.phone) return true;
         const server = getServer();
         const g = guide;

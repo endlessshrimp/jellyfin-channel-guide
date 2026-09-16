@@ -20,7 +20,9 @@
  *   HomerHub.autoplay is false (tests), or it's a phone.
  * - The guide lists the hub's channels (a filter on the lineup), in groups,
  *   with what's on now (and its progress) and next. OK tunes one into the TV
- *   window; F goes full screen.
+ *   window; F goes full screen. Its rows follow Settings → Guide size
+ *   (Standard or Large, the guide's own setting): Large draws about 40%
+ *   bigger, so fewer channels fit on screen.
  * - Tabs switch the content area; each tab's render(ctx) fills it. ▲ from the
  *   top of the content goes up into the tab row, ◀▶ run along it without
  *   switching anything, OK opens a tab and ▼ comes back to where it left.
@@ -146,6 +148,26 @@
     };
     const isVideoRoute = () => /^#\/video/.test(location.hash);
     const isPhone = () => !!(window.HomerLayout && window.HomerLayout.isPhone());
+
+    // ---------- Size: the guide's Standard / Large, shared ----------
+    // The channel list under the TV window follows Settings → Guide size, so a
+    // hub read from the couch has the same big rows the guide does. The guide
+    // owns the setting (ChannelGuide.size/setSize, localStorage per device);
+    // this only reads it, and falls back to the same default if the guide
+    // hasn't loaded.
+    const SIZE_KEY = 'homer-guide-size';
+    const sizeNow = () => {
+        const cg = window.ChannelGuide;
+        if (cg && typeof cg.size === 'function') {
+            const v = safe(() => cg.size(), '');
+            if (v === 'large' || v === 'standard') return v;
+        }
+        try {
+            const v = localStorage.getItem(SIZE_KEY);
+            if (v === 'large' || v === 'standard') return v;
+        } catch { /* storage blocked: the default */ }
+        return window.HOMER_TVAPP ? 'large' : 'standard';
+    };
 
     // ---------- Small helpers ----------
 
@@ -578,6 +600,18 @@
             <div class="hb-ticker hb-focusable"></div>`;
         document.body.appendChild(root);
         const $ = (s) => stage.querySelector(s);
+
+        // Standard or Large channel rows (Settings → Guide size). Checked
+        // again when Settings changes it and on the screen's own tick, so an
+        // open hub follows along like the guide does.
+        let sizeIs = '';
+        const applySize = () => {
+            const want = sizeNow();
+            if (want === sizeIs) return;
+            sizeIs = want;
+            root.classList.toggle('hb-large', want === 'large');
+            if (focused) reveal(focused);
+        };
 
         let alive = true;
         const cleanups = [];
@@ -1192,7 +1226,9 @@
         }, { id: def.id, title: def.title || def.id }) : () => {};
 
         // ----- open -----
-        const minuteTimer = setInterval(() => { guide.tick(); paintTv(); }, 30000);
+        const minuteTimer = setInterval(() => { guide.tick(); paintTv(); applySize(); }, 30000);
+        const onSizeChange = () => applySize();
+        window.addEventListener('homer-guide-size', onSizeChange);
         guide.load().catch((err) => {
             console.warn('[HOMER Hub] channels:', err);
             $('.hb-guide-list').appendChild(ui.empty('Channels didn\'t load'));
@@ -1209,6 +1245,7 @@
         };
 
         const startTab = Math.max(0, tabs.findIndex((t) => t.key === lastTabs.get(def.id)));
+        applySize();
         showTab(startTab);
         setFocus(tabEls[startTab] || tvEl, { scroll: false });
         paintTv();
@@ -1244,6 +1281,7 @@
                 clearInterval(minuteTimer);
                 clearTimeout(toastTimer);
                 safe(wxDetach);
+                window.removeEventListener('homer-guide-size', onSizeChange);
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);

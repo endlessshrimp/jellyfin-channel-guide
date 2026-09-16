@@ -224,6 +224,10 @@ tabs of content on the right, and a ticker along the bottom.
 - **News** opens on CNN. Tabs: Top, US, World, UK, France, Business, Local,
   Tech, from publishers' RSS feeds through HOMER's feed helper on the NAS
   (`/homer-feeds`). OK opens a story with a QR code to read it on your phone.
+- The channel list follows Settings → **Guide size** as well: **Large** draws
+  its rows about 40% bigger (so about three and a half channels at a time
+  instead of five, and it scrolls for the rest), **Standard** as before.
+  Changing it there changes an open hub too.
 - Keys: arrows and OK; `[` `]` or 1–9 switch tabs; **F** full screen; focus
   the ticker to pause it, ◀▶ to step through it.
 - A new hub is a `HomerHub.define({...})` call; see `docs/hubs-notes.md`.
@@ -278,7 +282,8 @@ top, a channel grid you move through with the arrow keys, and OK to tune in.
   read from a couch instead of a desk. Changing it redraws the open guide where
   it stands, on the same channel and program; nothing reloads. HOMER's Apple TV
   app starts on Large, a browser on Standard, and a choice you make yourself
-  always wins (it's kept per device).
+  always wins (it's kept per device). The Sports and News hubs' channel lists
+  follow the same setting.
 - **The filter chips are part of the arrows.** **▲** off the top channel moves
   up into the category and country row, **◀ ▶** run along it, **OK** picks and
   **▼** drops back onto the program you left. **[ ]**, **1–8** and **C** still
