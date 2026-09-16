@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.11
 
 - **HOMER's own loading screen, instead of Jellyfin's "Page not found."**
   Opening one of HOMER's own pages after a reload — `#/weather`, `#/rooms`,
