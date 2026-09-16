@@ -1,5 +1,6 @@
 # Changelog
 
+<<<<<<< HEAD
 ## v0.4.4
 
 - **The hubs' channel lists follow Guide size.** The list of channels under
@@ -13,6 +14,69 @@
   again on its own tick). Nothing else on the screen moves: the TV window, the
   tabs, the legend and the ticker keep their places at 1920x1080 and at
   1600x900, and a phone is unaffected.
+=======
+## v0.4.5
+
+**Cameras** (`#/cameras`, Home's menu after Rooms, the **Cameras** chip on
+Home on a phone): every camera in the house on one wall, and the doorbell's
+rings and clips where you can see them.
+
+- **The wall.** One tile per camera, the doorbell first and twice the size,
+  each with its name, its room and a still that refreshes every few seconds.
+  The tile with focus upgrades to the live stream after about a second and
+  says **Live**, so only one stream runs at a time; a doorbell's tile says
+  when it last rang. **OK** opens a camera full screen, **Esc** comes back.
+- **A camera, full screen.** The live view large (Home Assistant's HLS through
+  hls.js, the refreshing still until it starts), the camera's own controls
+  beside it, and a strip of what it saw underneath. **▲▼** moves between the
+  three, **◀▶** runs along a row; everything is registered with the Actions
+  strip (`HomerActions.provide`), so the Siri Remote reaches all of it.
+- **The controls are the camera's real ones**, found on its own Home Assistant
+  device: **Siren**, **Quick reply**, **LED** (Off · Auto · At night · Always
+  on, **OK** steps through), **Privacy mode**, and its **Battery** where it has
+  one. A camera with none says so. Nothing risky is offered — no restart, no
+  firmware, no sensitivity.
+  - `shared/homeassistant.js` now keeps those four current: Home Assistant
+    files them as config/diagnostic entities, which kept them out of `states`
+    entirely. They stay out of Rooms (`kindOf` still calls them hidden); only
+    the Cameras screen asks for them, by name, and only on a device that has a
+    camera. New: `HomerHA.siblings(id)` (the other entities on an entity's
+    device).
+- **Recent: the rings and the detections, newest first** — *Ring · 4:12 PM*,
+  *Person · 3:58 PM* — with the clip's length on its thumbnail and rings in
+  amber. **OK** plays that clip in the big view; **Esc** goes back to live.
+  - They come from the camera's own recordings, published by Home Assistant's
+    Reolink integration at `media-source://reolink` (camera → resolution → day
+    → clip). HOMER reads the integration's own clip titles
+    (`19:00:39 0:02:32 Motion Vehicle Person Doorbell`) for the trigger and the
+    exact start out of the media id, and asks for the low-resolution copies.
+    New: `HomerHA.browseMedia`, `HomerHA.resolveMedia`, `HomerHA.history`.
+  - **Home Assistant hands out no thumbnail for those clips and keeps no stills
+    of its own**, so a tile's picture is the clip's own first frame, in a
+    paused muted `<video>`, two at a time so a battery camera isn't asked for a
+    dozen files at once. A media source that does carry a thumbnail is used as
+    it is.
+  - Where a camera keeps no clips, the events fall back to Home Assistant's
+    history of the ring and detection sensors: right times, no picture, marked
+    **No clip**. Where both have the same moment, the clip wins. (A ring often
+    leaves *no* trace in the recorder — the visitor sensor's pulse is shorter
+    than the recorder's resolution — so the camera's clips are the reliable
+    record, not the history.)
+- **Four cameras that aren't up yet** (Driveway, Backyard, Garage, Side Yard)
+  hold their squares, marked **Not set up yet**, so the wall is the right shape
+  before the bulb cameras go up. They're the `PLANNED` list in
+  `cameras/cameras-model.js`: give a Home Assistant camera a name that matches
+  one and its placeholder becomes the live tile on the next refresh, with no
+  code change and no reload. A camera matching none of them still appears,
+  after the placeholders.
+- **A phone layout** (`cameras/cameras-phone.js`): one column, the doorbell
+  first with its Recent strip right under it, then the rest and the
+  placeholders. A tap opens a camera one level deep — live view, controls,
+  its own Recent — with **‹ Cameras** back.
+- Also: `shared/player.js` and `shared/layout.js` know `#/cameras` is HOMER's
+  own page; `shared/shell.css` grew the `hc-` prefix; Home's menu has an
+  eleven-item size.
+>>>>>>> feature/cameras
 
 ## v0.4.3
 

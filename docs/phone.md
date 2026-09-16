@@ -203,6 +203,34 @@ through `ctx`, as Weather's do. Two things worth copying:
   (`.phone`), a panel at the right and a card at the top right, scaled from
   1080-tall units, on a TV.
 
+## Cameras: one column, the doorbell first
+
+`cameras/cameras-phone.js` is a screen under the bars like Settings and
+Weather, with the same shape as its TV layout turned into a column. Worth
+copying:
+
+- **The data is a model file, not the TV screen.** `cameras/cameras-model.js`
+  holds the wall (real cameras and the placeholders), each camera's controls,
+  and its events — the camera's own clips from `media-source://reolink` and,
+  where there are none, Home Assistant's history. `cameras/cameras.js` hands
+  it to the phone layout through `ctx` (`model()`, plus its formatters:
+  `whenText`, `agoText`, `runLength`, `roomTag`, `keepStill`,
+  `statusMessage`). Both layouts share one model instance, so a change of
+  layout doesn't re-read anything.
+- **One level deep.** The column is the doorbell, its events strip, then the
+  other cameras. A tap on any camera swaps the column for that camera's page
+  (live view, controls, its own events) with a 44px **‹ Cameras** button; Esc
+  and the phone's Back do the same. Nothing is nested further.
+- **A strip of clips as thumbnails.** Each event's picture is its clip's first
+  frame, in a muted `<video preload="metadata">` that loads two at a time, so
+  a strip of a dozen doesn't pull a dozen files off a battery camera at once.
+  A frame that never arrives leaves the event's icon showing, which is also
+  what a history-only event ("No clip") gets.
+- **The camera's controls are 60px buttons**, two across (four in landscape),
+  and each says what it will do rather than what it is (**Siren · Sound it**,
+  **LED · Auto**). Nothing here needs a press-again confirm: none of them
+  throws anything away.
+
 ## The shared TV shell: `shared/shell.css`
 
 The TV screens' stage, palette, top bar (brand and clock), key legend, toast,

@@ -197,6 +197,7 @@
         if (/^#\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return { tab: null, name: 'Settings' };
         if (/^#\/weather(\?|$)/.test(h)) return { tab: null, name: 'Weather' };
         if (/^#\/rooms(\?|$)/.test(h)) return { tab: null, name: 'Rooms' };
+        if (/^#\/cameras(\?|$)/.test(h)) return { tab: null, name: 'Cameras' };
         if (/^#\/sports(\?|$)/.test(h)) return { tab: null, name: 'Sports' };
         if (/^#\/news(\?|$)/.test(h)) return { tab: null, name: 'News' };
         if (/^#\/books(\?|$)/.test(h)) return { tab: null, name: 'Books' };

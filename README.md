@@ -210,6 +210,92 @@ http:
 Restart Home Assistant after changing it. The same two lines cover a reverse
 proxy like Caddy on the same NAS.
 
+## Cameras
+
+Once Home Assistant is connected, **Cameras** (Home's menu, after Rooms, or
+the **Cameras** chip on Home on a phone) puts every camera in the house on one
+wall and the doorbell's rings where you can see them.
+
+![The camera wall](screenshots/cameras-wall.jpg)
+
+- **The wall.** One tile per camera, the doorbell first and twice the size.
+  Every tile shows a still that refreshes every few seconds; the tile you're
+  on upgrades to the live stream after a moment, so only one stream ever runs
+  at a time. A doorbell's tile says when it last rang. **OK** opens a camera
+  full screen, **Esc** comes back.
+- **A camera, full screen.** The live view large, the camera's own controls
+  beside it, and a strip of what it saw underneath. **▲▼** moves between the
+  three, **◀▶** along a row.
+
+  ![The doorbell's page](screenshots/cameras-doorbell.jpg)
+
+- **The controls** are whatever the camera really has, found on its own
+  Home Assistant device: **Siren**, **Quick reply** (plays the camera's first
+  quick-reply message), **LED** (Off, Auto, At night, Always on — **OK**
+  steps through), **Privacy mode**, and its **Battery** where it runs on one.
+  A camera with none of them says so. Nothing else on the device is offered:
+  no restart, no firmware, no sensitivity sliders.
+- **Recent** is the doorbell's rings and its detections, newest first:
+  **Ring · 4:12 PM**, **Person · 3:58 PM**, with the clip's length on its
+  thumbnail. Rings are in amber. **OK** plays that clip in the big view;
+  **Esc** goes back to live.
+
+### Where the rings and the clips come from
+
+A Reolink camera keeps its own recordings, and Home Assistant's Reolink
+integration publishes them as a media source (`media-source://reolink`), a
+tree of camera → resolution → day → clip. Each clip's title is the
+integration's own — `19:00:39 0:02:32 Motion Vehicle Person Doorbell`: the
+time of day, how long it runs, and everything the camera triggered on.
+**Doorbell** in that list is a ring. HOMER walks the newest days backwards,
+reads the exact start out of the media id, and labels each event with the most
+telling thing in it (a ring first, then a person, a package, an animal, a
+vehicle, plain motion). It asks for the low-resolution copies: the same events,
+a quarter of the bytes.
+
+Home Assistant hands out **no thumbnail** for those clips and keeps no stills
+of its own — `thumbnail` is `null` on every one, and `media-source://media_source`
+(the `/media` folder) is empty. So a tile's picture is the clip's own first
+frame, drawn by a paused, muted `<video>`, two at a time so a battery camera
+isn't asked for a dozen files at once. A media source that *does* carry a
+thumbnail is used as it is.
+
+Where a camera has no clips — it isn't a Reolink, or its recording is off —
+the events fall back to Home Assistant's history of the ring and detection
+sensors (`history/history_during_period`). Those events have the right time
+and no picture, and say **No clip**. Where both have the same moment, the clip
+wins. Worth knowing: Home Assistant's recorder often has *no* trace of a ring
+(the visitor sensor's pulse is shorter than the recorder's resolution), so the
+camera's own clips are the reliable record of a ring, not the history.
+
+If you want a still of every ring regardless — something to look at when the
+camera is asleep or its SD card has rolled over — the smallest fix is a
+Home Assistant automation that calls `camera.snapshot` on
+`camera.front_door_snapshots_fluent` when `binary_sensor.front_door_visitor`
+turns on, writing to `/media/doorbell/`. That puts the stills in
+`media-source://media_source`, and nothing here has to change to find them.
+HOMER doesn't install it for you.
+
+### Cameras that aren't up yet
+
+Four cameras are drawn as placeholders, marked **Not set up yet**, so the wall
+is the right shape before the bulb cameras go up: **Driveway**, **Backyard**,
+**Garage**, **Side Yard**. They're the `PLANNED` list at the top of
+`cameras/cameras-model.js`, each with a name and a pattern.
+
+**To make one real, nothing here has to be re-coded.** Add the camera to
+Home Assistant (any integration — ONVIF, generic, Reolink) and give its
+`camera.` entity a name that matches the slot: anything containing *driveway*,
+*backyard* (or *back garden*, *rear yard*), *garage*, or *side yard* (or
+*side gate*). Its placeholder becomes the live tile on HOMER's next refresh —
+the screen watches Home Assistant, so it appears without a reload. Put the
+entity in a Home Assistant **area** and the tile shows the room under the name.
+
+A camera that matches none of the four still shows up: it lands after the
+placeholders, in the same wall. So does a second doorbell. Only the *order*
+and the held squares come from `PLANNED`; nothing is filtered out by it. To
+reserve a fifth square, or change a name, add a line to that list.
+
 ## Sports and News
 
 Two hub screens, each built the same way: a TV window that plays a channel
@@ -381,9 +467,16 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   locked, or HOMER has been in the background, for 3 minutes, so a phone in a
   pocket doesn't hold one of the provider's two streams. A recording or a
   movie just stays paused.
-- Home, Movies, TV Shows, Search, Recordings, Settings and Weather don't have
-  their phone layouts yet: they show their TV layout, shrunk to fit between
-  the bars.
+- **Cameras** is one column: the doorbell first, its **Recent** strip of rings
+  and detections right under it (swipe it sideways, tap one to play the clip),
+  then the other cameras and the placeholders. Tap a camera to open it — live
+  view, its controls, its own Recent strip — and **‹ Cameras** to come back.
+
+  ![Cameras on a phone](screenshots/cameras-phone.png)
+
+- Every HOMER screen has a phone layout of its own now — the guide, Home,
+  Movies and TV Shows with their details pages, Search, Recordings, Settings,
+  Weather, Rooms and Cameras. See `docs/phone.md` for how one is built.
 
 ## Install
 
@@ -400,13 +493,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.4/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.5/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.4.4`), so an update never changes
+The URL is pinned to a release tag (`@v0.4.5`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

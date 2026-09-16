@@ -65,6 +65,9 @@
     js('forecast/forecast-phone.js'); // Weather's phone layout
     js('rooms/rooms.js'); // Home Assistant's rooms
     js('rooms/rooms-phone.js'); // Rooms' phone layout
+    js('cameras/cameras-model.js'); // the cameras, their events and clips
+    js('cameras/cameras.js'); // Cameras (#/cameras)
+    js('cameras/cameras-phone.js'); // Cameras' phone layout
     js('shared/ticker.js'); // the hubs' BottomLine-style ticker
     js('shared/hub.js'); // the hubs' screen: TV window, channel guide, tabs, ticker
     js('sports/sports-data.js'); // ESPN's scores, standings, rankings and news
