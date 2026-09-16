@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.10
+
+- **Now Playing on a phone:** "Nothing is playing" no longer sits under the
+  cards when something is. The screen's own layout rule was beating the
+  browser's `hidden`; the shared phone chrome and TV shell now reset `[hidden]`
+  as well, so no screen can hit it again.
+
 ## v0.4.9
 
 - **A tap on the HOMER mark on a phone opens the menu** (`HomerMenu.openSheet`,
