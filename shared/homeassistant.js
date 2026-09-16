@@ -1575,7 +1575,10 @@
         put('switch.garage', 'on', { friendly_name: 'Garage', device_class: 'outlet' });
         // players: a Sonos group (the living room leads, the kitchen follows), a TV, a WiiM
         const sonos = 4127295;
-        const song = { media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', media_content_type: 'music' };
+        const song = {
+            media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', media_content_type: 'music',
+            media_duration: 302, media_position: 74, media_position_updated_at: new Date().toISOString()
+        };
         const art = mockArt('#c9743a', '#3b2a5c', 'HARVEST MOON');
         put('media_player.living_room_sonos', 'playing', Object.assign({
             friendly_name: 'Living Room', volume_level: 0.32, is_volume_muted: false, supported_features: sonos, source_list: ['TV', 'Line-in'],
@@ -1608,6 +1611,7 @@
         put('media_player.apple_tv', 'playing', {
             friendly_name: 'Apple TV', supported_features: 22449, app_name: 'Jellyfin', app_id: 'org.jellyfin.swiftfin',
             media_title: 'Fishes', media_series_title: 'The Bear', media_season: 2, media_episode: 6, media_content_type: 'tvshow',
+            media_duration: 3960, media_position: 1512, media_position_updated_at: new Date().toISOString(),
             entity_picture: mockArt('#1d4f7a', '#0b1a2e', 'THE BEAR')
         });
         dev('media_player.apple_tv', 'dev_atv_bed', atv, null);
@@ -1626,6 +1630,19 @@
         dev('media_player.office_wiim', 'dev_wiim_office', { name: 'Office Wiim', model: 'WiiM Mini', maker: 'WiiM' }, null);
         at('media_player.office_wiim', 'office');
         platformOf.set('media_player.office_wiim', 'linkplay');
+        // switched on but not playing anything: Now Playing's quiet "Ready" strip
+        put('media_player.kitchen_display', 'off', { friendly_name: 'Kitchen Display', supported_features: 152461 });
+        dev('media_player.kitchen_display', 'dev_nest_kitchen', { name: 'Kitchen Display', model: 'Nest Hub', maker: 'Google' }, null);
+        at('media_player.kitchen_display', 'kitchen');
+        platformOf.set('media_player.kitchen_display', 'cast');
+        put('media_player.office_speaker', 'idle', { friendly_name: 'Office Speaker', volume_level: 0.35, supported_features: 84045 });
+        dev('media_player.office_speaker', 'dev_office_speaker', { name: 'Office Speaker', model: 'One SL', maker: 'Sonos' }, null);
+        at('media_player.office_speaker', 'office');
+        platformOf.set('media_player.office_speaker', 'sonos');
+        put('media_player.primary_bedroom_tv', 'standby', { friendly_name: 'Primary Bedroom TV', device_class: 'tv', supported_features: 24509 });
+        dev('media_player.primary_bedroom_tv', 'dev_tv_bed', { name: 'Primary Bedroom TV', model: 'TCL 55S5', maker: 'TCL' }, null);
+        at('media_player.primary_bedroom_tv', 'primary_bedroom');
+        platformOf.set('media_player.primary_bedroom_tv', 'samsungtv');
         // the purifier, and its own settings
         const pur = { name: 'Xiaomi Smart Air Purifier 4 Compact', model: 'zhimi.airp.cpa4', maker: 'zhimi' };
         put('fan.air_purifier', 'on', { friendly_name: pur.name + ' Air Purifier', preset_modes: ['Auto', 'Sleep', 'Favorite'], preset_mode: 'Favorite', supported_features: 56 });

@@ -11,7 +11,8 @@
  * screens and the top bar the weather and Search, so Settings (the one left
  * over) is a button at the top of Home, beside the date, with Rooms before it
  * once Home Assistant is connected on this device. Sports and News (the hubs)
- * are a row of buttons under them.
+ * are a row of buttons under them, with Now Playing (everything playing
+ * anywhere in the house) first.
  *
  * Watch plays the channel in a strip under the top bar (HomerPlayer docks the
  * real video there, in the same place as the guide's), and the rows keep
@@ -74,6 +75,7 @@
                             <button type="button" class="hmp-settings"><span class="hmp-settings-pill">${icon('settings')}Settings</span></button>
                         </div>
                         <div class="hmp-hubs">
+                            <button type="button" class="hmp-settings hmp-hub" data-go="#/playing"><span class="hmp-settings-pill">${icon('graphic_eq')}Playing</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/sports"><span class="hmp-settings-pill">${icon('sports_football')}Sports</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/news"><span class="hmp-settings-pill">${icon('newspaper')}News</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/books"><span class="hmp-settings-pill">${icon('auto_stories')}Books</span></button>

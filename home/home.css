@@ -150,74 +150,32 @@
     text-transform: uppercase;
 }
 
-/* ---------- Main menu (TiVo Central style) ---------- */
+/* ---------- Main menu ---------- */
+/* The menu's own look is shared/menu.css (shared/menu.js draws it, in one of
+   its two treatments). Home only says where the column goes, and what the
+   rest of the screen does when the icon rail hands its width back. */
 
-.hm-menu {
-    position: absolute;
+#hm-stage .hm-menu {
     left: 72px;
     top: 140px;
     width: 400px;
-    height: 400px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px; /* seven items: 7 × 52 + 6 × 6 = 400, level with On Now */
+    height: 400px; /* about seven big rows; the column scrolls past that */
 }
 
-/* eight (Sports and News; Rooms makes nine): 8 × 46 + 7 × 4.57 = 400 */
-.hm-menu.hm-menu-8 { gap: calc(32px / 7); }
-.hm-menu.hm-menu-8 .hm-menu-item { height: 46px; font-size: 26px; }
-
-/* nine (Sports and News, and Rooms with Home Assistant connected):
-   9 × 40 + 8 × 5 = 400 */
-.hm-menu.hm-menu-9 { gap: 5px; }
-.hm-menu.hm-menu-9 .hm-menu-item { height: 40px; font-size: 25px; }
-.hm-menu.hm-menu-9 .hm-menu-item .material-icons { font-size: 28px; }
-
-/* ten (Books too, with Rooms): 10 × 36 + 9 × 4.44 = 400 */
-.hm-menu.hm-menu-10 { gap: calc(40px / 9); }
-.hm-menu.hm-menu-10 .hm-menu-item { height: 36px; font-size: 24px; }
-.hm-menu.hm-menu-10 .hm-menu-item .material-icons { font-size: 27px; }
-
-/* eleven (Music too, with Rooms): 11 × 33 + 10 × 3.7 = 400 */
-.hm-menu.hm-menu-11 { gap: calc(37px / 10); }
-.hm-menu.hm-menu-11 .hm-menu-item { height: 33px; font-size: 22px; padding: 0 18px; gap: 14px; }
-.hm-menu.hm-menu-11 .hm-menu-item .material-icons { font-size: 25px; width: 30px; }
-
-/* twelve (Cameras and Music, with Rooms): 12 × 30 + 11 × 3.4 = 397 */
-.hm-menu.hm-menu-12 { gap: calc(37px / 11); }
-.hm-menu.hm-menu-12 .hm-menu-item { height: 30px; font-size: 21px; padding: 0 16px; gap: 12px; }
-.hm-menu.hm-menu-12 .hm-menu-item .material-icons { font-size: 23px; width: 28px; }
-
-.hm-menu-item {
-    height: 52px;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    padding: 0 22px;
-    border-radius: 12px;
-    font-size: 27px;
-    font-weight: 700;
-    color: #d6e0ec;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+/* the icon rail: a narrow column the height of the screen, and everything
+   else moves left into the width it gives back */
+#hm-stage.hm-rail .hm-menu {
+    left: 48px;
+    top: 140px;
+    width: 104px;
+    height: 816px;
 }
 
-.hm-menu-item .material-icons {
-    font-size: 30px;
-    color: var(--homer-accent-2);
-    width: 34px;
-}
-
-.hm-menu-item .hm-menu-hint {
-    margin-left: auto;
-    font-family: var(--homer-font-cond);
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--homer-faint);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
+#hm-stage.hm-rail .hm-hero { left: 190px; }
+#hm-stage.hm-rail .hm-row-title,
+#hm-stage.hm-rail .hm-row-track,
+#hm-stage.hm-rail .hm-row-empty { left: 190px; }
+#hm-stage.hm-rail .hm-legend { left: 190px; }
 
 /* ---------- On Now feature panel ---------- */
 
@@ -591,16 +549,12 @@
 
 /* ---------- Focus: the one highlight, same as the guide ---------- */
 
-.hm-menu-item.hm-focus,
 .hm-btn.hm-focus {
     background: var(--homer-focus-fill);
     color: #fff;
     border-color: transparent;
     box-shadow: var(--homer-focus-ring);
 }
-
-.hm-menu-item.hm-focus .material-icons,
-.hm-menu-item.hm-focus .hm-menu-hint { color: #fff; }
 
 .hm-card.hm-focus {
     transform: scale(1.06);

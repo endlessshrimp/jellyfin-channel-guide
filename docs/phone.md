@@ -4,8 +4,8 @@ HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. Every HOMER screen has a phone layout of its own: the
 guide, Home, Movies and TV Shows with their details pages, Search,
-Recordings, Settings, Weather and Rooms. A screen without one would draw its
-TV layout, shrunk to fit.
+Recordings, Settings, Weather, Rooms, Cameras, Music and Now Playing. A screen
+without one would draw its TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -250,14 +250,38 @@ worth copying for anything that plays:
   drawn twice. A repaint arrives about four times a second, so anything the
   finger is on (the queue list) is only redrawn when the track actually
   changes.
+## Now Playing: one model, two layouts, no menu on the phone
+
+`playing/playing-phone.js` is the shortest version of the pattern, because
+everything that isn't drawing already lives somewhere else:
+
+- **The model is the whole screen.** `playing/playing-model.js` gathers the
+  three sources (Jellyfin's `/Sessions`, Home Assistant's players, HOMER's own
+  music), normalizes them into one list of cards and owns every control
+  (`act(card, what, arg)`). Both layouts call `cards()`, `idle()` and
+  `onChange()` and draw; neither knows which source a card came from.
+- **`start()` and `stop()` belong to whichever layout is up.** The model polls
+  `/Sessions` only while a layout has started it, so switching layouts hands
+  the polling over rather than running it twice.
+- **A progress bar doesn't need a poll.** A card carries `position` and `at`
+  (when that position was read). Each layout runs its own cheap interval — 250
+  ms on TV, 500 ms on the phone — and computes `position + (now − at)` for
+  anything playing, so the bars move smoothly between samples.
+- **The phone layout has no menu.** The TV layout draws `shared/menu.js` down
+  the left so the screen doubles as a way into everything else; on a phone the
+  tab bar and Home's row of buttons already do that, so the phone layout is
+  just the cards.
+
 ## The shared TV shell: `shared/shell.css`
 
 The TV screens' stage, palette, top bar (brand and clock), key legend, toast,
 chips, buttons and loading state are in one file, listed per screen prefix
 (`hl-` library, `hs-` search, `hr-` recordings, `hx-` settings, `hf-` weather,
-`ho-` rooms).
+`hn-` now playing, `ho-` rooms).
 A new TV screen adds its prefix to those lists; its own stylesheet only holds
-what it does differently.
+what it does differently. `shell.css` doesn't set `box-sizing`, so a screen
+whose sizes are outer sizes says so itself (Now Playing does, once, for
+`#hn-stage *`).
 
 ## Testing without a phone
 

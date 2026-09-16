@@ -1,0 +1,284 @@
+/*
+ * HOMER Now Playing, phone layout (playing/playing-phone.js). Everything is
+ * scoped to #hn-root.hn-phone, so playing.css (the TV stage) and this can both
+ * be loaded; colors and type come from shared/tokens.css, and the top bar and
+ * tab bar around it from shared/phone.css.
+ */
+
+#hn-root.hn-phone {
+    --hnp-side: 16px;
+
+    position: fixed;
+    inset: auto;
+    left: 0;
+    right: 0;
+    top: var(--homer-phone-top);
+    bottom: var(--homer-phone-tabs);
+    z-index: 99997;
+    overflow: hidden;
+    background: var(--homer-backdrop);
+    font-family: var(--homer-font);
+    color: var(--homer-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.hn-phone button {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.hn-phone h1 { margin: 0; }
+
+.hn-phone .hnp-scroll {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px var(--hnp-side) 28px;
+}
+
+.hn-phone .hnp-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.hn-phone .hnp-head h1 { font-size: 26px; font-weight: 800; }
+
+.hn-phone .hnp-count {
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-accent-2);
+}
+
+.hn-phone .hnp-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.hn-phone .hnp-card {
+    position: relative;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--homer-panel);
+    box-shadow: 0 0 0 1px var(--homer-line);
+    overflow: hidden;
+}
+
+.hn-phone .hnp-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--homer-accent);
+}
+
+.hn-phone .hnp-card.hnp-paused::before { background: var(--homer-faint); }
+
+.hn-phone .hnp-top {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+}
+
+.hn-phone .hnp-art {
+    position: relative;
+    width: 92px;
+    height: 92px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #12305a, #071427);
+}
+
+.hn-phone .hnp-art-img {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+}
+
+.hn-phone .hnp-art-none {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+    color: rgba(160, 190, 230, 0.35);
+}
+
+.hn-phone .hnp-art-none .material-icons { font-size: 34px; }
+.hn-phone .hnp-art-empty .hnp-art-none { display: grid; }
+.hn-phone .hnp-paused .hnp-art-img { filter: grayscale(0.7) brightness(0.75); }
+
+.hn-phone .hnp-text { min-width: 0; }
+
+.hn-phone .hnp-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.hn-phone .hnp-tag {
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 11px;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--homer-dim);
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.hn-phone .hnp-tag.hnp-playing { background: rgba(47, 140, 255, 0.24); color: #cfe4ff; }
+.hn-phone .hnp-tag.hnp-group { background: rgba(111, 211, 255, 0.18); color: #cdf1ff; }
+
+.hn-phone .hnp-title {
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.15;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.hn-phone .hnp-sub {
+    margin-top: 3px;
+    font-size: 15px;
+    color: #c5d2e2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hn-phone .hnp-where {
+    margin-top: 5px;
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--homer-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hn-phone .hnp-bar {
+    margin-top: 12px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.hn-phone .hnp-bar b {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--homer-accent-2), var(--homer-accent));
+    transition: width 400ms linear;
+}
+
+.hn-phone .hnp-bar.hnp-none { background: rgba(255, 255, 255, 0.05); }
+
+.hn-phone .hnp-times {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    height: 16px;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--homer-faint);
+}
+
+.hn-phone .hnp-ctl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.hn-phone .hnp-b {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 46px;
+    min-width: 50px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--homer-text);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.hn-phone .hnp-b .material-icons { font-size: 24px; }
+.hn-phone .hnp-b.hnp-big { background: rgba(47, 140, 255, 0.3); min-width: 74px; }
+.hn-phone .hnp-b.hnp-off { color: var(--homer-faint); }
+.hn-phone .hnp-b:active { background: rgba(255, 255, 255, 0.2); }
+
+.hn-phone .hnp-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--homer-dim);
+}
+
+.hn-phone .hnp-empty .material-icons { font-size: 56px; color: rgba(160, 190, 230, 0.22); }
+.hn-phone .hnp-empty b { font-size: 20px; color: var(--homer-text); }
+.hn-phone .hnp-empty span { font-size: 15px; }
+
+.hn-phone .hnp-idle {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--homer-line);
+    font-family: var(--homer-font-cond);
+    font-size: 14px;
+    color: var(--homer-faint);
+}
+
+.hn-phone .hnp-idle em {
+    display: block;
+    margin-top: 4px;
+    font-style: normal;
+    color: rgba(90, 111, 137, 0.75);
+}
+
+.hn-phone .hnp-idle b {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}

@@ -39,6 +39,7 @@
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
     css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
     js('shared/layout.js'); // first: TV or phone layout, and touch
+    js('shared/menu.js'); // before the screens: Home and Now Playing draw its menu
     js('shared/actions.js'); // before the screens: they register their actions with it
     js('shared/homeassistant.js'); // before the player: it takes a Home Assistant sign-in off the address first
     js('rooms/quick.js'); // before the screens: its keys (L, and the panel's arrows) come first
@@ -82,4 +83,7 @@
     js('music/music-strip.js'); // the music's now-playing strip on every other screen
     js('music/music.js'); // Music (#/music)
     js('music/music-phone.js'); // Music's phone layout
+    js('playing/playing-model.js'); // everything playing: Jellyfin's sessions, the house, HOMER's music
+    js('playing/playing.js'); // Now Playing (#/playing)
+    js('playing/playing-phone.js'); // Now Playing's phone layout
 })();

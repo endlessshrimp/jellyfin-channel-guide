@@ -1,5 +1,71 @@
 # Changelog
 
+## Unreleased
+
+- **Now Playing** (`#/playing`, the menu's **Now Playing** item): everything
+  playing anywhere in the house on one screen, with the controls for it. No
+  video — artwork only.
+  - `playing/playing-model.js` gathers the three places something can be
+    playing and hands both layouts one list of cards: Jellyfin's `/Sessions`
+    (asked again every 4s while the screen is open, every 15s in a background
+    tab), every Home Assistant `media_player` that isn't idle (pushed, so no
+    polling), and HOMER's own music in this tab (`music/music-model.js`,
+    controlled directly — and the Jellyfin session it reports is dropped so it
+    isn't on screen twice).
+  - A card shows the cover, the show and the episode (or the film, or the
+    track), the device, the room and the user, and a progress bar. Positions
+    are sampled, not streamed: a card carries where it was and when that was
+    read, and the bar runs on its own between samples instead of asking the
+    server every frame.
+  - Controls per card, only the ones that player actually takes: ⏮ ⏯ ⏹ ⏭,
+    mute and a volume pill (◀ ▶ set it; a press at either end moves the focus
+    on instead, so a slider is never somewhere you can't arrow out of). A
+    player that only steps its volume gets − + rather than a level. Jellyfin's
+    volume and mute appear only where the client lists them in
+    `SupportedCommands`.
+  - Speakers playing together (Sonos, WiiM multiroom) are one card naming the
+    rooms, with play, pause and the skips going to the one leading the group.
+    An Apple TV or a Samsung TV card also offers **Remote**, which opens the
+    remote Rooms already draws (`#/rooms?remote=…`).
+  - Active things are big, one card each, most recently started first.
+    Players that are on but idle collapse into a quiet line at the bottom
+    ("Ready: Kitchen, Office…") instead of competing with them.
+  - The main menu runs down the left, so the screen doubles as the way into
+    every other one. Its own phone layout (`playing/playing-phone.js`) is the
+    same cards in one column with thumb-sized buttons, and no menu — the tab
+    bar already has the screens.
+  - Registers its actions with `HomerActions.provide` (Play/Pause as the main
+    action, Stop, Mute, Remote, Check again), so an Apple TV's remote reaches
+    them by holding OK.
+- **The main menu is one list, in one of two treatments** (`shared/menu.js`,
+  `shared/menu.css`), drawn by Home and by Now Playing.
+  - It used to live in `home/home.js` and shrink a little more every time an
+    item was added (`.hm-menu-8` … `.hm-menu-12`): thirteen items later the
+    rows were 30px tall and 21px text, which is not a menu you read from a
+    sofa. Those classes are gone.
+  - **A. Big rows that scroll** (`homer-menu` = `rows`, the default): rows back
+    at the size they were with seven items (52px tall, 27px text), about seven
+    visible. ▲▼ walk the column and scroll it, and the focus never leaves it;
+    an arrow at the top or bottom edge says there's more that way and pages
+    when clicked, and the row the column is cut off at fades.
+  - **B. An icon rail** (`homer-menu` = `rail`): a narrow column of large
+    icons the height of the screen, the focused one naming itself in a tab
+    beside it. The items share out the height, so any number of them fit
+    without scrolling, and Home's On Now panel and rows — and Now Playing's
+    cards — move left into the ~300px it gives back.
+  - Which one is a `localStorage` setting per device
+    (`localStorage['homer-menu']`), so the two can be compared side by side;
+    `HomerMenu.setStyle()` redraws every open menu at once. Both work with a
+    remote (▲ off the top item still reaches Home's search box), a mouse and
+    touch, and neither hides anything behind a submenu.
+  - The list gained **Now Playing** (second, after the guide); the phone Home
+    gained a **Playing** button beside Sports and News.
+- `shared/shell.css` gained the `hn-` prefix for Now Playing's stage, top bar
+  and legend. The made-up house (`localStorage['homer-ha-mock']`) gained a
+  length and a position on its Sonos pair and its Apple TV, and now also
+  stands in for Jellyfin's sessions, so a screenshot of Now Playing doesn't
+  have to have the family's real viewing in it.
+
 ## v0.4.7
 
 - HOMER's Apple apps (`apple/`) are now an Apple TV app **and** an iPhone and

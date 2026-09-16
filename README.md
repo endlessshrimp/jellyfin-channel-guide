@@ -7,16 +7,48 @@ Jellyfin page matches. On a phone, HOMER has a phone layout (see
 
 ## Home
 
-Home replaces Jellyfin's home page: a main menu (Live TV Guide, Movies, TV
-Shows, Books, Recordings, Weather, Sports, News, Settings, and Rooms once Home
-Assistant is connected), an On Now panel, and rows of Continue Watching, Up
-Next, On Now and Recently Added. The search box sits above the menu (▲ or `/`).
+Home replaces Jellyfin's home page: a main menu (Live TV Guide, Now Playing,
+Movies, TV Shows, Books, Music, Recordings, Weather, Sports, News, Settings,
+and Rooms and Cameras once Home Assistant is connected), an On Now panel, and
+rows of Continue Watching, Up Next, On Now and Recently Added. The search box
+sits above the menu (▲ or `/`).
 
 - **Watch** plays the channel in the On Now preview window, and Home stays up
   so you can keep browsing. The panel shows what you're watching, with
   **Full screen**, **Guide** and **Stop**.
 - **H**, or the HOMER logo at the top left of any HOMER screen, comes back to
   Home from anywhere.
+
+### The main menu, in one of two treatments
+
+The menu is one list (`shared/menu.js`), drawn on Home and on Now Playing, so
+both screens agree on what HOMER has and neither hides anything behind a
+submenu. It comes in two treatments, and which one a device uses is a
+`localStorage` setting:
+
+```js
+localStorage.setItem('homer-menu', 'rows');   // A: big rows that scroll (default)
+localStorage.setItem('homer-menu', 'rail');   // B: an icon rail down the side
+```
+
+- **A. Big rows that scroll** — rows at the size they were when Home had seven
+  items (52px tall, 27px text), about seven visible at once. ▲▼ walk the
+  column and scroll it; the focus never leaves it. A small arrow at the top or
+  bottom edge says there's more that way (and clicking it pages), and the row
+  the column is cut off at fades.
+
+  ![Home, big rows](docs/screenshots/menu-a-rows.jpg)
+
+- **B. An icon rail** — a narrow column of large icons the height of the
+  screen, the focused one naming itself in a tab beside it. It fits any number
+  of items without scrolling (they share out the height), and the On Now
+  panel, the rows and the Now Playing cards all move left into the ~300px it
+  gives back.
+
+  ![Home, the icon rail](docs/screenshots/menu-b-rail.jpg)
+
+Both work with a remote (▲▼ move, OK selects, ▲ off the top item goes to the
+search box), a mouse and touch.
 
 ## Watching while you browse
 
@@ -318,6 +350,50 @@ tabs of content on the right, and a ticker along the bottom.
   the ticker to pause it, ◀▶ to step through it.
 - A new hub is a `HomerHub.define({...})` call; see `docs/hubs-notes.md`.
 
+## Now Playing
+
+Everything playing anywhere in the house, on one screen, with the controls for
+it (`#/playing`, the menu's **Now Playing** item). No video here — artwork
+only.
+
+![Now Playing](docs/screenshots/playing-full.jpg)
+
+A card is the cover, what's on (the show and the episode, the film, the
+track), where it's playing and for whom, a progress bar that keeps moving, and
+the controls that player actually takes: ⏮ ⏯ ⏹ ⏭, mute and a volume pill.
+Active things are big, one card each, most recently started first; players
+that are on but idle collapse into a quiet line at the bottom ("Ready:
+Kitchen, Office…") instead of competing with them. The main menu runs down the
+left, so this screen is also the way into every other one.
+
+It gathers three places something can be playing:
+
+- **Jellyfin's sessions** — every client signed in to the server, from
+  `/Sessions`, asked again every few seconds while the screen is open (every
+  fifteen when the tab is in the background). Pause, stop and the track skips
+  go to `/Sessions/{id}/Playing/…`; the volume and mute go to
+  `/Sessions/{id}/Command`, and only appear on a client that says it takes
+  them (`SupportedCommands`).
+- **The house** — every Home Assistant `media_player` that isn't idle, through
+  `shared/homeassistant.js`. Home Assistant pushes its state, so those cards
+  need no polling. Speakers playing together (Sonos, WiiM multiroom) are one
+  card naming the rooms, with play, pause and the skips going to the one
+  leading the group. An Apple TV or a Samsung TV also offers **Remote**, which
+  opens the remote Rooms already draws (`#/rooms?remote=…`).
+- **HOMER's own music** — the music playing in this browser tab
+  (`music/music-model.js`), controlled directly rather than through Jellyfin.
+  The Jellyfin session it reports is dropped, so it isn't on screen twice.
+
+Positions are sampled, not streamed: a card carries where it was and when that
+was read, and the bar runs on its own between samples, so it moves smoothly
+without asking the server every frame.
+
+**Keys:** ▲▼◀▶ move, **OK** does the button under the focus, **◀ ▶** on a
+volume pill sets the volume (a press at either end moves the focus on
+instead), **R** asks the server again, **Esc** goes back, **H** goes Home.
+Holding OK on a remote opens the Actions strip with Play/Pause, Stop, Mute and
+Remote for the card you're on.
+
 ## Books
 
 Audiobooks from Jellyfin's Books library: the book you're listening to up
@@ -456,6 +532,7 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 | **Sports / News** | Next section (**]**), Previous section (**[**), Full screen (**F**, while the video is docked) |
 | **Rooms** | Color (**C**) for the light you're on, Full screen (**F**) |
 | **Home** | Search (**/**), Full screen (**F**) |
+| **Now Playing** | Play/Pause, Stop, Mute and Remote for the card you're on, and Check again (**R**) |
 | **Weather**, **Books** | Try again when something failed; Books adds Play/Pause (**P**) |
 | **Music** | Play/Pause (**P**), Next track, Shuffle (**S**), Repeat (**R**), Instant Mix (**I**), Now playing |
 | **Anywhere, with music loaded** | Play/Pause music, Next track, and **Music** to go back to it |
@@ -463,7 +540,8 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 
 A **swipe up** on the Siri Remote's clickpad runs the screen's one main action
 without the strip: **Skip 30s** in the full-screen player, **Search** on the
-Search screen, **Play/Pause** in Books and in Music, and from anywhere else — Home included
+Search screen, **Play/Pause** in Books, in Music and on the Now Playing card
+you're on, and from anywhere else — Home included
 — it opens the **Guide**. A **swipe down** closes the Actions strip, or the
 quick controls panel if that's what's up; with nothing open it does nothing.
 
@@ -497,9 +575,9 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 - A **top bar** (HOMER and the screen's name, the weather, **Search**) and a
   **tab bar** (Home, Guide, Movies, Shows, Recordings) on every HOMER screen.
-  The weather opens the Weather screen; Settings is on Home, and so is Rooms
-  once Home Assistant is connected. The phone shows the time, so HOMER
-  doesn't.
+  The weather opens the Weather screen; Settings is on Home, and so are Now
+  Playing, Sports, News, Books, Music, Cameras and Rooms (the row of buttons
+  under the date). The phone shows the time, so HOMER doesn't.
 - **The guide** is a list: one row per channel with what's on (time left and a
   progress bar), what's next, and a **●** button. The time rail picks what the
   rows show: **Now**, or any half hour ahead. Category and country chips work
@@ -537,9 +615,12 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 ![Music on a phone](docs/screenshots/music-phone.jpg)
 
-- Home, Movies, TV Shows, Search, Recordings, Settings and Weather don't have
-  their phone layouts yet: they show their TV layout, shrunk to fit between
-  the bars.
+- **Now Playing** on a phone is the same cards in one column, biggest thing
+  first, with the controls as buttons big enough for a thumb (− and + for the
+  volume). There's no menu on it: the tab bar and the buttons on Home already
+  have the screens.
+
+![Now Playing on a phone](docs/screenshots/playing-phone.jpg)
 ## Install
 
 The guide is a script, so it needs the

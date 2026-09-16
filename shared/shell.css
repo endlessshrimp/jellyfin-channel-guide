@@ -5,7 +5,7 @@
  * buttons and the loading/empty state.
  *
  * Screens: Movies/TV Shows/details (hl-), Search (hs-), Recordings
- * (hr-), Settings (hx-), Weather (hf-), Rooms (ho-), Cameras (hc-) and the hubs, Sports and News (hb-,
+ * (hr-), Settings (hx-), Weather (hf-), Now Playing (hn-), Rooms (ho-), Cameras (hc-) and the hubs, Sports and News (hb-,
  * shared/hub.js). Each screen's own
  * stylesheet loads after this one and adds only what it does differently.
  * The guide and Home keep their own copies for now. A screen's phone layout
@@ -19,6 +19,7 @@
 #hr-root,
 .hx-root,
 #hf-root,
+#hn-root,
 #ho-root,
 #hc-root,
 .hb-root {
@@ -58,6 +59,7 @@
 #hr-stage,
 .hx-stage,
 #hf-stage,
+#hn-stage,
 #ho-stage,
 #hc-stage,
 .hb-stage {
@@ -80,6 +82,7 @@
 #hr-stage::after,
 .hx-stage::after,
 #hf-stage::after,
+#hn-stage::after,
 #ho-stage::after,
 #hc-stage::after,
 .hb-stage::after {
@@ -99,6 +102,7 @@
 .hr-topbar,
 .hx-topbar,
 .hf-topbar,
+.hn-topbar,
 .ho-topbar,
 .hc-topbar,
 .hb-topbar {
@@ -118,6 +122,7 @@
 .hr-brand,
 .hx-brand,
 .hf-brand,
+.hn-brand,
 .ho-brand,
 .hc-brand,
 .hb-brand {
@@ -134,6 +139,7 @@
 .hr-brand-mark,
 .hx-brand-mark,
 .hf-brand-mark,
+.hn-brand-mark,
 .ho-brand-mark,
 .hc-brand-mark,
 .hb-brand-mark {
@@ -151,6 +157,7 @@
 .hr-brand-mark::before,
 .hx-brand-mark::before,
 .hf-brand-mark::before,
+.hn-brand-mark::before,
 .ho-brand-mark::before,
 .hc-brand-mark::before,
 .hb-brand-mark::before {
@@ -166,6 +173,7 @@
 .hr-brand-sub,
 .hx-brand-sub,
 .hf-brand-sub,
+.hn-brand-sub,
 .ho-brand-sub,
 .hc-brand-sub,
 .hb-brand-sub {
@@ -184,6 +192,7 @@
 .hr-brand.homer-home,
 .hx-brand.homer-home,
 .hf-brand.homer-home,
+.hn-brand.homer-home,
 .ho-brand.homer-home,
 .hc-brand.homer-home,
 .hb-brand.homer-home {
@@ -199,6 +208,7 @@
 .hr-brand.homer-home:hover,
 .hx-brand.homer-home:hover,
 .hf-brand.homer-home:hover,
+.hn-brand.homer-home:hover,
 .ho-brand.homer-home:hover,
 .hc-brand.homer-home:hover,
 .hb-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
@@ -208,6 +218,7 @@
 .hr-brand-mark .material-icons,
 .hx-brand-mark .material-icons,
 .hf-brand-mark .material-icons,
+.hn-brand-mark .material-icons,
 .ho-brand-mark .material-icons,
 .hc-brand-mark .material-icons,
 .hb-brand-mark .material-icons {
@@ -221,6 +232,7 @@
 .hr-brand.homer-home:hover .hr-brand-mark::before,
 .hx-brand.homer-home:hover .hx-brand-mark::before,
 .hf-brand.homer-home:hover .hf-brand-mark::before,
+.hn-brand.homer-home:hover .hn-brand-mark::before,
 .ho-brand.homer-home:hover .ho-brand-mark::before,
 .hc-brand.homer-home:hover .hc-brand-mark::before,
 .hb-brand.homer-home:hover .hb-brand-mark::before { display: none; }
@@ -230,6 +242,7 @@
 .hr-brand.homer-home:hover .hr-brand-mark .material-icons,
 .hx-brand.homer-home:hover .hx-brand-mark .material-icons,
 .hf-brand.homer-home:hover .hf-brand-mark .material-icons,
+.hn-brand.homer-home:hover .hn-brand-mark .material-icons,
 .ho-brand.homer-home:hover .ho-brand-mark .material-icons,
 .hc-brand.homer-home:hover .hc-brand-mark .material-icons,
 .hb-brand.homer-home:hover .hb-brand-mark .material-icons { display: block; }
@@ -239,6 +252,7 @@
 .hr-clock,
 .hx-clock,
 .hf-clock,
+.hn-clock,
 .ho-clock,
 .hc-clock,
 .hb-clock {
@@ -251,6 +265,7 @@
 .hr-clock-time,
 .hx-clock-time,
 .hf-clock-time,
+.hn-clock-time,
 .ho-clock-time,
 .hc-clock-time,
 .hb-clock-time {
@@ -265,6 +280,7 @@
 .hr-clock-date,
 .hx-clock-date,
 .hf-clock-date,
+.hn-clock-date,
 .ho-clock-date,
 .hc-clock-date,
 .hb-clock-date {
@@ -351,6 +367,7 @@
 .hr-state,
 .hx-state,
 .hf-state,
+.hn-state,
 .ho-state,
 .hc-state,
 .hb-state {
@@ -369,6 +386,7 @@
 .hr-state.show,
 .hx-state.show,
 .hf-state.show,
+.hn-state.show,
 .ho-state.show,
 .hc-state.show,
 .hb-state.show { display: flex; }
@@ -378,6 +396,7 @@
 .hr-state b,
 .hx-state b,
 .hf-state b,
+.hn-state b,
 .ho-state b,
 .hc-state b,
 .hb-state b {
@@ -391,6 +410,7 @@
 .hr-state span,
 .hx-state span,
 .hf-state span,
+.hn-state span,
 .ho-state span,
 .hc-state span,
 .hb-state span {
@@ -407,6 +427,7 @@
 .hr-legend,
 .hx-legend,
 .hf-legend,
+.hn-legend,
 .ho-legend,
 .hc-legend,
 .hb-legend {
@@ -429,6 +450,7 @@
 .hr-key,
 .hx-key,
 .hf-key,
+.hn-key,
 .ho-key,
 .hc-key,
 .hb-key {
@@ -451,6 +473,7 @@
 .hr-legend .spacer,
 .hx-legend .spacer,
 .hf-legend .spacer,
+.hn-legend .spacer,
 .ho-legend .spacer,
 .hc-legend .spacer,
 .hb-legend .spacer { flex: 1; }
@@ -460,6 +483,7 @@
 .hr-legend [data-action],
 .hx-legend [data-action],
 .hf-legend [data-action],
+.hn-legend [data-action],
 .ho-legend [data-action],
 .hc-legend [data-action],
 .hb-legend [data-action] {
@@ -472,6 +496,7 @@
 .hr-legend [data-action]:hover,
 .hx-legend [data-action]:hover,
 .hf-legend [data-action]:hover,
+.hn-legend [data-action]:hover,
 .ho-legend [data-action]:hover,
 .hc-legend [data-action]:hover,
 .hb-legend [data-action]:hover { color: var(--text); }

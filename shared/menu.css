@@ -1,0 +1,235 @@
+/*
+ * HOMER main menu (shared/menu.js): the two treatments, on any 1080-tall
+ * HOMER stage (Home, Now Playing). The host element is positioned by the
+ * screen; everything inside it is here.
+ *
+ *   .hm-menu.hm-menu-rows   big rows, seven or so visible, the column scrolls
+ *   .hm-menu.hm-menu-rail   a narrow column of large icons, the focused one
+ *                           naming itself beside it
+ */
+
+.hm-menu {
+    position: absolute;
+    overflow: hidden;
+    z-index: 6; /* the rail's labels sit over what the screen put beside it */
+}
+
+.hm-menu-track {
+    display: flex;
+    flex-direction: column;
+    transition: transform 160ms ease;
+    will-change: transform;
+}
+
+.hm-menu-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    cursor: pointer;
+    color: #d6e0ec;
+    font-weight: 700;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.hm-menu-item .material-icons {
+    color: var(--homer-accent-2);
+    flex: 0 0 auto;
+}
+
+.hm-menu-hint {
+    margin-left: auto;
+    font-family: var(--homer-font-cond);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--homer-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* the screen you're on, when it's in the list */
+.hm-menu-item.hm-here::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 18%;
+    bottom: 18%;
+    width: 4px;
+    border-radius: 0 3px 3px 0;
+    background: var(--homer-accent-2);
+}
+
+/* the one highlight, same as everywhere else in HOMER */
+.hm-menu-item.hm-focus {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: var(--homer-focus-ring);
+}
+
+.hm-menu-item.hm-focus .material-icons,
+.hm-menu-item.hm-focus .hm-menu-hint { color: #fff; }
+.hm-menu-item.hm-focus.hm-here::before { background: #fff; }
+
+.homer-touch .hm-menu-item:active,
+.hm-menu-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.hm-menu-item.hm-focus:hover {
+    background: var(--homer-focus-fill);
+}
+
+/* ---------- A. Big rows that scroll ---------- */
+
+.hm-menu-rows .hm-menu-track { gap: 6px; }
+
+.hm-menu-rows .hm-menu-item {
+    height: 52px;
+    gap: 18px;
+    padding: 0 22px;
+    font-size: 27px;
+}
+
+.hm-menu-rows .hm-menu-item .material-icons {
+    font-size: 30px;
+    width: 34px;
+}
+
+.hm-menu-rows .hm-menu-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* there's more above or below: a small arrow at the edge and a touch of
+   shade, so the column reads as a list rather than as everything there is */
+.hm-menu-more {
+    position: absolute;
+    right: 6px;
+    height: 30px;
+    width: 30px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    z-index: 3;
+    cursor: pointer;
+    color: #fff;
+    background: rgba(12, 26, 46, 0.92);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 4px 14px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.hm-menu-more .material-icons { font-size: 24px; }
+.hm-menu-more.up { top: 2px; }
+.hm-menu-more.down { bottom: 2px; }
+.hm-menu-rows.hm-menu-more-up .hm-menu-more.up,
+.hm-menu-rows.hm-menu-more-down .hm-menu-more.down { display: flex; pointer-events: auto; }
+
+/* the row the column is cut off at fades, so it's plainly a list that runs on */
+.hm-menu-rows::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 26px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 140ms ease;
+    background: linear-gradient(0deg, rgba(2, 5, 10, 0.75), rgba(2, 5, 10, 0));
+}
+
+.hm-menu-rows.hm-menu-more-down::after { opacity: 1; }
+
+/* ---------- B. An icon rail ---------- */
+
+/* the rail never scrolls, and the focused item's name has to be able to sit
+   outside the column */
+.hm-menu-rail { overflow: visible; }
+
+/* the rail shares out the height it's given, so however many items there are
+   they all fit without the column ever scrolling */
+.hm-menu-rail .hm-menu-track {
+    height: 100%;
+    gap: 4px;
+}
+
+.hm-menu-rail .hm-menu-item {
+    flex: 1 1 0;
+    min-height: 44px;
+    max-height: 76px;
+    width: 104px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: 14px;
+    overflow: visible;
+}
+
+.hm-menu-rail .hm-menu-item .material-icons {
+    font-size: 36px;
+    width: auto;
+}
+
+.hm-menu-rail .hm-menu-hint { display: none; }
+
+/* the focused icon says what it is, in a tab beside it; it sits over
+   whatever the screen put to the right, so the rail's width never changes */
+.hm-menu-rail .hm-menu-label {
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translate(-10px, -50%);
+    margin-left: 6px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #3a95ff, #1c64d8);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 25px;
+    font-weight: 700;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 5;
+}
+
+.hm-menu-rail .hm-menu-item.hm-focus .hm-menu-label,
+.hm-menu-rail .hm-menu-item:hover .hm-menu-label {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(0, -50%);
+}
+
+/* hovering isn't focus: that label is quieter than the focused one */
+.hm-menu-rail .hm-menu-item:hover:not(.hm-focus) .hm-menu-label {
+    background: rgba(12, 26, 46, 0.96);
+    box-shadow: 0 0 0 1px var(--homer-line-strong), 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.hm-menu-rail .hm-menu-item.hm-here {
+    background: rgba(111, 211, 255, 0.12);
+    border-color: rgba(111, 211, 255, 0.3);
+}
+
+.hm-menu-rail .hm-menu-item.hm-here::before {
+    left: 0;
+    top: 26%;
+    bottom: 26%;
+    width: 3px;
+}
+
+.hm-menu-rail .hm-menu-item.hm-here .material-icons { color: #cdf1ff; }
+.hm-menu-rail .hm-menu-item.hm-focus.hm-here { background: var(--homer-focus-fill); border-color: transparent; }
+
+/* the rail always fits, so it never shows the "more" arrows */
+.hm-menu-rail .hm-menu-more { display: none !important; }

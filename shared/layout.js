@@ -219,6 +219,7 @@
         if (/^#\/news(\?|$)/.test(h)) return { tab: null, name: 'News' };
         if (/^#\/books(\?|$)/.test(h)) return { tab: null, name: 'Books' };
         if (/^#\/music(\?|$)/.test(h)) return { tab: null, name: 'Music' };
+        if (/^#\/playing(\?|$)/.test(h)) return { tab: null, name: 'Now Playing' };
         return { tab: 'home', name: 'Home' };
     };
 

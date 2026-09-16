@@ -2,7 +2,8 @@
  * HOMER Home: a TiVo-style main menu that replaces Jellyfin Web's home page.
  *
  * Loaded on every Jellyfin Web page by homer.js. When Jellyfin shows its home
- * route (#/home), this puts a full-screen HOMER stage over it: a main menu, an
+ * route (#/home), this puts a full-screen HOMER stage over it: the main menu
+ * (shared/menu.js), an
  * "On Now" feature panel with a live preview, and rows of Continue Watching,
  * Up Next, On Now and Recently Added. Remote-style arrow navigation, OK to
  * select; mouse hover highlights, click selects, the trackpad scrolls.
@@ -271,7 +272,8 @@
             if (focused) focused.classList.remove('hm-focus');
             focused = node;
             node.classList.add('hm-focus');
-            if (scroll) revealFocused();
+            if (hmenu && node.classList.contains('hm-menu-item')) hmenu.reveal(node);
+            else if (scroll) revealFocused();
             if (node.dataset.row != null && node.dataset.col != null) rowMemory[node.dataset.row] = +node.dataset.col;
         };
         const rect = (n) => n.getBoundingClientRect();
@@ -280,7 +282,17 @@
             if (!focused || !all.includes(focused)) { setFocus(all[0]); return; }
             // down from the menu's last item or the On Now buttons lands on the first
             // row; up from the first row goes back where you came from
-            if (dir === 'down' && focused.dataset.row == null && (focused === menu.lastChild || focused.closest('.hm-hero'))) {
+            // inside the menu, ▲▼ walk the column (and scroll it); only its
+            // last item drops into the rows, and ▲ off the top goes to Search
+            if (hmenu && focused.classList.contains('hm-menu-item') && (dir === 'up' || dir === 'down')) {
+                const next = hmenu.move(dir, focused);
+                if (next) { setFocus(next); return; }
+                if (dir === 'up') { focusSearch(); return; }
+                const first = rowCard(0, rowMemory[0] ?? 0);
+                if (first) { lastAbove = focused; setFocus(first); }
+                return;
+            }
+            if (dir === 'down' && focused.dataset.row == null && (focused === menuLast() || focused.closest('.hm-hero'))) {
                 const t = rowCard(0, rowMemory[0] ?? 0);
                 if (t) { lastAbove = focused; setFocus(t); return; }
             }
@@ -366,46 +378,29 @@
         // ---------- Menu ----------
         let views = [];
         const route = go;
-        const viewRoute = (type) => {
-            const v = views.find((x) => x.CollectionType === type);
-            if (!v) return null;
-            return type === 'movies'
-                ? `#/movies?topParentId=${v.Id}&collectionType=movies`
-                : `#/tv?topParentId=${v.Id}&collectionType=tvshows`;
+        // The menu is shared/menu.js's now: one list, in whichever of its two
+        // treatments this device is set to (big rows that scroll, or an icon
+        // rail). It used to be built here and shrink a little more with every
+        // item added, which is how the rows got down to 30px.
+        const menuBox = $('.hm-menu');
+        let hmenu = null;
+        const buildMenu = () => {
+            if (!window.HomerMenu) return;
+            if (hmenu) hmenu.destroy();
+            hmenu = window.HomerMenu.build(menuBox, {
+                go: route,
+                openGuide,
+                current: 'home',
+                // Home has already fetched the library views for its rows
+                views: () => Promise.resolve(views),
+                onRedraw: (node) => { focused = null; setFocus(node); }
+            });
+            stage.classList.toggle('hm-rail', hmenu.style === 'rail');
         };
-        const MENU = [
-            { icon: 'live_tv', label: 'Live TV Guide', hint: 'G', act: openGuide },
-            { icon: 'movie', label: 'Movies', act: () => { const r = viewRoute('movies'); if (r) route(r); } },
-            { icon: 'tv', label: 'TV Shows', act: () => { const r = viewRoute('tvshows'); if (r) route(r); } },
-            // the audiobooks (books/books.js)
-            { icon: 'auto_stories', label: 'Books', act: () => route('#/books') },
-            // the music library (music/music.js); it keeps playing while you browse
-            { icon: 'library_music', label: 'Music', act: () => route('#/music') },
-            { icon: 'fiber_smart_record', label: 'Recordings', act: () => route('#/livetv?tab=3') },
-            { icon: 'wb_sunny', label: 'Weather', act: () => route('#/weather') },
-            // the hubs: a TV window, their channels, scores or headlines, a ticker
-            { icon: 'sports_football', label: 'Sports', act: () => route('#/sports') },
-            { icon: 'newspaper', label: 'News', act: () => route('#/news') },
-            // Home Assistant's rooms, once it's connected on this device (Settings)
-            { icon: 'lightbulb', label: 'Rooms', act: () => route('#/rooms'), when: () => !!(window.HomerHA && window.HomerHA.isSetUp()) },
-            // the cameras' wall, with the doorbell's rings and clips
-            { icon: 'videocam', label: 'Cameras', act: () => route('#/cameras'), when: () => !!(window.HomerHA && window.HomerHA.isSetUp()) },
-            // (Search isn't in the menu: its box is right above it, ▲ from the
-            // first item or / gets there)
-            { icon: 'settings', label: 'Settings', act: () => route('#/mypreferencesmenu') }
-        ].filter((m) => !m.when || m.when());
-        const menu = $('.hm-menu');
-        menu.classList.toggle('hm-menu-8', MENU.length === 8);
-        menu.classList.toggle('hm-menu-9', MENU.length === 9);
-        menu.classList.toggle('hm-menu-10', MENU.length === 10);
-        menu.classList.toggle('hm-menu-11', MENU.length === 11);
-        menu.classList.toggle('hm-menu-12', MENU.length >= 12);
-        MENU.forEach((m) => {
-            const item = el('div', 'hm-menu-item hm-focusable',
-                `<span class="material-icons" aria-hidden="true">${m.icon}</span>${esc(m.label)}${m.hint ? `<span class="hm-menu-hint">${m.hint}</span>` : ''}`);
-            item._act = m.act;
-            menu.appendChild(item);
-        });
+        buildMenu();
+        const offMenuStyle = window.HomerMenu ? window.HomerMenu.onChange(buildMenu) : () => {};
+        const menuFirst = () => (hmenu ? hmenu.first() : null);
+        const menuLast = () => (hmenu ? hmenu.last() : null);
 
         // ---------- Search ----------
         const searchInput = $('.hm-search input');
@@ -576,7 +571,7 @@
             const k = ev.key;
             if (ev.target === searchInput) {
                 if (k === 'Enter') { ev.preventDefault(); runSearch(); }
-                else if (k === 'Escape' || k === 'ArrowDown') { ev.preventDefault(); searchInput.blur(); setFocus(menu.firstChild); }
+                else if (k === 'Escape' || k === 'ArrowDown') { ev.preventDefault(); searchInput.blur(); setFocus(menuFirst()); }
                 ev.stopPropagation();
                 return;
             }
@@ -584,7 +579,7 @@
             if (map[k]) {
                 ev.preventDefault();
                 ev.stopPropagation();
-                if (k === 'ArrowUp' && focused && focused.classList.contains('hm-menu-item') && focused === menu.firstChild) { focusSearch(); return; }
+                if (k === 'ArrowUp' && focused && focused === menuFirst()) { focusSearch(); return; }
                 move(map[k]);
             } else if (k === 'Enter') {
                 ev.preventDefault();
@@ -657,6 +652,8 @@
                 clearInterval(clockTimer);
                 wxDetach();
                 clearInterval(mirrorTimer);
+                offMenuStyle();
+                if (hmenu) hmenu.destroy();
                 root.remove();
             }
         };
@@ -674,7 +671,7 @@
             rows.forEach((row) => addRow(row.title, row.items, row.live ? liveCard : mediaCard));
             if (!rowCount) rowsBox.appendChild(el('div', 'hm-row-empty', 'Nothing to show yet.'));
 
-            setFocus(menu.firstChild, { scroll: false });
+            setFocus(menuFirst(), { scroll: false });
         })().catch((err) => {
             console.error('[HOMER Home]', err);
             if (home === self) $('.hm-hero-title').textContent = 'Couldn\'t load home';
