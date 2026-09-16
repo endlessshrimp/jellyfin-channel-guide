@@ -11,6 +11,10 @@
  * The guide and Home keep their own copies for now. A screen's phone layout
  * doesn't use any of this: see shared/phone.css.
  */
+/* Jellyfin's page has no [hidden] reset, and a screen's own display rule
+ * beats the browser's. Nothing marked hidden should ever draw. */
+[hidden] { display: none !important; }
+
 
 /* ---------- Stage ---------- */
 

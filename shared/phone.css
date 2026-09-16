@@ -13,6 +13,10 @@
  * --homer-phone-top and --homer-phone-tabs; a TV-layout screen's root is
  * simply shrunk to that room (its fit() scales the stage to it).
  */
+/* Jellyfin's page has no [hidden] reset, and a screen's own display rule
+ * beats the browser's. Nothing marked hidden should ever draw. */
+[hidden] { display: none !important; }
+
 
 :root {
     --homer-phone-top-h: 52px;

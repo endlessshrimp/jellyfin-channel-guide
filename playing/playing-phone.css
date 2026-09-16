@@ -242,6 +242,9 @@
 .hn-phone .hnp-b.hnp-off { color: var(--homer-faint); }
 .hn-phone .hnp-b:active { background: rgba(255, 255, 255, 0.2); }
 
+/* the phone layout has no reset of its own: [hidden] must win over these displays */
+.hn-phone [hidden] { display: none !important; }
+
 .hn-phone .hnp-empty {
     display: flex;
     flex-direction: column;
