@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.9
 
 - **A tap on the HOMER mark on a phone opens the menu** (`HomerMenu.openSheet`,
   `shared/menu.js`). The tab bar has five screens and HOMER has fourteen, so
