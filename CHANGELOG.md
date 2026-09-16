@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.7
 
 - HOMER's Apple apps (`apple/`) are now an Apple TV app **and** an iPhone and
   iPad app from one project, sharing a `HomerKit` group; only the input and
