@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.4
 
 - **The hubs' channel lists follow Guide size.** The list of channels under
   the TV window in **Sports** and **News** was too small to read from across
