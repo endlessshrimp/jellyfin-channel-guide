@@ -32,11 +32,13 @@
  * window.HomerHA = { status, problem, isSetUp, address, setAddress,
  *                    addressProblem, signIn, disconnect, onChange, house,
  *                    entity, lightOn, toggle, setBrightness, setTemperature,
- *                    setMode, scene, snapshotUrl, playCamera, rings, onRing,
+ *                    setMode, scene, snapshotUrl, playCamera, browseMedia,
+ *                    resolveMedia, history, rings, onRing,
  *                    color, setColor, supports, playPause, mediaCommand,
  *                    setVolume, stepVolume, mute, setSource, power,
  *                    setFanSpeed, setPreset, setOption, setNumber, run,
- *                    extras, device, pictureUrl, remoteFor, sendRemote,
+ *                    extras, device, siblings, pictureUrl, remoteFor,
+ *                    sendRemote,
  *                    destroy, version }
  */
 (() => {
@@ -67,6 +69,9 @@
     const ALARMING = /\bsiren|\balarm/i;
     const HARDWARE_SETTING = /audio output|output (hardware )?mode/i;
     // buttons left out: the ones that restart, reset or identify a device
+    // a camera's own controls, which Home Assistant marks config/diagnostic:
+    // HOMER keeps these current so the Cameras screen can offer them
+    const CAMERA_CONTROL = /^siren\.|^switch\..*privacy|^select\..*(doorbell_led|status_led|quick_reply)|^sensor\..*battery/i;
     const RISKY_BUTTON = /restart|reboot|reset|factory|shut ?down|power ?off|format|erase|delete|unpair|identify|update|firmware/i;
     const RISKY_BUTTON_CLASS = ['restart', 'identify', 'update'];
     const RETRY_MS = [1000, 2000, 5000, 10000, 30000];
@@ -611,6 +616,22 @@
             const glance = (d === 'sensor' && GLANCE_SENSOR[dc]) || (d === 'binary_sensor' && GLANCE_BINARY[dc]);
             if (((DOMAINS.includes(d) || MORE.includes(d) || glance) && !hidden.has(id)) || wallSwitches.has(id) || isDoorbellSensor(s)) wanted.add(id);
         }
+        // A camera's own controls and its battery, which Home Assistant files
+        // as config or diagnostic entities (so they stay out of the rooms:
+        // kindOf still calls them hidden). The Cameras screen offers them
+        // beside the live view, where they make sense.
+        const camDevices = new Set();
+        for (const s of all || []) {
+            if (domainOf(s.entity_id) !== 'camera') continue;
+            const dev = deviceOf.get(s.entity_id);
+            if (dev) camDevices.add(dev);
+        }
+        if (camDevices.size) {
+            for (const s of all || []) {
+                const id = s.entity_id;
+                if (CAMERA_CONTROL.test(id) && camDevices.has(deviceOf.get(id))) wanted.add(id);
+            }
+        }
         areas.forEach((a) => {
             if (a.temperature_entity_id) wanted.add(a.temperature_entity_id);
             if (a.humidity_entity_id) wanted.add(a.humidity_entity_id);
@@ -952,6 +973,16 @@
     const extras = (id) => { house(); return (extrasOf.get(id) || []).filter((x) => states[x]); };
     // { name, model, maker } of an entity's device
     const device = (id) => devInfo.get(deviceOf.get(id)) || null;
+    // every other entity on the same device that HOMER keeps current: a
+    // doorbell's siren, its quick replies, its LED, its privacy switch, its
+    // battery. (Home Assistant files most of those as config or diagnostic
+    // entities, which keeps them out of the rooms; the Cameras screen asks
+    // for them by name.)
+    const siblings = (id) => {
+        const dev = deviceOf.get(id);
+        if (!dev) return [];
+        return Object.keys(states).filter((x) => x !== id && deviceOf.get(x) === dev);
+    };
     // an entity's name next to its device ("Amplifier", "Child lock"): its
     // own name when it has one, less the room's name
     const ALIASES = [[/^physical control(s)? lock(ed)?$/i, 'Child lock'], [/^custom[- ]service /i, ''], [/\s+hardware mode$/i, '']];
@@ -1352,6 +1383,51 @@
         return { started, stop };
     };
 
+    // ---------- Media sources (the cameras' own recordings) ----------
+
+    // Home Assistant's media browser over the WebSocket. The Reolink
+    // integration puts the doorbell's recordings at media-source://reolink,
+    // a tree of camera → resolution → day → clip; browse() walks it and
+    // resolve() turns a clip into a URL a <video> can load. The URL carries
+    // its own signature (?authSig=…), like a camera still's token, so it
+    // isn't CORS-gated — but it also isn't readable by fetch() from another
+    // origin, so it can only be handed to a media element, never inspected.
+    const browseMedia = (id) => {
+        if (mocking()) return mockBrowse(id);
+        return send({ type: 'media_source/browse_media', ...(id ? { media_content_id: id } : {}) });
+    };
+    const resolveMedia = async (id) => {
+        if (mocking()) return mockResolve(id);
+        const r = await send({ type: 'media_source/resolve_media', media_content_id: id });
+        const url = r && r.url ? r.url : '';
+        return { url: /^https?:/i.test(url) ? url : address() + url, mime: (r && r.mime_type) || '' };
+    };
+
+    // Every state an entity was in over a stretch of time, oldest first:
+    // [{ state, at }]. HOMER's fallback for a camera's events when the
+    // camera itself keeps no clips (or Home Assistant's recorder has more
+    // than the camera does).
+    const history = async (ids, hours = 24) => {
+        const list = Array.isArray(ids) ? ids : [ids];
+        if (mocking()) return mockHistory(list, hours);
+        const r = await send({
+            type: 'history/history_during_period',
+            start_time: new Date(Date.now() - hours * 3600000).toISOString(),
+            entity_ids: list,
+            minimal_response: true,
+            no_attributes: true,
+            significant_changes_only: false
+        });
+        const out = {};
+        for (const id of list) {
+            out[id] = ((r && r[id]) || []).map((x) => ({
+                state: x.s !== undefined ? x.s : x.state,
+                at: x.lu != null ? x.lu * 1000 : x.lc != null ? x.lc * 1000 : Date.parse(x.last_changed || x.last_updated)
+            })).filter((x) => isFinite(x.at));
+        }
+        return out;
+    };
+
     // ---------- The made-up house (DEV ONLY: localStorage homer-ha-mock = 1) ----------
 
     let mockTimer = 0;
@@ -1416,6 +1492,23 @@
         }
         put('binary_sensor.front_door_visitor', 'off', { friendly_name: 'Front Door Visitor' });
         deviceOf.set('binary_sensor.front_door_visitor', 'dev_front_door');
+        // the doorbell's own controls, as a Reolink video doorbell has them,
+        // so the Cameras screen's buttons can be seen without the real one
+        const bell = (id, state, attrs) => {
+            put(id, state, attrs);
+            deviceOf.set(id, 'dev_front_door');
+            placeOf.set(id, 'front_door');
+        };
+        bell('siren.front_door_siren', 'off', { friendly_name: 'Front Door Siren' });
+        bell('switch.front_door_privacy_mode', 'off', { friendly_name: 'Front Door Privacy mode' });
+        bell('select.front_door_doorbell_led', 'auto', { friendly_name: 'Front Door Doorbell LED', options: ['stayoff', 'auto', 'alwaysonatnight', 'alwayson'] });
+        bell('select.front_door_play_quick_reply_message', 'unknown', {
+            friendly_name: 'Front Door Play quick reply message',
+            options: ['I\'m sorry. I think you\'ve knocked on the wrong door.', 'Hi, we will be right there. Please wait a moment.', 'Hi, please leave the package at the door. We will get it later.']
+        });
+        bell('sensor.front_door_battery', '62', { friendly_name: 'Front Door Battery', unit_of_measurement: '%', device_class: 'battery' });
+        bell('binary_sensor.front_door_person', 'off', { friendly_name: 'Front Door Person' });
+        bell('binary_sensor.front_door_motion', 'off', { friendly_name: 'Front Door Motion', device_class: 'motion' });
         put('climate.hallway_thermostat', 'cool', {
             friendly_name: 'Hallway Thermostat', current_temperature: 74, temperature: 72, min_temp: 50, max_temp: 90,
             hvac_modes: ['off', 'heat', 'cool', 'heat_cool', 'fan_only'], hvac_action: 'cooling', target_temp_step: 1, current_humidity: 48
@@ -1646,6 +1739,137 @@
         emit();
     };
     const mockRings = async () => mockRingTimes.slice();
+
+    // The made-up house's media source: a Reolink-shaped tree
+    // (reolink → camera → resolution → day → clip) over the mock doorbell,
+    // with the same titles the real integration writes
+    // ("19:00:39 0:02:32 Motion Vehicle Person Doorbell"). Unlike the real
+    // one, these clips carry a thumbnail, so the events strip can be seen
+    // without anybody's front door in it.
+    const MOCK_CLIPS = [ // [minutes ago, seconds long, what it saw]
+        [6, 47, 'Motion Vehicle Person Doorbell'], [23, 31, 'Motion Person'], [64, 22, 'Motion Vehicle'],
+        [150, 18, 'Motion'], [214, 96, 'Motion Animal Person'], [327, 40, 'Vehicle'],
+        [402, 27, 'Motion Person Doorbell'], [560, 15, 'Motion'], [733, 52, 'Motion Vehicle'],
+        [1090, 33, 'Motion Pet'], [1340, 24, 'Motion Person'], [1610, 19, 'Motion']
+    ];
+    const mockCamId = () => (doorbells[0] && doorbells[0].camera) || 'camera.front_door_doorbell';
+    const two = (n) => String(n).padStart(2, '0');
+    const stamp = (d) => `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
+    const mockClipList = () => MOCK_CLIPS.map(([mins, secs, kinds]) => {
+        const at = new Date(Date.now() - mins * 60000);
+        const end = new Date(at.getTime() + secs * 1000);
+        const dur = `${Math.floor(secs / 3600)}:${two(Math.floor(secs / 60) % 60)}:${two(secs % 60)}`;
+        return {
+            title: `${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())} ${dur} ${kinds}`,
+            media_class: 'video',
+            media_content_type: 'video',
+            media_content_id: `media-source://reolink/FILE|MOCK|0|sub|Mp4Record/mock.mp4|${stamp(at)}|${stamp(end)}`,
+            can_play: true,
+            can_expand: false,
+            thumbnail: mockSnapshot(mockCamId() + '#' + Math.round(at.getTime() / 60000))
+        };
+    });
+    const mockDays = () => {
+        const days = new Map();
+        for (const c of mockClipList()) {
+            const at = new Date(Date.parse(
+                c.media_content_id.split('|')[5].replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)$/, '$1-$2-$3T$4:$5:$6')));
+            const key = `${at.getFullYear()}|${at.getMonth() + 1}|${at.getDate()}`;
+            if (!days.has(key)) days.set(key, at);
+        }
+        return [...days.entries()].sort((a, b) => a[1] - b[1]).map(([key, at]) => ({
+            title: key.replace(/\|/g, '/'),
+            media_class: 'directory',
+            media_content_type: 'playlist',
+            media_content_id: `media-source://reolink/DAY|MOCK|0|sub|${key.replace(/\|/g, '|')}`,
+            can_play: false,
+            can_expand: true,
+            thumbnail: null,
+            _at: at
+        }));
+    };
+    const mockNode = (title, id, children, cls = 'channel') => ({
+        title, media_class: cls, media_content_type: 'playlist', media_content_id: id,
+        can_play: false, can_expand: true, thumbnail: null, children
+    });
+    const mockBrowse = async (id) => {
+        const cam = mockCamId();
+        if (!id || id === 'media-source://') {
+            return mockNode('Media sources', 'media-source://', [mockNode('Reolink', 'media-source://reolink', undefined, 'app')], 'app');
+        }
+        if (id === 'media-source://reolink') {
+            const one = mockNode(nameOf(cam), 'media-source://reolink/CAM|MOCK|0', undefined);
+            one.thumbnail = '/api/camera_proxy/' + cam;
+            return mockNode('Reolink', id, [one], 'app');
+        }
+        if (/^media-source:\/\/reolink\/CAM\|/.test(id)) {
+            return mockNode(nameOf(cam), id, [
+                mockNode('Low resolution', 'media-source://reolink/RES|MOCK|0|sub'),
+                mockNode('High resolution', 'media-source://reolink/RES|MOCK|0|main')
+            ]);
+        }
+        if (/^media-source:\/\/reolink\/RES\|/.test(id)) return mockNode(nameOf(cam) + ' Low res.', id, mockDays());
+        if (/^media-source:\/\/reolink\/DAY\|/.test(id)) {
+            const want = id.split('|').slice(4).join('/');
+            const mine = mockClipList().filter((c) => {
+                const s = c.media_content_id.split('|')[5];
+                return `${+s.slice(0, 4)}/${+s.slice(4, 6)}/${+s.slice(6, 8)}` === want;
+            });
+            return mockNode(want, id, mine, 'directory');
+        }
+        throw new Error('no such media source in the mock house');
+    };
+    // A real, playable stand-in clip: a few seconds of the mock camera's
+    // picture recorded off a canvas. One is made the first time something
+    // asks, and every mock clip plays it.
+    let mockClipUrl = null;
+    const mockResolve = async () => {
+        if (mockClipUrl) return { url: mockClipUrl, mime: 'video/mp4' };
+        if (typeof MediaRecorder === 'undefined') return { url: '', mime: '' };
+        const c = document.createElement('canvas');
+        c.width = 640;
+        c.height = 360;
+        const g = c.getContext('2d');
+        const cam = mockCamId();
+        const type = ['video/mp4', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+        if (!type) return { url: '', mime: '' };
+        const rec = new MediaRecorder(c.captureStream(10), { mimeType: type });
+        const parts = [];
+        rec.ondataavailable = (e) => e.data.size && parts.push(e.data);
+        const done = new Promise((resolve) => { rec.onstop = resolve; });
+        rec.start();
+        const paint = () => {
+            const img = new Image();
+            img.onload = () => g.drawImage(img, 0, 0, 640, 360);
+            img.src = mockSnapshot(cam);
+        };
+        const t = setInterval(paint, 100);
+        paint();
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        clearInterval(t);
+        rec.stop();
+        await done;
+        mockClipUrl = URL.createObjectURL(new Blob(parts, { type }));
+        return { url: mockClipUrl, mime: type };
+    };
+    // the made-up house's history: the doorbell's rings, and motion every
+    // so often, so the fallback has something to show
+    const mockHistory = async (ids, hours) => {
+        const out = {};
+        const since = Date.now() - hours * 3600000;
+        for (const id of ids) {
+            const hits = /visitor|doorbell/i.test(id)
+                ? mockRingTimes.map((d) => d.getTime())
+                : MOCK_CLIPS.map(([mins]) => Date.now() - mins * 60000).filter((_, i) => i % 2 === 0);
+            const list = [{ state: 'off', at: since }];
+            for (const at of hits.filter((a) => a > since).sort((a, b) => a - b)) {
+                list.push({ state: 'on', at }, { state: 'off', at: at + 20000 });
+            }
+            out[id] = list;
+        }
+        return out;
+    };
+
     const mockShots = new Map();
     // a stand-in camera picture: a sky, a ground, and the camera's clock
     const mockSnapshot = (id) => {
@@ -1749,6 +1973,7 @@
         run,
         extras,
         device,
+        siblings,
         shortName,
         platform: (id) => platformOf.get(id) || '',
         isGroup,
@@ -1756,6 +1981,9 @@
         isMain: (id) => mainOf.has(id),
         snapshotUrl,
         playCamera,
+        browseMedia,
+        resolveMedia,
+        history,
         rings,
         lastRing,
         onRing(fn) { ringers.add(fn); return () => ringers.delete(fn); },

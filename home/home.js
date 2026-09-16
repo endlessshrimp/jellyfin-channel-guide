@@ -386,6 +386,8 @@
             { icon: 'newspaper', label: 'News', act: () => route('#/news') },
             // Home Assistant's rooms, once it's connected on this device (Settings)
             { icon: 'lightbulb', label: 'Rooms', act: () => route('#/rooms'), when: () => !!(window.HomerHA && window.HomerHA.isSetUp()) },
+            // the cameras' wall, with the doorbell's rings and clips
+            { icon: 'videocam', label: 'Cameras', act: () => route('#/cameras'), when: () => !!(window.HomerHA && window.HomerHA.isSetUp()) },
             // (Search isn't in the menu: its box is right above it, ▲ from the
             // first item or / gets there)
             { icon: 'settings', label: 'Settings', act: () => route('#/mypreferencesmenu') }
@@ -393,7 +395,8 @@
         const menu = $('.hm-menu');
         menu.classList.toggle('hm-menu-8', MENU.length === 8);
         menu.classList.toggle('hm-menu-9', MENU.length === 9);
-        menu.classList.toggle('hm-menu-10', MENU.length >= 10);
+        menu.classList.toggle('hm-menu-10', MENU.length === 10);
+        menu.classList.toggle('hm-menu-11', MENU.length >= 11);
         MENU.forEach((m) => {
             const item = el('div', 'hm-menu-item hm-focusable',
                 `<span class="material-icons" aria-hidden="true">${m.icon}</span>${esc(m.label)}${m.hint ? `<span class="hm-menu-hint">${m.hint}</span>` : ''}`);
