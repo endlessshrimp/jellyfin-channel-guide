@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.3
 
 Two things a Siri Remote couldn't do, and one it couldn't reach.
 
