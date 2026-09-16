@@ -541,8 +541,9 @@
 
 /* ---------- The Apple TV app ---------- */
 
-/* apple-tv/ sets window.HOMER_TVAPP and shared/layout.js marks <html>: a
-   remote drives everything, so no mouse cursor anywhere */
+/* On the Apple TV (apple/, window.HOMER_APP.platform === 'tvos'),
+   shared/layout.js marks <html>: a remote drives everything, so no mouse
+   cursor anywhere */
 html.homer-tvapp,
 html.homer-tvapp * {
     cursor: none !important;

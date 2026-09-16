@@ -68,7 +68,9 @@
         standard: { key: 'standard', label: 'Standard', window: 180, rowH: 76, rows: 5 },
         large: { key: 'large', label: 'Large', window: 120, rowH: 98, rows: 4 }
     };
-    const sizeDefault = () => (window.HOMER_TVAPP ? 'large' : 'standard');
+    // the Apple TV app draws Large; a phone, an iPad or a browser, Standard
+    const onAppleTv = () => (window.HOMER_APP ? window.HOMER_APP.platform === 'tvos' : window.HOMER_TVAPP === true);
+    const sizeDefault = () => (onAppleTv() ? 'large' : 'standard');
     // what Settings saved, or '' when it has never been asked
     const sizeSaved = () => {
         try {

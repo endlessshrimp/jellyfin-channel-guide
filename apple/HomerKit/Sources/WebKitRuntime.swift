@@ -94,6 +94,7 @@ enum WebKitRuntime {
     @objc(setAllowsInlineMediaPlayback:) optional func wk_setAllowsInlineMediaPlayback(_ on: Bool)
     @objc(setMediaTypesRequiringUserActionForPlayback:) optional func wk_setMediaTypesRequiringUserActionForPlayback(_ types: UInt)
     @objc(setAllowsAirPlayForMediaPlayback:) optional func wk_setAllowsAirPlayForMediaPlayback(_ on: Bool)
+    @objc(setAllowsPictureInPictureMediaPlayback:) optional func wk_setAllowsPictureInPictureMediaPlayback(_ on: Bool)
     @objc(setUserContentController:) optional func wk_setUserContentController(_ controller: AnyObject)
     @objc(preferences) optional func wk_preferences() -> AnyObject?
 

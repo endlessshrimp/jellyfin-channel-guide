@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- HOMER's Apple apps (`apple/`) are now an Apple TV app **and** an iPhone and
+  iPad app from one project, sharing a `HomerKit` group; only the input and
+  the platform's own tricks differ.
+  - The apps set `window.HOMER_APP = { platform, version }` (`tvos`, `ios` or
+    `ipados`) and fire `homer-app` events for the buttons that aren't keys
+    (OK held down, swipe up, swipe down). The Apple TV also sets the old
+    `window.HOMER_TVAPP` and fires `homer-tv`, so a released HOMER keeps
+    working.
+  - HOMER draws by platform: the Apple TV keeps the TV layout with no touch,
+    no cursor and the Large guide; an iPad draws the TV layout with touch; an
+    iPhone draws HOMER's phone layouts, as in any phone browser.
+  - On the iPhone and iPad: Music keeps playing with the screen locked or
+    another app in front, the lock screen shows the track with play/pause,
+    skip and scrub, and a video can pop out into picture in picture.
+
 ## v0.4.6
 
 - **Music** (`#/music`, Home's **Music** item): your own music from Jellyfin's

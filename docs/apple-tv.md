@@ -1,6 +1,6 @@
 # HOMER on the Apple TV
 
-Research from 2026-09-15. The Option A test app is in [apple-tv/](../apple-tv/README.md): how to install it, and the pass/fail checklist.
+Research from 2026-09-15. The app is in [apple/](../apple/README.md): how to install it, and the pass/fail checklist.
 
 ## The short version
 

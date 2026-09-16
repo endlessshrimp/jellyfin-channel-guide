@@ -166,7 +166,7 @@
             const v = localStorage.getItem(SIZE_KEY);
             if (v === 'large' || v === 'standard') return v;
         } catch { /* storage blocked: the default */ }
-        return window.HOMER_TVAPP ? 'large' : 'standard';
+        return (window.HOMER_APP ? window.HOMER_APP.platform === 'tvos' : window.HOMER_TVAPP === true) ? 'large' : 'standard';
     };
 
     // ---------- Small helpers ----------

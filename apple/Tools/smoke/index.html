@@ -24,13 +24,15 @@
 <script>
     const plain = location.search === '?plain';
     const log = (m) => { document.getElementById('out').textContent = m; return fetch('/log?' + encodeURIComponent(m)).catch(() => {}); };
-    log(`boot tvapp=${window.HOMER_TVAPP} maxTouchPoints=${navigator.maxTouchPoints} touch=${'ontouchstart' in window} `
-        + `bridge=${typeof window.__homerTvApp} restored=${localStorage.getItem('homer-smoke')} ua=${navigator.userAgent}`);
+    log(`boot tvapp=${window.HOMER_TVAPP} platform=${(window.HOMER_APP || {}).platform} maxTouchPoints=${navigator.maxTouchPoints} `
+        + `touch=${'ontouchstart' in window} bridge=${typeof window.__homerApp} alias=${typeof window.__homerTvApp} `
+        + `restored=${localStorage.getItem('homer-smoke')} ua=${navigator.userAgent}`);
     localStorage.setItem('homer-smoke', 'saved-' + Date.now());
     document.addEventListener('keydown', (e) => log(`keydown key=${JSON.stringify(e.key)} code=${e.code} keyCode=${e.keyCode} `
         + `repeat=${e.repeat} target=${e.target.id || e.target.tagName}`), true);
     document.addEventListener('keyup', (e) => log(`keyup key=${JSON.stringify(e.key)}`), true);
     document.getElementById('q').addEventListener('input', (e) => log('input value=' + e.target.value));
+    window.addEventListener('homer-app', (e) => log('homer-app action=' + e.detail.action));
     window.addEventListener('homer-tv', (e) => log('homer-tv action=' + e.detail.action));
     setTimeout(() => log(`zoomstate plain=${plain} dpr=${devicePixelRatio} innerWidth=${innerWidth} cssZoom=${document.documentElement.style.zoom || 'none'}`), 5000);
     if (plain) {

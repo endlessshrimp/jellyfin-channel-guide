@@ -1,0 +1,60 @@
+# XcodeGen spec for HOMER's Apple apps: one project, two targets, the same
+# HomerKit sources in both. `xcodegen generate` in this folder writes
+# HOMER.xcodeproj (not committed). See README.md.
+name: HOMER
+options:
+  bundleIdPrefix: org.nelsons
+  deploymentTarget:
+    tvOS: "26.0"
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Jason's free personal team. Xcode's Signing tab overrides it; clear it
+    # here if someone else builds this.
+    DEVELOPMENT_TEAM: HSH6FW9K2Q
+targets:
+  HOMER-tvOS:
+    type: application
+    platform: tvOS
+    sources:
+      - path: HomerKit
+      - path: tvOS
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: HOMER
+        # The id already signed onto the Apple TV: keep it, or the app becomes
+        # a different app and loses its saved sign-in.
+        PRODUCT_BUNDLE_IDENTIFIER: org.nelsons.homer.appletv3
+        INFOPLIST_FILE: tvOS/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "3"
+    scheme:
+      commandLineArguments:
+        # Tick this in Edit Scheme… → Run → Arguments to open another page.
+        "-HomerURL http://192.168.68.100:8096/web/index.html#/home": false
+  HOMER-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: HomerKit
+      - path: iOS
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: HOMER
+        PRODUCT_BUNDLE_IDENTIFIER: org.nelsons.homer.ios
+        INFOPLIST_FILE: iOS/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        # 1 is iPhone, 2 is iPad: one app for both.
+        TARGETED_DEVICE_FAMILY: "1,2"
+    scheme:
+      commandLineArguments:
+        "-HomerURL http://192.168.68.100:8096/web/index.html#/home": false

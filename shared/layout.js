@@ -14,20 +14,25 @@
  * to fit between the phone's top bar and tab bar: its fit() asks stageBox()
  * how much room there is.
  *
- * In HOMER's Apple TV app (apple-tv/), which sets window.HOMER_TVAPP before
- * the page loads, it's always the TV layout without touch, whatever the web
- * view reports, and <html> carries homer-tvapp (no mouse cursor: shell.css).
+ * HOMER's Apple apps (apple/) set window.HOMER_APP = { platform, version }
+ * before the page loads, and the platform decides, whatever the web view
+ * reports:
+ *   tvos    the TV layout, no touch, and <html> carries homer-tvapp (no
+ *           mouse cursor: shell.css)
+ *   ipados  the TV layout, with touch
+ *   ios     nothing forced: the phone layouts, as in any phone browser
+ * window.HOMER_TVAPP, the app's older flag, still means tvos.
  *
  * On a phone every HOMER screen gets the phone chrome: a top bar (HOMER, the
  * screen's name, the weather, Search) and a tab bar (Home, Guide, Movies,
  * Shows, Recordings). Navigation still goes through HomerPlayer, so a video
  * playing in a preview window keeps playing.
  *
- * window.HomerLayout = { isPhone, isTouch, onChange, register, usePhone,
+ * window.HomerLayout = { platform, isPhone, isTouch, onChange, register, usePhone,
  *                        stageBox, chromeShown, force, destroy, version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     if (window.HomerLayout && typeof window.HomerLayout.destroy === 'function') {
         window.HomerLayout.destroy();
@@ -45,10 +50,22 @@
     // force({ phone, touch }): for testing (an iframe can't be a phone that
     // can't hover); null goes back to the media query
     let forced = { phone: null, touch: null };
-    // the Apple TV app: a TV, never a phone or a touch screen
-    const tvApp = () => window.HOMER_TVAPP === true;
-    const isPhone = () => (tvApp() ? false : forced.phone != null ? forced.phone : !!(phoneMq && phoneMq.matches));
-    const isTouch = () => (tvApp() ? false : forced.touch != null ? forced.touch : !!(touchMq && touchMq.matches));
+    // which of HOMER's Apple apps this is, if any
+    const platform = () => {
+        const app = window.HOMER_APP;
+        if (app && app.platform) return app.platform;
+        return window.HOMER_TVAPP === true ? 'tvos' : null; // the app's older flag
+    };
+    const tvApp = () => platform() === 'tvos';
+    // an Apple TV and an iPad both draw the TV layout; only the Apple TV has
+    // no touch (its remote sends keys)
+    const bigScreen = () => tvApp() || platform() === 'ipados';
+    const isPhone = () => (bigScreen() ? false : forced.phone != null ? forced.phone : !!(phoneMq && phoneMq.matches));
+    const isTouch = () => {
+        if (tvApp()) return false;
+        if (platform() === 'ipados') return true;
+        return forced.touch != null ? forced.touch : !!(touchMq && touchMq.matches);
+    };
 
     // ---------- Jellyfin session ----------
 
@@ -310,6 +327,7 @@
 
     window.HomerLayout = {
         version: VERSION,
+        platform,
         isPhone,
         isTouch,
         onChange,

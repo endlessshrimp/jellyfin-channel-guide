@@ -32,10 +32,13 @@
  * and Quick controls. A provider that returns [] is skipped, so a screen that
  * is up but not in front doesn't have to unregister.
  *
- * The Apple TV app (apple-tv/) fires these on window:
- *   new CustomEvent('homer-tv', { detail: { action: 'menu' } })       OK held
- *   new CustomEvent('homer-tv', { detail: { action: 'swipe-up' } })   clickpad
- *   new CustomEvent('homer-tv', { detail: { action: 'swipe-down' } })
+ * HOMER's Apple apps (apple/) fire these on window, with the platform in the
+ * same detail:
+ *   new CustomEvent('homer-app', { detail: { action: 'menu' } })       OK held
+ *   new CustomEvent('homer-app', { detail: { action: 'swipe-up' } })   clickpad
+ *   new CustomEvent('homer-app', { detail: { action: 'swipe-down' } })
+ * (The Apple TV app fires them as 'homer-tv' as well, the name HOMER v0.4.6
+ * and older listen for; this file has moved on to 'homer-app'.)
  * menu opens the strip, swipe-up runs the screen's main action (the Guide from
  * anywhere that hasn't got one), swipe-down closes what's open.
  *
@@ -377,7 +380,7 @@
 
     document.addEventListener('keydown', onKeyCapture, true);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('homer-tv', onTv);
+    window.addEventListener('homer-app', onTv);
     window.addEventListener('resize', scale);
     layer.addEventListener('click', onClick);
     layer.addEventListener('mousemove', onMove);
@@ -397,7 +400,7 @@
             providers.length = 0;
             document.removeEventListener('keydown', onKeyCapture, true);
             document.removeEventListener('keydown', onKey);
-            window.removeEventListener('homer-tv', onTv);
+            window.removeEventListener('homer-app', onTv);
             window.removeEventListener('resize', scale);
             layer.remove();
             document.getElementById('hk-css')?.remove();

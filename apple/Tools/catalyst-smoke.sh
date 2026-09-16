@@ -1,7 +1,8 @@
 #!/bin/bash
 # Runs the app's code on this Mac, without Xcode or an Apple TV.
 #
-# Builds HOMER/Sources as a Mac Catalyst app with the Command Line Tools (the
+# Builds the Apple TV app's code (HomerKit + tvOS) as a Mac Catalyst app with
+# the Command Line Tools (the
 # Mac SDK carries UIKit for Catalyst, and WebKit is loaded the same way it is
 # on the TV), opens Tools/smoke/index.html from a local server in place of
 # HOMER, and lets the Debug self-test press remote buttons. Then it runs again
@@ -37,12 +38,12 @@ swiftc -Onone -D DEBUG -swift-version 5 -module-name HOMER \
     -sdk "$SDK" -target arm64-apple-ios17.0-macabi \
     -F "$IOS/System/Library/Frameworks" -I "$IOS/usr/include" -L "$IOS/usr/lib" \
     -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker /System/iOSSupport/usr/lib/swift \
-    "$HERE"/HOMER/Sources/*.swift -o "$APP/Contents/MacOS/HOMER" || exit 1
-cp "$HERE/HOMER/Resources/homer-tvapp.js" "$APP/Contents/Resources/"
+    "$HERE"/HomerKit/Sources/*.swift "$HERE"/tvOS/*.swift -o "$APP/Contents/MacOS/HOMER" || exit 1
+cp "$HERE/HomerKit/Resources/homer-app.js" "$APP/Contents/Resources/"
 sed -e 's/$(EXECUTABLE_NAME)/HOMER/; s/$(PRODUCT_NAME)/HOMER/; s/$(PRODUCT_MODULE_NAME)/HOMER/' \
     -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/; s/\$(PRODUCT_BUNDLE_PACKAGE_TYPE)/APPL/" \
     -e 's/$(MARKETING_VERSION)/0.1.0/; s/$(CURRENT_PROJECT_VERSION)/1/' \
-    "$HERE/HOMER/Info.plist" > "$APP/Contents/Info.plist"
+    "$HERE/tvOS/Info.plist" > "$APP/Contents/Info.plist"
 plutil -insert LSMinimumSystemVersion -string 14.0 "$APP/Contents/Info.plist"
 plutil -insert CFBundleSupportedPlatforms -json '["MacOSX"]' "$APP/Contents/Info.plist"
 plutil -insert UIDeviceFamily -json '[2]' "$APP/Contents/Info.plist"
@@ -107,8 +108,10 @@ check "keyboard text lands in the box"        'input value=smoke'
 check "Done presses Enter in the box"         'keydown key="Enter" .*target=q'
 check "sign-in saved by the app"              '\[HOMER\] saved sign-in: .*homer-smoke'
 check "sign-in restored after a wipe"         'restored=saved-[0-9]+'
-check "hold OK: HOMER's menu, no Enter"      'homer-tv action=menu'
-check "swipe up / down: HOMER's swipes"       'homer-tv action=swipe-(up|down)'
+check "hold OK: HOMER's menu, no Enter"      'homer-app action=menu'
+check "swipe up / down: HOMER's swipes"       'homer-app action=swipe-(up|down)'
+check "the old homer-tv event still fires"    'homer-tv action=menu'
+check "the page is told which platform"       'boot .*platform=tvos'
 check "swipe sideways stays an arrow"         'keydown key="ArrowLeft"'
 check "a HOMER screen is never zoomed"        'zoomstate plain=false .* cssZoom=none'
 check "Jellyfin's own pages are zoomed"       'zoomstate plain=true .* cssZoom=1.5'

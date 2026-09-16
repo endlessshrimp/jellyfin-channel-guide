@@ -20,8 +20,9 @@ final class HomerWebView: NSObject {
     private let proxy: WebKitDelegateProxy
 
     /// nil when WebKit can't be loaded or a WKWebView can't be made.
-    /// `bootScript` runs first, then the bridge.
-    init?(bootScript: String, frame: CGRect) {
+    /// `bootScript` runs first, then the bridge. `interactive` is false on the
+    /// Apple TV, where the remote drives the page through key events instead.
+    init?(bootScript: String, frame: CGRect, interactive: Bool, pictureInPicture: Bool) {
         guard WebKitRuntime.loadedFrom != nil,
               let configClass = WebKitRuntime.objectClass("WKWebViewConfiguration"),
               let controllerClass = WebKitRuntime.objectClass("WKUserContentController")
@@ -32,6 +33,7 @@ final class HomerWebView: NSObject {
         c.wk_setAllowsInlineMediaPlayback?(true)
         c.wk_setMediaTypesRequiringUserActionForPlayback?(0) // WKAudiovisualMediaTypeNone: autoplay, sound and all
         c.wk_setAllowsAirPlayForMediaPlayback?(true)
+        if pictureInPicture { c.wk_setAllowsPictureInPictureMediaPlayback?(true) }
 
         if let prefs = c.wk_preferences?() {
             let p = WebKitRuntime.calls(prefs)
@@ -62,18 +64,19 @@ final class HomerWebView: NSObject {
 
         let w = WebKitRuntime.calls(webView)
         w.wk_setNavigationDelegate?(proxy)
-        w.wk_setCustomUserAgent?(Config.userAgent)
+        if let userAgent = Config.userAgent { w.wk_setCustomUserAgent?(userAgent) }
         w.wk_setInspectable?(true) // Safari's Develop menu, if it lists the Apple TV
 
         webView.backgroundColor = .black
         webView.isOpaque = true
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        // The remote never touches the page directly: every press becomes a
-        // key event (RemoteKeys). This also keeps WebKit's own tvOS focus
-        // and scrolling out of the way.
-        webView.isUserInteractionEnabled = false
+        // On the Apple TV the remote never touches the page directly: every
+        // press becomes a key event (RemoteKeys), which also keeps WebKit's
+        // own tvOS focus and scrolling out of the way. A phone or iPad taps
+        // and scrolls the page itself.
+        webView.isUserInteractionEnabled = interactive
         if let scroll = w.wk_scrollView?() {
-            scroll.isScrollEnabled = false
+            scroll.isScrollEnabled = interactive
             scroll.contentInsetAdjustmentBehavior = .never
             scroll.backgroundColor = .black
         }
@@ -104,13 +107,13 @@ final class HomerWebView: NSObject {
         }
     }
 
-    /// homer-tvapp.js from the app bundle.
+    /// homer-app.js from the app bundle.
     private static func bridgeSource() -> String {
-        guard let url = Bundle.main.url(forResource: "homer-tvapp", withExtension: "js"),
+        guard let url = Bundle.main.url(forResource: "homer-app", withExtension: "js"),
               let js = try? String(contentsOf: url, encoding: .utf8)
         else {
-            print("[HOMER] homer-tvapp.js is missing from the app bundle")
-            return "window.HOMER_TVAPP = true;"
+            print("[HOMER] homer-app.js is missing from the app bundle")
+            return "window.HOMER_APP = { platform: '\(Config.platform)', version: '\(Config.version)' };"
         }
         return js
     }

@@ -1,14 +1,22 @@
-# HOMER on the Apple TV (the test app)
+# HOMER on the Apple TV, the iPhone and the iPad
 
-A small tvOS app that opens HOMER full screen on the Apple TV, with the Siri
-Remote working it like a keyboard. It's the pass/fail test from
+One Xcode project, two apps, the same HOMER: a full-screen web view with no
+browser chrome, the sign-in kept for it, and whatever else the platform needs.
+
+| App | Runs on | HOMER draws | Driven by |
+|---|---|---|---|
+| **HOMER-tvOS** | Apple TV (tvOS 26+) | the TV layout, Large guide | the Siri Remote, as key presses |
+| **HOMER-iOS** | iPhone (iOS 18+) | HOMER's phone layouts | touch |
+| **HOMER-iOS** | iPad | the TV layout, with touch | touch |
+
+Both open `http://192.168.68.100:8096/web/index.html#/home`. To change that,
+edit `defaultURL` in [HomerKit/Sources/Config.swift](HomerKit/Sources/Config.swift).
+
+The Apple TV app began as the pass/fail test from
 [docs/apple-tv.md](../docs/apple-tv.md) (Option A): does HOMER, as it is, work
-in the web view Apple hides on the Apple TV?
+in the web view Apple hides on the Apple TV? It does.
 
-It opens `http://192.168.68.100:8096/web/index.html#/home`. To change that,
-edit `defaultURL` in [HOMER/Sources/Config.swift](HOMER/Sources/Config.swift).
-
-## Install it on the TV
+## Install it on the Apple TV
 
 You need Xcode 27 (Apple TVs on tvOS 27 need it) and the Apple TV on the same
 network as the Mac. A free Apple ID is enough.
@@ -29,19 +37,18 @@ network as the Mac. A free Apple ID is enough.
      (I haven't confirmed that tvOS asks.)
 4. **Make the Xcode project.** In Terminal:
    ```sh
-   cd ~/Projects/jellyfin-channel-guide/.claude/worktrees/apple-tv/apple-tv
+   cd ~/Projects/jellyfin-channel-guide/.claude/worktrees/ios/apple
    xcodegen generate
    open HOMER.xcodeproj
    ```
    XcodeGen is already installed (`brew install xcodegen` if it isn't).
-5. **Pick your team.** In Xcode's left sidebar, click **HOMER** (the blue icon
-   at the top), then the **HOMER** target → **Signing & Capabilities** →
-   **Team** → "Your Name (Personal Team)". Running `xcodegen generate` again
-   clears the team, so pick it again after that. Leave the bundle identifier
+5. **Check the team.** `project.yml` already carries your personal team, so
+   Xcode should show it under the **HOMER-tvOS** target → **Signing &
+   Capabilities** → **Team**. Leave the bundle identifier
    (`org.nelsons.homer.appletv3`) alone: it's the one already on the TV, and a
    different one is a different app, with no saved sign-in.
-6. **Run it.** At the top of the Xcode window, click the run destination
-   (next to "HOMER") and pick your Apple TV. Press **▶** (⌘R). The first time
+6. **Run it.** At the top of the Xcode window, pick the **HOMER-tvOS** scheme
+   and your Apple TV as the destination. Press **▶** (⌘R). The first time
    takes a minute or two while Xcode prepares the TV.
    - If Xcode says the app couldn't open because the developer isn't
      trusted, look on the TV under Settings → General for a device
@@ -56,7 +63,36 @@ HOMER then shows up on the TV's Home Screen like any app, with a plain icon.
 **Every 7 days** (free Apple ID): the app stops opening. Open the project and
 press ▶ again with the TV on. Your sign-in should still be there.
 
-## Using it
+## Install it on the iPhone and the iPad
+
+Same project, the **HOMER-iOS** scheme. The app is one app for both
+(`org.nelsons.homer.ios`).
+
+1. Plug the iPhone into the Mac with a cable (or pair it over Wi-Fi in Xcode →
+   Window → Devices and Simulators). Unlock it and tap **Trust** if it asks.
+2. In Xcode, pick the **HOMER-iOS** scheme, then the iPhone as the
+   destination, and press **▶**.
+3. The first run, the phone says the developer isn't trusted: on the phone,
+   **Settings → General → VPN & Device Management**, tap your Apple ID, then
+   **Trust**. Press ▶ again.
+4. The same for the iPad.
+5. HOMER asks to find devices on the local network the first time it opens.
+   Choose **Allow**, or it can't reach the NAS.
+
+With a free Apple ID these stop opening after 7 days as well; press ▶ again.
+With the paid account (once it's through) they last a year, and TestFlight
+becomes an option.
+
+**On the phone** HOMER draws its phone layouts (`docs/phone.md`), and the page
+takes taps and swipes itself: no key mapping, no page zoom. **On the iPad**
+HOMER draws the TV layout with touch, so it looks like the TV and works like a
+tablet.
+
+Music keeps playing when the screen locks or you leave the app, and the lock
+screen shows what's playing with play/pause, skip and scrub. A video can pop
+out into picture in picture from the player's own control.
+
+## Using it on the Apple TV
 
 | Remote | Does |
 |---|---|
@@ -71,7 +107,7 @@ press ▶ again with the TV on. Your sign-in should still be there.
 | TV button | Leaves the app, like any app |
 
 Holding OK and swiping up or down reach HOMER as
-`window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action } }))`,
+`window.dispatchEvent(new CustomEvent('homer-app', { detail: { action } }))`,
 with `action` of `menu`, `swipe-up` or `swipe-down`. HOMER's own side decides
 what they do.
 
@@ -124,6 +160,13 @@ whether it does for tvOS.
 - **On Jason's bedroom Apple TV:** HOMER loads, signing in with the tvOS
   keyboard works, and the sign-in is still there next time. The rest of the
   checklist above is still to do.
+- **iPhone and iPad Simulators (iOS 27):** the app opens HOMER full screen and
+  says which platform it is. On the iPhone, HOMER draws its phone layout
+  (`homer-phone homer-touch`) and Jellyfin its mobile one, with no zoom; on
+  the iPad, HOMER's TV layout with touch (`homer-touch`, no `homer-phone`).
+  The sign-in is saved, and after the web view's storage is wiped the app puts
+  it back before the page loads. The now-playing bridge reaches the app
+  (title, artist, position).
 - **tvOS Simulator (tvOS 27, Xcode 27):** the app builds (for the Simulator
   and, unsigned, for a real Apple TV) with no warnings. On the Simulator:
   - It loads WebKit and opens HOMER's sign-in page full screen, with
@@ -133,8 +176,8 @@ whether it does for tvOS.
     page at 960×540 and never went full screen.
   - The sign-in page zooms to 1.5× and lays out again at that size, with
     nothing cut off.
-- **On the Mac** (`Tools/catalyst-smoke.sh`, 23 checks): the same code built
-  for the Mac.
+- **On the Mac** (`Tools/catalyst-smoke.sh`, 25 checks): the Apple TV's code
+  built for the Mac.
   - Every remote button arrives in a page as the right key (key, code,
     keyCode, repeat), and the keyboard's text lands in the box.
   - Holding OK sends HOMER's menu and no Enter; a tap still sends Enter;
@@ -142,19 +185,31 @@ whether it does for tvOS.
   - A page with a HOMER screen is never zoomed, a plain one is.
   - The sign-in is saved and comes back after the web view's storage is wiped.
   - On a plain sign-in form, the arrows, Done and OK work.
-- **Only the TV can answer these:**
+- **Only a real device can answer these:**
   - Does real video (Jellyfin's live TV, a movie, a camera) play docked?
-  - Do swipes on the clickpad reach the app? (Presses do: Jason signed in
-    with them. Swipes come from UIKit gestures, which the Mac and the
-    Simulator can't stand in for.)
+  - Does music keep playing on the iPhone with the screen locked, and do the
+    lock screen's buttons work? The plumbing is in (the audio background mode,
+    a `.playback` session held while something plays, and WebKit's own log
+    saying `category = MediaPlayback, policy = LongFormAudio`), but this Mac's
+    Simulators stopped playing any media part-way through the day — audio and
+    video both stall with `AddRunningClient failed (-66681)` from CoreAudio,
+    which is the Mac, not the app. (Earlier in the day the same tvOS build
+    played a test video in the Simulator.)
+  - Does picture in picture pop out of the page?
+  - Do swipes on the clickpad reach the Apple TV app? (Presses do: Jason
+    signed in with them. Swipes come from UIKit gestures, which the Mac and
+    the Simulators can't stand in for.)
   - Does the Keychain keep the sign-in through a reboot and a 7-day
-    re-install?
+    re-install? (In the Simulators it falls back to UserDefaults, because an
+    unsigned build has no Keychain entitlement.)
 
 ## How it works
 
 tvOS has WebKit on every Apple TV, but the SDK leaves it out, so there's no
 `import WebKit`. The app does what
-[tvOSBrowser](https://github.com/jvanakker/tvOSBrowser) does:
+[tvOSBrowser](https://github.com/jvanakker/tvOSBrowser) does. (iOS has WebKit
+in the open, but the same code runs there: one web view host, no `#if` in the
+part that matters.)
 
 - **Loads WebKit at runtime:** `dlopen` on
   `/System/Library/Frameworks/WebKit.framework/WebKit`, with two older paths
@@ -204,37 +259,76 @@ Where this app differs from tvOSBrowser:
   settings (under 96 KB) to the Keychain, and puts them back at document start
   before Jellyfin reads them.
 
-On the HOMER side (this branch), `shared/layout.js` reads
-`window.HOMER_TVAPP`: never a phone layout, never touch, and `html.homer-tvapp`
-hides the cursor (`shared/shell.css`). The live v0.4.1 doesn't have that yet.
-The app's page script covers the touch part until it ships.
+### What the page is told (the bridge)
+
+`HomerKit/Resources/homer-app.js` is injected at document start, before any of
+Jellyfin's or HOMER's code runs. It sets:
+
+```js
+window.HOMER_APP = { platform: 'tvos' | 'ios' | 'ipados', version: '0.2.0' }
+window.HOMER_TVAPP = true      // the Apple TV only: the name HOMER v0.4.6 reads
+```
+
+and fires, for the buttons that aren't keys:
+
+```js
+window.dispatchEvent(new CustomEvent('homer-app', { detail: { action, platform } }))
+// action: 'menu' (OK held) | 'swipe-up' | 'swipe-down'
+// the Apple TV fires the same thing as 'homer-tv' too, for HOMER v0.4.6 and older
+```
+
+HOMER's side (`shared/layout.js`) reads the platform: **tvos** is the TV
+layout with no touch and no cursor (`html.homer-tvapp`, `shared/shell.css`),
+**ipados** is the TV layout with touch, and **ios** leaves the media queries
+alone, so a phone gets HOMER's phone layouts. `guide/guide.js` and
+`shared/hub.js` start on the Large guide on the Apple TV only, and
+`shared/actions.js` listens for `homer-app`.
+
+### What's shared and what isn't
+
+`HomerKit/` is both apps: the web view host and its WebKit-by-selector layer,
+the injected page script, the saved sign-in, the loading/error screen, the
+settings, and the messages between page and app. `HomerViewController.make()`
+hands back the subclass for the platform.
+
+`tvOS/` is the remote: presses turned into keys, the hold and repeat timers,
+the swipe gestures and the tvOS keyboard, in `TVViewController`.
+
+`iOS/` is what a web view can't do by itself: the audio session, what's
+playing on the lock screen and its buttons, and picture in picture, in
+`PhoneViewController`.
 
 ### Files
 
 | File | What it is |
 |---|---|
-| `project.yml` | XcodeGen spec (tvOS 26+, Swift). `HOMER.xcodeproj` is made from it and not committed. |
-| `HOMER/Info.plist` | Scene manifest, http allowed (web content, media, LAN), local network text |
-| `HOMER/Sources/Config.swift` | The address, user agent, Play/Pause key, timings |
-| `HOMER/Sources/WebKitRuntime.swift` | dlopen, and the WebKit selectors the app calls |
-| `HOMER/Sources/HomerWebView.swift` | The web view: autoplay, inline video, the page script, messages back |
-| `HOMER/Sources/HomerViewController.swift` | The screen: presses, loading/error screen, keyboard, saving |
-| `HOMER/Sources/RemoteKeys.swift` | Siri Remote → keys (repeat, hold Back for H, hold OK and swipes for HOMER) |
-| `HOMER/Sources/TextEntry.swift` | The tvOS keyboard for a text box |
-| `HOMER/Sources/SessionStore.swift` | The sign-in copy in the Keychain (UserDefaults if that fails) |
-| `HOMER/Sources/AppDelegate.swift` | App and scene delegates |
-| `HOMER/Resources/homer-tvapp.js` | The page side: the flag, keys, the homer-tv events, keyboard, saving, zoom and focus on plain pages |
-| `Tools/catalyst-smoke.sh` | Runs the app's code on the Mac against `Tools/smoke/index.html` |
+| `project.yml` | XcodeGen spec: the HOMER-tvOS and HOMER-iOS targets. `HOMER.xcodeproj` is made from it and not committed. |
+| `HomerKit/Sources/Config.swift` | The address, and what differs per platform: user agent, zoom, touch, picture in picture, background audio |
+| `HomerKit/Sources/WebKitRuntime.swift` | dlopen, and the WebKit selectors the apps call |
+| `HomerKit/Sources/HomerWebView.swift` | The web view: autoplay, inline video, picture in picture, the page script, messages back |
+| `HomerKit/Sources/HomerViewController.swift` | The screen: loading/error, zoom, the page's messages, saving the sign-in |
+| `HomerKit/Sources/SessionStore.swift` | The sign-in copy in the Keychain (UserDefaults if that fails) |
+| `HomerKit/Sources/AppDelegate.swift` | App and scene delegates |
+| `HomerKit/Resources/homer-app.js` | The page side: the flag, the events, keys, keyboard, saving, zoom, now playing |
+| `tvOS/TVViewController.swift` | The Siri Remote: presses, swipes, the keyboard, the self-test |
+| `tvOS/RemoteKeys.swift` | Remote → keys (repeat, hold Back for H, hold OK and swipes for HOMER) |
+| `tvOS/TextEntry.swift` | The tvOS keyboard for a text box |
+| `tvOS/Info.plist` | Scene manifest, http allowed (web content, media, LAN) |
+| `iOS/PhoneViewController.swift` | The audio session, the lock screen and its buttons |
+| `iOS/Info.plist` | The same, plus the audio background mode and the orientations |
+| `Tools/catalyst-smoke.sh` | Runs the Apple TV's code on the Mac against `Tools/smoke/index.html` |
 
-### Checking it without the TV
+### Checking it without a TV or a phone
 
 ```sh
-# the Swift sources and the page script
-node --check HOMER/Resources/homer-tvapp.js
-xcodegen generate
-xcodebuild -project HOMER.xcodeproj -scheme HOMER -sdk appletvsimulator CODE_SIGNING_ALLOWED=NO build
+# the page script
+node --check HomerKit/Resources/homer-app.js
 
-# the app's code on the Mac, 23 checks (a small window opens for ~40 s)
+xcodegen generate
+xcodebuild -project HOMER.xcodeproj -scheme HOMER-tvOS -sdk appletvsimulator CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project HOMER.xcodeproj -scheme HOMER-iOS  -sdk iphonesimulator  CODE_SIGNING_ALLOWED=NO build
+
+# the Apple TV's code on the Mac, 25 checks (a small window opens for ~40 s)
 Tools/catalyst-smoke.sh
 ```
 
@@ -246,6 +340,6 @@ Debug builds take two launch arguments (Edit Scheme… → Run → Arguments):
 
 `-HomerURL <address>` opens another page (Debug or Release).
 
-If a tvOS update breaks it, the app shows "This Apple TV won't open a web
+If a system update breaks it, the app shows "This device won't open a web
 view" instead of crashing. Check tvOSBrowser's issues and pull requests for
 that year's fix.
