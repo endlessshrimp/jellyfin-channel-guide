@@ -14,7 +14,7 @@
  *          and the rest of the screen gets the width back.
  *
  * Which one is a device setting, so both can be looked at side by side:
- *   localStorage['homer-menu'] = 'rows' | 'rail'      (default: rows)
+ *   localStorage['homer-menu'] = 'rows' | 'rail'      (default: rail)
  * A screen picks it up the next time it draws; HomerMenu.setStyle() redraws
  * every open menu at once.
  *
@@ -47,7 +47,7 @@
 
     const STYLE_KEY = 'homer-menu';
     const STYLES = ['rows', 'rail'];
-    const DEFAULT_STYLE = 'rows';
+    const DEFAULT_STYLE = 'rail';
     // the column's width on a 1920-wide stage, per treatment: what a screen
     // has to leave clear to the left of everything else
     const WIDTH = { rows: 400, rail: 104 };

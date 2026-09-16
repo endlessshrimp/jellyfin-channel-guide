@@ -308,6 +308,7 @@
     // the guide (guide/guide.js), for the Guide size choice; it isn't there when
     // Settings is used on its own
     const CG = () => (window.ChannelGuide && typeof window.ChannelGuide.setSize === 'function' ? window.ChannelGuide : null);
+    const MENU = () => (window.HomerMenu && typeof window.HomerMenu.setStyle === 'function' ? window.HomerMenu : null);
 
     // Home Assistant: what this device's connection is, as a choice list
     const HA_STATUS = {
@@ -455,6 +456,17 @@
                 matches: (o, v) => o.value === v,
                 // an open guide redraws itself at the new size; nothing reloads
                 save: async (value) => { if (CG()) CG().setSize(value); }
+            },
+            {
+                id: 'menustyle', icon: 'menu', label: 'Menu', scope: 'device',
+                desc: 'How Home\u2019s menu is drawn on this device. Icons keeps every item on screen however many there are, and names the one you\u2019re on; Rows names them all and scrolls when there are too many.',
+                options: () => [
+                    { value: 'rail', label: 'Icons', sub: 'Every item fits; the focused one is named' },
+                    { value: 'rows', label: 'Rows', sub: 'Every item named; the list scrolls' }
+                ],
+                current: () => (MENU() ? MENU().style() : 'rail'),
+                matches: (o, v) => o.value === v,
+                save: async (value) => { if (MENU()) MENU().setStyle(value); }
             },
             {
                 id: 'weather', icon: 'wb_sunny', label: 'Weather location', scope: 'device',
