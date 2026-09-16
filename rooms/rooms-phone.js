@@ -325,13 +325,7 @@
                 card.querySelector('.op-media-name').textContent = M.name;
                 card.querySelector('.op-media-line').textContent = ctx.mediaLine(M);
                 card.querySelector('.op-media-title').textContent = ctx.mediaTitle(M);
-                const art = card.querySelector('.op-art');
-                const img = art.querySelector('img');
-                if (img.dataset.src !== M.art) {
-                    img.dataset.src = M.art;
-                    art.classList.remove('has-art');
-                    if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
-                }
+                ctx.setArt(card.querySelector('.op-art'), M);
                 card.querySelectorAll('.op-mb').forEach((b) => {
                     b.querySelector('.material-icons').textContent = b.dataset.b === 'power' ? 'power_settings_new' : ctx.mediaButtonIcon(M, b.dataset.b);
                     b.setAttribute('aria-label', ctx.mediaButtonLabel(M, b.dataset.b));
@@ -476,13 +470,7 @@
             $('.op-rm-name').textContent = M.name;
             $('.op-rm-line').textContent = [M.stateText, ctx.remoteNowLine(M)].filter(Boolean).join(' · ');
             rmView.classList.toggle('playing', M.playing);
-            const art = $('.op-rm-art');
-            const img = art.querySelector('img');
-            if (img.dataset.src !== M.art) {
-                img.dataset.src = M.art;
-                art.classList.remove('has-art');
-                if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
-            }
+            ctx.setArt($('.op-rm-art'), M);
             rmView.querySelectorAll('.op-rm-key').forEach((b) => {
                 b.querySelector('.material-icons').textContent = ctx.remoteKeyIcon(M, b.dataset.rk);
                 b.querySelector('.op-rm-key-label').textContent = { volume_down: 'Vol −', volume_up: 'Vol +', play_pause: M.playing ? 'Pause' : 'Play' }[b.dataset.rk] || ctx.remoteKeyLabel(M, b.dataset.rk);

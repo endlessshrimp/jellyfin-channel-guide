@@ -172,6 +172,15 @@
         const load = () => {
             if (stopped || loading) return;
             const h = HA();
+            // a camera Home Assistant can't reach has no still to ask for, and
+            // the one on screen is however old the outage is: clear it, say
+            // there's no picture, and stop asking until it's back
+            const ent = h && h.entity ? h.entity(id) : null;
+            if (ent && (ent.state === 'unavailable' || ent.state === 'unknown')) {
+                if (box) { box.classList.remove('has-still'); box.classList.add('no-still'); }
+                img.removeAttribute('src');
+                return;
+            }
             const url = h ? h.snapshotUrl(id, true) : '';
             if (!url) { box && box.classList.add('no-still'); return; }
             if (url.startsWith('data:')) {
@@ -263,7 +272,7 @@
                     <video class="hc-view-live" muted playsinline></video>
                     <video class="hc-view-clip" playsinline controls></video>
                     <div class="hc-view-badge"></div>
-                    <div class="hc-view-none">${icon('videocam_off')}<span>No picture from this camera</span></div>
+                    <div class="hc-view-none">${icon('videocam_off')}<span class="hc-view-none-say">No picture from this camera</span><span class="hc-view-none-seen"></span></div>
                     <div class="hc-view-clipinfo"></div>
                 </div>
                 <div class="hc-view-side">
@@ -343,6 +352,7 @@
                 <img alt="" draggable="false">
                 <video class="hc-tile-live" muted playsinline></video>
                 <div class="hc-tile-none">${icon('videocam_off')}</div>
+                <div class="hc-tile-down">${icon('videocam_off')}<b>Camera unavailable</b><span class="hc-tile-seen"></span></div>
                 <div class="hc-tile-badge"></div>
                 <div class="hc-tile-label">${t.doorbell ? icon('doorbell') : ''}<span>${esc(t.name)}</span>${roomTag(t) ? `<i>${esc(roomTag(t))}</i>` : ''}</div>
                 <div class="hc-tile-note"></div>
@@ -359,6 +369,10 @@
             paintWall();
         };
 
+        // "Last seen 7:13 AM" — when Home Assistant last had anything from a
+        // camera that's gone quiet.
+        const seenText = (t) => (t && t.since ? `Last seen ${whenText(t.since)}` : 'Home Assistant can\'t reach it');
+
         const paintWall = () => {
             const h = HA();
             $$('.hc-tile').forEach((t, i) => {
@@ -366,8 +380,13 @@
                 const note = t.querySelector('.hc-tile-note');
                 if (!note) return;
                 const id = t.dataset.cam;
-                const bell = tiles[i] && tiles[i].bellId;
-                if (bell && h) {
+                const info = tiles[i];
+                const down = !!info && !info.planned && !info.available;
+                t.classList.toggle('down', down);
+                const seen = t.querySelector('.hc-tile-seen');
+                if (seen) seen.textContent = down ? seenText(info) : '';
+                const bell = info && info.bellId;
+                if (bell && h && !down) {
                     const last = h.lastRing(bell);
                     note.textContent = last ? `Last ring ${agoText(last)}` : last === null ? 'No rings in a week' : '';
                 } else note.textContent = '';
@@ -391,6 +410,8 @@
         // camera that can't stream — the still keeps refreshing instead.
         const startLive = (id, video, after = 0) => {
             if (!id || liveFor === id) return;
+            const t = tileOf(id);
+            if (t && !t.available) { stopLive(); return; } // nothing to stream from
             stopLive();
             clearTimeout(liveTimer);
             liveTimer = setTimeout(() => {
@@ -444,13 +465,40 @@
                 else if (c.kind === 'privacy') { value = c.on ? 'On' : 'Off'; on = c.on; }
                 else if (c.kind === 'led') { value = c.words[c.options.indexOf(c.state)] || c.state; }
                 else if (c.kind === 'reply') { value = c.options.length ? 'Play a message' : 'None set'; }
-                return `<div class="hc-ctl${on ? ' on' : ''}" data-c="${k}" role="button">${icon(c.icon)}<b>${esc(c.label)}</b><span>${esc(value)}</span></div>`;
+                if (!c.available) { value = 'Unavailable'; on = false; }
+                return `<div class="hc-ctl${on ? ' on' : ''}${c.available ? '' : ' off-line'}" data-c="${k}" role="button">${icon(c.icon)}<b>${esc(c.label)}</b><span>${esc(value)}</span></div>`;
             });
             if (bat != null) bits.push(`<div class="hc-bat">${icon(bat > 60 ? 'battery_full' : bat > 25 ? 'battery_5_bar' : 'battery_alert')}<b>Battery</b><span>${bat}%</span></div>`);
             if (!list.length && bat == null) bits.push('<div class="hc-ctl-none">This camera has no controls in Home Assistant.</div>');
             return bits.join('');
         };
         const controlList = () => (M ? M.controls(cam) : []);
+
+        // The camera view, when Home Assistant can't reach the camera: the
+        // picture is replaced by what's wrong and when it was last heard from,
+        // and the badge stops claiming a still it hasn't got.
+        let viewDown = null; // what the open camera was last drawn as
+        const paintDown = () => {
+            const t = tileOf(cam);
+            const down = !!cam && !!t && !t.available;
+            const main = $('.hc-view-main');
+            main.classList.toggle('hc-down', down);
+            if (down) main.classList.add('no-still');
+            $('.hc-view-none-say').textContent = down ? 'Camera unavailable' : 'No picture from this camera';
+            $('.hc-view-none-seen').textContent = down ? seenText(t) : '';
+            if (down && zone !== 'clip') $('.hc-view-badge').innerHTML = '<span class="hc-off-badge">Offline</span>';
+            if (viewDown === down) return;
+            const was = viewDown;
+            viewDown = down;
+            // it came back while the view was open: pick the picture up again
+            // rather than leaving the camera sitting there marked offline
+            if (was === true && !down && cam && zone !== 'clip') {
+                main.classList.remove('no-still');
+                $('.hc-view-badge').innerHTML = '<span class="hc-still-badge">Still</span>';
+                startLive(cam, $('.hc-view-live'), 0);
+                if (M) { M.forget(cam); loadEvents(true); }
+            }
+        };
 
         const paintControls = () => {
             $('.hc-controls').innerHTML = controlsHtml();
@@ -475,13 +523,16 @@
         const paintEvents = () => {
             const track = $('.hc-events-track');
             const note = $('.hc-events-note');
+            const why = M ? M.trouble(cam) : '';
             if (!evs.length) {
-                track.innerHTML = '<div class="hc-events-none">Nothing recorded yet.</div>';
+                track.innerHTML = `<div class="hc-events-none">${esc(why || 'Nothing recorded yet.')}</div>`;
                 note.textContent = '';
                 return;
             }
             track.innerHTML = evs.map(eventHtml).join('');
-            note.textContent = evs.some((e) => e.clip) ? '' : 'times only — this camera keeps no clips';
+            // times from Home Assistant's history still stand when the camera
+            // itself is away, so say which of the two this strip is showing
+            note.textContent = evs.some((e) => e.clip) ? '' : (why || 'times only — this camera keeps no clips');
             $$('.hc-ev').forEach((n, k) => n.classList.toggle('sel', zone === 'view' && part === 'events' && k === ei));
             loadThumbs();
             revealEvent();
@@ -556,6 +607,8 @@
             $('.hc-view-badge').innerHTML = '<span class="hc-still-badge">Still</span>';
             const main = $('.hc-view-main');
             main.classList.remove('has-still', 'no-still');
+            viewDown = null;
+            paintDown();
             if (stopBig) stopBig();
             stopBig = keepStill($('.hc-view-img'), id, BIG_STILL_MS);
             paintControls();
@@ -568,6 +621,7 @@
         };
 
         const closeCamera = () => {
+            viewDown = null;
             stopLive();
             if (stopBig) { stopBig(); stopBig = null; }
             clearInterval(eventsTimer);
@@ -642,6 +696,7 @@
         const runControl = (c) => {
             const h = HA();
             if (!h || !c) return;
+            if (!c.available) { toast(`${c.label} is unavailable while the camera is offline.`, 'err'); return; }
             if (c.kind === 'siren') {
                 h.toggle(c.id).then(() => toast(c.on ? 'Siren off' : 'Siren on')).catch(failed);
             } else if (c.kind === 'privacy') {
@@ -747,10 +802,32 @@
             else if (k === 'ArrowRight') move(1, 0);
             else if ((k === 'Enter' || k === ' ') && !ev.repeat) ok();
         };
+        // The wheel doesn't scroll the page — every screen is a fixed stage —
+        // but the Recent strip is wider than the window (two dozen events, eight
+        // of them in view), and the remote's ◀▶ were the only way to reach the
+        // rest. With a mouse, the wheel over the strip scrolls it, either axis,
+        // so every event can be clicked.
         const onWheel = (ev) => {
             if (document.getElementById('cg-root')) return;
             ev.preventDefault();
             ev.stopImmediatePropagation();
+            const track = ev.target.closest && ev.target.closest('.hc-events-track');
+            if (!track || track.scrollWidth <= track.clientWidth) return;
+            const by = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+            if (!by) return;
+            track.scrollLeft += by * (ev.deltaMode === 1 ? 30 : 1); // a line, or pixels
+            // keep the highlight on something that's actually in view, so OK
+            // on the remote picks up where the mouse left off
+            const near = $$('.hc-ev').reduce((best, n, k) => {
+                const d = Math.abs(n.offsetLeft + n.offsetWidth / 2 - track.scrollLeft - track.clientWidth / 2);
+                return best && best.d <= d ? best : { d, k };
+            }, null);
+            if (near && near.k !== ei) {
+                ei = near.k;
+                part = 'events';
+                $$('.hc-ev').forEach((n, k) => n.classList.toggle('sel', zone === 'view' && k === ei));
+                updateLegend();
+            }
         };
         const onClick = (ev) => {
             if (ev.target.closest('.hc-brand')) { goHome(); return; }
@@ -769,6 +846,20 @@
             if (ctl) { part = 'controls'; ci = Number(ctl.dataset.c); paintParts(); runControl(controlList()[ci]); return; }
             const evn = ev.target.closest('.hc-ev');
             if (evn) { part = 'events'; ei = Number(evn.dataset.e); paintParts(); playClip(evs[ei]); return; }
+            // the picture itself: it looks like a button, so it acts like one —
+            // a clip plays and pauses, the live view is just picked out
+            const main = ev.target.closest('.hc-view-main');
+            if (main && zone !== 'wall') {
+                if (zone === 'clip') {
+                    // same as OK on the remote, including the browser that
+                    // won't start sound on its own: play it silently instead
+                    if (clipEl.paused) clipEl.play().catch(() => { clipEl.muted = true; return clipEl.play().catch(() => {}); });
+                    else clipEl.pause();
+                    setTimeout(updateLegend, 120);
+                }
+                else { part = 'live'; paintParts(); }
+                return;
+            }
             if (ev.target.closest('.hc-state [data-ok]')) ok();
         };
 
@@ -830,7 +921,7 @@
                 tiles = next;
                 paintWall();
             }
-            if (zone !== 'wall' && cam) paintControls();
+            if (zone !== 'wall' && cam) { paintControls(); paintDown(); }
             updateLegend();
         };
 

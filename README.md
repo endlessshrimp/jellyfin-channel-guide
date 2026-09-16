@@ -310,6 +310,28 @@ turns on, writing to `/media/doorbell/`. That puts the stills in
 `media-source://media_source`, and nothing here has to change to find them.
 HOMER doesn't install it for you.
 
+### A camera that's offline
+
+A camera Home Assistant can't reach — a doorbell that dropped off Wi-Fi, a
+battery that ran out, an integration whose IP has moved — goes `unavailable`,
+and with it every entity on that device. Its tile used to go black and say
+nothing. Now it says **Camera unavailable** with **Last seen 7:13 AM** under
+it, keeping its name and its room, and the full-screen view says the same in
+place of the picture. Nothing asks it for a still or a stream while it's away,
+and its own controls (siren, quick reply, LED, privacy) are dimmed and marked
+**Unavailable** rather than failing quietly when you press them. It all clears
+itself the moment Home Assistant has the camera back — the screen watches, so
+there's no reload.
+
+**Recent still works.** The times come from Home Assistant's own history of
+the ring and detection sensors, which is on the server, not the camera, so it
+is there either way. The clips are on the camera: `media-source://reolink` can
+still be browsed a level or two (the integration answers with the camera and
+its two resolutions from what it already knows), but the day listing has to
+ask the camera itself and fails while it's away. So the strip shows the times
+it has and says why the clips are missing — *Its clips are on the camera, and
+the camera is offline — they'll be back with it* — rather than looking empty.
+
 ### Cameras that aren't up yet
 
 Four cameras are drawn as placeholders, marked **Not set up yet**, so the wall
@@ -367,6 +389,22 @@ Active things are big, one card each, most recently started first; players
 that are on but idle collapse into a quiet line at the bottom ("Ready:
 Kitchen, Office…") instead of competing with them. The main menu runs down the
 left, so this screen is also the way into every other one.
+
+**Where a house player's artwork comes from.** Home Assistant gives a player's
+picture as a proxy address on its own server
+(`/api/media_player_proxy/<entity>?token=…&cache=…`), and HOMER tries that
+first. It doesn't always draw: **Home Assistant's Apple TV integration serves
+album art as HEIC**, which is a perfectly good reply — `200`, `image/heic` —
+that no browser but Safari can decode, so the `<img>` fails on it. Where that
+happens HOMER reads the artwork's real address out of the proxy URL's own
+`cache=` parameter (for an Apple TV that is the live Apple Music cover, with
+Apple's `{w}x{h}{c}.{f}` template in it, which HOMER fills in) and draws that
+instead. Failing both, it looks the same album up in **Jellyfin's own library**
+by album, artist and track — the house is playing it, so the server usually
+has a copy — and failing all three the card keeps an icon for what kind of
+thing is playing, with the track name still large on it. It never shows an
+empty box. The cascade is `HomerHA.pictureUrls` / `HomerHA.loadPicture` in
+`shared/homeassistant.js`, so Rooms and the quick panel get it too.
 
 It gathers three places something can be playing:
 

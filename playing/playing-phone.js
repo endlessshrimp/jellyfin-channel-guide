@@ -107,7 +107,9 @@
         };
 
         // the picture goes in once it has loaded, so a player whose artwork
-        // isn't really there leaves its icon rather than a blank square
+        // isn't really there leaves its icon rather than a blank square. The
+        // model picks between Home Assistant's proxy, the artwork's own
+        // address and Jellyfin's copy of the album (playing-model.js).
         const artFor = new Map();
         const setArt = (node, c) => {
             const box = node.querySelector('.hnp-art');
@@ -116,13 +118,18 @@
             img.style.backgroundImage = '';
             if (!c.art) return;
             const want = c.art;
-            const probe = new Image();
-            probe.onload = () => {
-                if (artFor.get(c.key) !== want || !node.isConnected) return;
-                img.style.backgroundImage = `url("${want.replace(/"/g, '%22')}")`;
+            const draw = (url) => {
+                if (!url || artFor.get(c.key) !== want || !node.isConnected) return;
+                img.style.backgroundImage = `url("${url.replace(/"/g, '%22')}")`;
                 box.classList.remove('hnp-art-empty');
             };
-            probe.src = want;
+            const mod = Model();
+            if (mod && mod.artFor) mod.artFor(c).then(draw, () => {});
+            else {
+                const probe = new Image();
+                probe.onload = () => draw(want);
+                probe.src = want;
+            }
         };
         const paintCard = (node, c) => {
             node.classList.toggle('hnp-paused', c.state === 'paused');

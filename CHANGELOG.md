@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+- **Album art loads on Now Playing again** — and in Rooms and the quick panel.
+  Home Assistant's Apple TV integration answers the artwork proxy with
+  `200 image/heic` (a real HEIF still, 13 KB of it), and no browser but Safari
+  can decode HEIC in an `<img>`, so a good reply was failing silently and the
+  card fell back to its icon. Nothing was wrong with the address, the token or
+  the DNS.
+  - `HomerHA.pictureUrls(id)` now returns every picture worth trying, best
+    first: Home Assistant's own proxy, then the artwork's real address, which
+    Home Assistant itself puts in the proxy URL's `cache=` parameter. For the
+    Apple TV that is the live Apple Music cover with Apple's own
+    `{w}x{h}{c}.{f}` template left in it; HOMER fills the template in and gets
+    a JPEG every browser reads.
+  - `HomerHA.loadPicture(id)` resolves the first one an `<img>` actually
+    draws, caches that per picture so a screen repainting ten times a second
+    asks the network once, and — where none of them draw — rebuilds from the
+    freshest state and tries once more, in case the player's token was
+    replaced while it was looking. A failure is forgotten after 30 seconds, so
+    a Wi-Fi blip isn't permanent.
+  - Where Home Assistant has no usable picture at all, Now Playing looks the
+    same album up in **Jellyfin's library** by album, artist and track
+    (`HomerPlayingModel.artFor`), and only then falls back to an icon — now
+    the icon for what's playing (a note for music, a film, live TV) rather
+    than for the box it's playing on, with the track name still large.
+  - Rooms, the quick panel and both Now Playing layouts all go through the one
+    helper, so a player's cover behaves the same everywhere.
+
+- **A camera that's offline says so** instead of showing a black square.
+  The tile keeps its name and room and adds **Camera unavailable** with
+  **Last seen 7:13 AM**; the full-screen view says the same where the picture
+  would be, with an **Offline** badge. Nothing asks an unavailable camera for a
+  still or a stream any more, and its controls are dimmed, marked
+  **Unavailable**, and say so when pressed rather than failing quietly. It
+  clears itself as soon as Home Assistant has the camera back.
+- **Recent keeps working while the camera is away.** The ring and detection
+  times come from Home Assistant's history, which is on the server, so they're
+  there either way; the clips are on the camera, and `media-source://reolink`
+  browses down to the camera and its resolutions but can't list the days
+  without asking the camera itself. The strip now shows what it has and says
+  why the rest is missing (`HomerCamerasModel.trouble`), instead of looking
+  empty with no explanation.
+- **Every event on the Cameras screen can be reached with a mouse.** The
+  Recent strip is about three times wider than the window — two dozen events,
+  eight in view — and the screen swallowed every wheel event, so the sixteen
+  off-screen ones could only be reached with the remote's ◀▶. The wheel now
+  scrolls the strip (either axis), the highlight follows what's in view so the
+  remote picks up where the mouse left off, and the strip has a thin scrollbar
+  so there's a sign there's more. The big picture, which has looked like a
+  button since it was drawn, now behaves like one: a click plays and pauses a
+  clip, or picks out the live view.
+
 ## v0.4.10
 
 - **Now Playing on a phone:** "Nothing is playing" no longer sits under the

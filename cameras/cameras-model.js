@@ -16,6 +16,9 @@
  *                   really has.
  *   events(id)      what the camera saw, newest first: rings and detections,
  *                   each with a time, a label, and a clip where there is one.
+ *   trouble(id)     why the last events(id) found no clips of its own, in
+ *                   words, or '' — a camera that's offline keeps its
+ *                   recordings to itself, and the strip says so.
  *   clipUrl(ev)     a URL a <video> can load for that event's clip.
  *
  * Where the events come from
@@ -102,6 +105,7 @@
     const create = () => {
         let mediaTree = null; // the Reolink browse, cached per camera
         const eventCache = new Map(); // camera id -> { at, list }
+        const troubles = new Map(); // camera id -> why there are no clips, in words
         const EVENTS_MS = 60000; // a minute; a ring pushes a refresh anyway
 
         // ----- the wall -----
@@ -121,6 +125,14 @@
             const tile = (id, planned) => {
                 used.add(id);
                 const bell = bells.find((b) => b.camera === id) || null;
+                const s = h.entity(id);
+                const state = s ? s.state : 'unavailable';
+                // Home Assistant says "unavailable" for a camera its
+                // integration can't reach — a Reolink that dropped off Wi-Fi,
+                // a battery that ran out. There's no picture, no stream and
+                // no live listing of its recordings until it's back.
+                const down = !s || state === 'unavailable' || state === 'unknown';
+                const since = down && s && s.last_changed ? new Date(s.last_changed) : null;
                 return {
                     id,
                     key: planned ? planned.key : id,
@@ -128,7 +140,11 @@
                     room: roomOf(house, id),
                     doorbell: !!bell,
                     bellId: bell ? bell.id : '',
-                    planned: false
+                    planned: false,
+                    state,
+                    available: !down,
+                    // when it was last heard from, where Home Assistant knows
+                    since: since && isFinite(since.getTime()) ? since : null
                 };
             };
             const out = [];
@@ -140,7 +156,7 @@
             for (const p of PLANNED) {
                 const found = cams.find((id) => !used.has(id) && (p.match.test(h.name(id)) || p.match.test(id)));
                 if (found) out.push(tile(found, p));
-                else out.push({ id: '', key: p.key, name: p.name, room: '', doorbell: false, bellId: '', planned: true });
+                else out.push({ id: '', key: p.key, name: p.name, room: '', doorbell: false, bellId: '', planned: true, state: 'planned', available: false, since: null });
             }
             // then anything else that's already there
             for (const id of cams) if (!used.has(id)) out.push(tile(id));
@@ -179,6 +195,8 @@
                     label: c.label,
                     state: s.state,
                     on: s.state === 'on',
+                    // an entity of a device that's offline takes no commands
+                    available: s.state !== 'unavailable' && s.state !== 'unknown',
                     options,
                     // the LED's words are Reolink's ("alwaysonatnight"); say them plainly
                     words: c.kind === 'led' ? options.map((o) => LED_WORDS[o] || o) : options
@@ -244,22 +262,51 @@
             };
         }).filter(Boolean);
 
+        // Is this camera's entity reachable right now?
+        const isDown = (camId) => {
+            const h = HA();
+            const s = h ? h.entity(camId) : null;
+            return !s || s.state === 'unavailable' || s.state === 'unknown';
+        };
+
         // Walk the camera's days newest first until there are enough events.
+        //
+        // media-source://reolink can be browsed with the camera offline, but
+        // only down to a point: the integration answers with the camera and
+        // its two resolutions from what it already knows, and then has to ask
+        // the camera itself which days it has recordings for — which fails
+        // while the camera is away. Whatever comes back before that point is
+        // kept, and `troubles` remembers why the rest didn't, so the strip can
+        // say so instead of looking empty.
         const fromCamera = async (camId, want) => {
             const h = HA();
-            const branch = await findBranch(camId);
-            if (!branch) return [];
-            const cam = await h.browseMedia(branch.media_content_id);
+            const stuck = (why) => { troubles.set(camId, why); return []; };
+            const branch = await findBranch(camId).catch(() => null);
+            // no Reolink branch at all is the ordinary case for every other
+            // make of camera: the times from history are the whole story, and
+            // the strip's own note already says so
+            if (!branch) {
+                return stuck(isDown(camId)
+                    ? 'This camera is offline, and Home Assistant keeps no recordings of its own.'
+                    : '');
+            }
+            const cam = await h.browseMedia(branch.media_content_id).catch(() => null);
             const res = pickRes(cam);
-            if (!res) return [];
-            const days = await h.browseMedia(res.media_content_id);
+            if (!res) return stuck('Home Assistant couldn\'t list this camera\'s recordings.');
+            const days = await h.browseMedia(res.media_content_id).catch(() => null);
             const list = ((days && days.children) || []).slice().reverse(); // newest day first
+            if (!list.length) {
+                return stuck(isDown(camId)
+                    ? 'Its clips are on the camera, and the camera is offline — they\'ll be back with it.'
+                    : 'This camera has no recordings saved.');
+            }
             const out = [];
             for (const day of list.slice(0, 4)) {
                 const node = await h.browseMedia(day.media_content_id).catch(() => null);
                 out.push(...clipsFrom(node));
                 if (out.length >= want) break;
             }
+            troubles.set(camId, out.length ? '' : 'No clips in the last few days.');
             return out;
         };
 
@@ -332,13 +379,23 @@
             if (!camId) return [];
             const had = eventCache.get(camId);
             if (!fresh && had && Date.now() - had.at < EVENTS_MS) return had.list;
-            const clips = await fromCamera(camId, want).catch(() => []);
+            troubles.set(camId, '');
+            const clips = await fromCamera(camId, want).catch(() => {
+                troubles.set(camId, 'Home Assistant couldn\'t list this camera\'s recordings.');
+                return [];
+            });
             const hist = await fromHistory(camId, hours).catch(() => []);
             const list = merge(clips, hist).slice(0, want);
             eventCache.set(camId, { at: Date.now(), list });
             return list;
         };
-        const forget = (camId) => { if (camId) eventCache.delete(camId); else eventCache.clear(); };
+        const forget = (camId) => {
+            if (camId) { eventCache.delete(camId); troubles.delete(camId); mediaTree = null; } else { eventCache.clear(); troubles.clear(); mediaTree = null; }
+        };
+
+        // Why this camera's own clips aren't in the strip, in words, or '' when
+        // they are. The times from Home Assistant's history stand either way.
+        const trouble = (camId) => troubles.get(camId) || '';
 
         // A clip's URL, resolved when it's wanted (the signature in it is
         // short-lived, so there's no point holding one).
@@ -354,11 +411,12 @@
             controls,
             battery,
             events,
+            trouble,
             forget,
             clipUrl,
             // for the screens' "what can this camera do" checks
             hasClips: (camId) => (eventCache.get(camId) || { list: [] }).list.some((e) => e.clip),
-            reset() { mediaTree = null; eventCache.clear(); }
+            reset() { mediaTree = null; eventCache.clear(); troubles.clear(); }
         };
     };
 

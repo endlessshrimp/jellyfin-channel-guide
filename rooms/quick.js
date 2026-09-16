@@ -254,13 +254,7 @@
                 n.querySelector('.hq-media-title').textContent = c.mediaTitle(M) || c.mediaLine(M);
                 n.querySelector('.hq-bar i').style.width = (M.canVolume ? M.volume : 0) + '%';
                 n.querySelector('.hq-art-icon').textContent = M.playing ? 'pause' : 'play_arrow';
-                const art = n.querySelector('.hq-art');
-                const img = art.querySelector('img');
-                if (img.dataset.src !== M.art) {
-                    img.dataset.src = M.art;
-                    art.classList.remove('has-art');
-                    if (M.art) { img.onload = () => art.classList.add('has-art'); img.src = M.art; } else img.removeAttribute('src');
-                }
+                c.setArt(n.querySelector('.hq-art'), M);
             } else if (row.kind === 'remote') {
                 n.querySelector('.hq-name').textContent = c.mediaInfo(row.id, r).name;
             } else if (row.kind === 'setpoint') {

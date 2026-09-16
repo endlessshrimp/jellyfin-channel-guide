@@ -24,7 +24,7 @@
  * between samples instead of the screen asking the server every frame.
  *
  * window.HomerPlayingModel = { start, stop, cards, idle, onChange, act,
- *                              refresh, status, destroy, version }
+ *                              artFor, refresh, status, destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -253,7 +253,12 @@
             who: '',
             via: '',
             room: members.length > 1 ? '' : entry.room || '',
-            icon: isTv ? 'tv' : 'speaker',
+            // with no artwork the card falls back to this, so it says what
+            // kind of thing is playing rather than what the box is
+            icon: a.media_content_type === 'music' ? 'music_note'
+                : /tvshow|episode/.test(a.media_content_type || '') ? 'live_tv'
+                : /movie/.test(a.media_content_type || '') ? 'movie'
+                : isTv ? 'tv' : 'speaker',
             rooms,
             grouped: members.length > 1,
             state: playing ? 'playing' : state === 'paused' ? 'paused' : state === 'buffering' ? 'buffering' : 'on',
@@ -274,8 +279,85 @@
             remote: h.remoteFor && h.remoteFor(entry.id) ? entry.id : '',
             started: started || Date.now(),
             _id: entry.id,
+            // what's playing, for finding the same thing in Jellyfin's own
+            // library when Home Assistant can't hand over a picture
+            _track: track,
+            _artist: a.media_artist || a.media_album_artist || '',
+            _album: album,
             _active: active
         };
+    };
+
+    // ---------- Artwork, once it has actually loaded ----------
+    //
+    // A card's `art` is the picture it would like; this is the one it gets.
+    // Home Assistant's own proxy comes first (shared/homeassistant.js already
+    // knows to fall back to the artwork's own address when the proxy answers
+    // with something the browser can't draw — an Apple TV's covers come back
+    // as HEIC, which only Safari reads). Where that leaves nothing at all and
+    // the track can be named, Jellyfin's own library is asked for the same
+    // album: the house is playing it, so the server usually has it. Failing
+    // both, '' — and the card keeps its icon, with the track still on it.
+
+    const jfArt = new Map(); // "artist|album|track" -> Promise<url>
+    const CLEAN = (x) => String(x || '')
+        .replace(/\s*[([][^)\]]*(remaster|remastered|deluxe|expanded|edition|version|mono|stereo|mix|bonus)[^)\]]*[)\]]/gi, '')
+        .replace(/\s+/g, ' ').trim();
+    const looselySame = (a, b) => {
+        const x = CLEAN(a).toLowerCase();
+        const y = CLEAN(b).toLowerCase();
+        return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+    };
+    const jellyfinArt = (track, artist, album) => {
+        const key = [artist, album, track].join('|');
+        if (!key.replace(/\|/g, '')) return Promise.resolve('');
+        const had = jfArt.get(key);
+        if (had) return had;
+        const find = async () => {
+            const server = getServer();
+            if (!server) return '';
+            const look = async (term, types, wantAlbum) => {
+                if (!term) return '';
+                const q = new URLSearchParams({
+                    searchTerm: term,
+                    IncludeItemTypes: types,
+                    Recursive: 'true',
+                    Limit: '8',
+                    ImageTypeLimit: '1',
+                    EnableImageTypes: 'Primary',
+                    Fields: 'AlbumArtist'
+                });
+                const res = await api(`/Users/${server.UserId}/Items?${q}`).catch(() => null);
+                const items = (res && res.Items) || [];
+                // the artist has to agree where the player named one, so a
+                // track called "Alone" doesn't pick up someone else's cover
+                const hit = items.find((it) => {
+                    const tags = it.ImageTags || {};
+                    if (!tags.Primary && !it.AlbumPrimaryImageTag) return false;
+                    if (artist && !(looselySame(it.AlbumArtist, artist) || (it.Artists || []).some((x) => looselySame(x, artist)))) return false;
+                    if (wantAlbum && album && !looselySame(it.Name, album)) return false;
+                    return true;
+                });
+                if (!hit) return '';
+                const tags = hit.ImageTags || {};
+                if (tags.Primary) return img(hit.Id, 'Primary', tags.Primary, 520);
+                return img(hit.AlbumId, 'Primary', hit.AlbumPrimaryImageTag, 520);
+            };
+            return (await look(CLEAN(album), 'MusicAlbum', true)) || (await look(CLEAN(track), 'Audio', false));
+        };
+        const p = find().catch(() => '');
+        jfArt.set(key, p);
+        if (jfArt.size > 60) jfArt.delete(jfArt.keys().next().value);
+        return p;
+    };
+
+    // artFor(card) -> Promise<url>: the picture to draw, '' for none.
+    const artFor = (card) => {
+        if (!card) return Promise.resolve('');
+        if (card.kind !== 'ha' || card._mock) return Promise.resolve(card.art || '');
+        const h = HA();
+        if (!h || !h.loadPicture) return Promise.resolve(card.art || '');
+        return h.loadPicture(card._id).then((url) => url || jellyfinArt(card._track, card._artist, card._album));
     };
 
     const doHouse = (card, what, arg) => {
@@ -543,6 +625,7 @@
         cards,
         idle,
         act,
+        artFor,
         onChange,
         refresh: poll,
         status: () => ({ running, error, sessions: sessions.length, mock: mocking() }),

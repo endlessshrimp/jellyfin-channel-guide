@@ -384,8 +384,12 @@
         // A picture is only put in the card once it has actually loaded: a
         // player's artwork is fetched from its own integration and often
         // isn't there (an expired proxy token, a speaker that reports a
-        // picture it can't serve), and a background image gives no error, so
-        // the card would be a blank rectangle. Until it loads, the icon.
+        // picture it can't serve, an Apple TV whose covers come back as HEIC),
+        // and a background image gives no error, so the card would be a blank
+        // rectangle. The model works through what it can try — Home
+        // Assistant's proxy, the artwork's own address, then Jellyfin's copy
+        // of the same album — and answers with whichever drew. Until then,
+        // and if none of them do, the icon.
         const artFor = new Map(); // key -> the picture the card was last given
         const setArt = (node, c) => {
             const box = node.querySelector('.hn-art');
@@ -394,13 +398,18 @@
             img.style.backgroundImage = '';
             if (!c.art) return;
             const want = c.art;
-            const probe = new Image();
-            probe.onload = () => {
-                if (artFor.get(c.key) !== want || !node.isConnected) return; // moved on
-                img.style.backgroundImage = `url("${want.replace(/"/g, '%22')}")`;
+            const draw = (url) => {
+                if (!url || artFor.get(c.key) !== want || !node.isConnected) return; // moved on
+                img.style.backgroundImage = `url("${url.replace(/"/g, '%22')}")`;
                 box.classList.remove('hn-art-empty');
             };
-            probe.src = want;
+            const mod = Model();
+            if (mod && mod.artFor) mod.artFor(c).then(draw, () => {});
+            else {
+                const probe = new Image();
+                probe.onload = () => draw(want);
+                probe.src = want;
+            }
         };
         const paintCard = (node, c) => {
             node.classList.toggle('hn-paused', c.state === 'paused');

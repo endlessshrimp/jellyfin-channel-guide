@@ -37,7 +37,8 @@
  *                    color, setColor, supports, playPause, mediaCommand,
  *                    setVolume, stepVolume, mute, setSource, power,
  *                    setFanSpeed, setPreset, setOption, setNumber, run,
- *                    extras, device, siblings, pictureUrl, remoteFor,
+ *                    extras, device, siblings, pictureUrl, pictureUrls,
+ *                    loadPicture, remoteFor,
  *                    sendRemote,
  *                    destroy, version }
  */
@@ -1198,6 +1199,84 @@
         return address() + pic;
     };
 
+    // The artwork's own address, where Home Assistant's proxy URL carries it.
+    //
+    // Home Assistant builds a player's entity_picture as
+    //   /api/media_player_proxy/<entity>?token=<the player's>&cache=<hash>
+    // and for some integrations (the Apple TV's) that cache= is not a hash at
+    // all but the artwork's real address, straight from the music service:
+    //   https://is1-ssl.mzstatic.com/image/thumb/…/{w}x{h}{c}.{f}
+    // — a template Apple fills in, so it has to be filled in here: a size, a
+    // crop and a format. It matters because the proxy itself answers 200 with
+    // an image/heic body for an Apple TV, and no browser but Safari can draw
+    // HEIC, so the <img> fails on a perfectly good reply. This address gives
+    // the same cover as a JPEG that every browser reads.
+    const ART_SIZE = 600;
+    const remoteArt = (pic) => {
+        const q = String(pic || '').split('?')[1] || '';
+        const hit = q.split('&').map((p) => p.split('=')).find((p) => p[0] === 'cache');
+        let url = hit ? decodeURIComponent(hit.slice(1).join('=')) : '';
+        if (!/^https?:\/\//i.test(url)) return '';
+        url = url.replace(/\{w\}|\{width\}/gi, ART_SIZE).replace(/\{h\}|\{height\}/gi, ART_SIZE)
+            .replace(/\{c\}/gi, 'bb').replace(/\{f\}/gi, 'jpg');
+        return /[{}]/.test(url) ? '' : url; // a placeholder left over: not ours to fill
+    };
+
+    // Every picture worth trying for a player, best first: Home Assistant's
+    // own proxy (local, and right for nearly every integration), then the
+    // artwork's own address where the proxy URL carries one.
+    const pictureUrls = (id) => {
+        const s = entity(id);
+        const pic = (s && s.attributes.entity_picture) || '';
+        if (!pic) return [];
+        if (/^(https?:|data:)/.test(pic)) return [pic];
+        const out = [address() + pic];
+        const far = remoteArt(pic);
+        if (far) out.push(far);
+        return out;
+    };
+
+    // The first of those an <img> can actually draw, or '' when none of them
+    // can. Answers the same promise while a picture is unchanged, so a screen
+    // that repaints ten times a second asks the network once. A picture that
+    // fails is remembered only briefly: a token that went stale, or a Wi-Fi
+    // blip, is worth another try.
+    const PICTURE_MS = 12000; // how long one <img> gets before it counts as failed
+    const PICTURE_MISS_MS = 30000; // how long a failure is remembered
+    const pictureTried = new Map(); // the candidates, joined -> Promise<url>
+    const drawable = (url) => new Promise((resolve) => {
+        const img = new Image();
+        let done = false;
+        const end = (ok) => { if (!done) { done = true; resolve(ok); } };
+        img.onload = () => end(img.naturalWidth > 0);
+        img.onerror = () => end(false);
+        img.src = url;
+        setTimeout(() => end(false), PICTURE_MS);
+    });
+    const loadPicture = (id) => {
+        const list = pictureUrls(id);
+        if (!list.length) return Promise.resolve('');
+        const key = list.join('\n');
+        const had = pictureTried.get(key);
+        if (had) return had;
+        const next = (i) => (i >= list.length
+            ? Promise.resolve('')
+            : drawable(list[i]).then((ok) => (ok ? list[i] : next(i + 1))));
+        const p = next(0).then((url) => {
+            if (url) return url;
+            // nothing drew: the player's token may have been replaced while
+            // this ran (Home Assistant mints a new one when it restarts), so
+            // rebuild from the state as it stands now and try that once
+            const again = pictureUrls(id);
+            if (again.length && again.join('\n') !== key) return loadPicture(id);
+            setTimeout(() => { if (pictureTried.get(key) === p) pictureTried.delete(key); }, PICTURE_MISS_MS);
+            return '';
+        }, () => '');
+        pictureTried.set(key, p);
+        if (pictureTried.size > 60) pictureTried.delete(pictureTried.keys().next().value);
+        return p;
+    };
+
     // ---------- A player's remote (Apple TV, Samsung TV) ----------
     //
     // A player whose device also has a remote.* entity from the Apple TV or
@@ -1980,6 +2059,8 @@
         setSource,
         power,
         pictureUrl,
+        pictureUrls,
+        loadPicture,
         remoteFor,
         sendRemote,
         _remoteLog: () => remoteLog.slice(),
@@ -2015,6 +2096,7 @@
             window.removeEventListener('hashchange', finishSignIn);
             listeners.clear();
             ringers.clear();
+            pictureTried.clear();
         }
     };
 })();
