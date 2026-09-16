@@ -36,10 +36,10 @@ network as the Mac. A free Apple ID is enough.
    XcodeGen is already installed (`brew install xcodegen` if it isn't).
 5. **Pick your team.** In Xcode's left sidebar, click **HOMER** (the blue icon
    at the top), then the **HOMER** target → **Signing & Capabilities** →
-   **Team** → "Your Name (Personal Team)". If Xcode says the bundle
-   identifier `org.nelsons.homer.appletv` isn't available, change its last
-   part (say `org.nelsons.homer.appletv2`).
-   Running `xcodegen generate` again clears the team, so pick it again after that.
+   **Team** → "Your Name (Personal Team)". Running `xcodegen generate` again
+   clears the team, so pick it again after that. Leave the bundle identifier
+   (`org.nelsons.homer.appletv3`) alone: it's the one already on the TV, and a
+   different one is a different app, with no saved sign-in.
 6. **Run it.** At the top of the Xcode window, click the run destination
    (next to "HOMER") and pick your Apple TV. Press **▶** (⌘R). The first time
    takes a minute or two while Xcode prepares the TV.
@@ -60,12 +60,20 @@ press ▶ again with the TV on. Your sign-in should still be there.
 
 | Remote | Does |
 |---|---|
-| Clickpad ▲▼◀▶ (or a swipe) | Arrow keys. Holding repeats. |
-| Click the clickpad | OK (Enter) |
+| Clickpad ▲▼◀▶ | Arrow keys. Holding repeats. |
+| Click the clickpad | OK (Enter), when you let go |
+| **Hold OK** (about ½ a second) | HOMER's menu, for the letter shortcuts a remote can't type |
+| **Swipe up / down** | HOMER's swipe-up / swipe-down |
+| Swipe left / right | ◀ ▶ |
 | Back | Back (Esc). Never quits the app while HOMER is showing. |
 | Hold Back | Home (H) |
 | Play/Pause | Space: pauses and plays in the full-screen player |
 | TV button | Leaves the app, like any app |
+
+Holding OK and swiping up or down reach HOMER as
+`window.dispatchEvent(new CustomEvent('homer-tv', { detail: { action } }))`,
+with `action` of `menu`, `swipe-up` or `swipe-down`. HOMER's own side decides
+what they do.
 
 **The first time** you get Jellyfin's sign-in page, and the tvOS keyboard
 comes up for the user name by itself. Type it (or hold the mic button and say
@@ -77,6 +85,14 @@ buttons.
 Any text box works the same way (Search, the ZIP and Home Assistant address in
 Settings): the keyboard comes up, and Done types the text in and presses Enter.
 If the keyboard went away, click the box again.
+
+**Jellyfin's own pages are zoomed** to 1.5× (`Config.stockPageZoom`), since
+they're built for a desk, not a couch, and they sit in a little from the edges
+so nothing lands in a TV's overscan. HOMER's own screens size themselves to the
+TV, so they stay at 1×; the app switches between the two as screens come and
+go. The zoom is CSS (`html { zoom }`), not WebKit's page zoom: on tvOS that one
+magnifies a page that's already laid out, so Jellyfin's sign-in lost its
+right-hand side.
 
 ## The pass/fail test
 
@@ -103,8 +119,11 @@ Also worth noting:
 list the Apple TV under Develop for the Web Inspector, but I don't know
 whether it does for tvOS.
 
-## What's tested so far (no TV yet)
+## What's tested so far
 
+- **On Jason's bedroom Apple TV:** HOMER loads, signing in with the tvOS
+  keyboard works, and the sign-in is still there next time. The rest of the
+  checklist above is still to do.
 - **tvOS Simulator (tvOS 27, Xcode 27):** the app builds (for the Simulator
   and, unsigned, for a real Apple TV) with no warnings. On the Simulator:
   - It loads WebKit and opens HOMER's sign-in page full screen, with
@@ -112,18 +131,24 @@ whether it does for tvOS.
   - The tvOS keyboard comes up for the user name.
   - A test video (a local MP4, not Jellyfin) autoplayed with sound inside the
     page at 960×540 and never went full screen.
-- **On the Mac** (`Tools/catalyst-smoke.sh`, 18 checks): the same code built
+  - The sign-in page zooms to 1.5× and lays out again at that size, with
+    nothing cut off.
+- **On the Mac** (`Tools/catalyst-smoke.sh`, 23 checks): the same code built
   for the Mac.
   - Every remote button arrives in a page as the right key (key, code,
     keyCode, repeat), and the keyboard's text lands in the box.
+  - Holding OK sends HOMER's menu and no Enter; a tap still sends Enter;
+    swiping up and down sends HOMER's swipes and sideways stays an arrow.
+  - A page with a HOMER screen is never zoomed, a plain one is.
   - The sign-in is saved and comes back after the web view's storage is wiped.
   - On a plain sign-in form, the arrows, Done and OK work.
 - **Only the TV can answer these:**
   - Does real video (Jellyfin's live TV, a movie, a camera) play docked?
-  - Do the Siri Remote's presses reach the app?
+  - Do swipes on the clickpad reach the app? (Presses do: Jason signed in
+    with them. Swipes come from UIKit gestures, which the Mac and the
+    Simulator can't stand in for.)
   - Does the Keychain keep the sign-in through a reboot and a 7-day
     re-install?
-  - Do the Developer Mode, trust and local network prompts come up?
 
 ## How it works
 
@@ -194,11 +219,11 @@ The app's page script covers the touch part until it ships.
 | `HOMER/Sources/WebKitRuntime.swift` | dlopen, and the WebKit selectors the app calls |
 | `HOMER/Sources/HomerWebView.swift` | The web view: autoplay, inline video, the page script, messages back |
 | `HOMER/Sources/HomerViewController.swift` | The screen: presses, loading/error screen, keyboard, saving |
-| `HOMER/Sources/RemoteKeys.swift` | Siri Remote → keys (repeat, hold Back for H) |
+| `HOMER/Sources/RemoteKeys.swift` | Siri Remote → keys (repeat, hold Back for H, hold OK and swipes for HOMER) |
 | `HOMER/Sources/TextEntry.swift` | The tvOS keyboard for a text box |
 | `HOMER/Sources/SessionStore.swift` | The sign-in copy in the Keychain (UserDefaults if that fails) |
 | `HOMER/Sources/AppDelegate.swift` | App and scene delegates |
-| `HOMER/Resources/homer-tvapp.js` | The page side: the flag, keys, keyboard, saving, focus on plain pages |
+| `HOMER/Resources/homer-tvapp.js` | The page side: the flag, keys, the homer-tv events, keyboard, saving, zoom and focus on plain pages |
 | `Tools/catalyst-smoke.sh` | Runs the app's code on the Mac against `Tools/smoke/index.html` |
 
 ### Checking it without the TV
@@ -209,7 +234,7 @@ node --check HOMER/Resources/homer-tvapp.js
 xcodegen generate
 xcodebuild -project HOMER.xcodeproj -scheme HOMER -sdk appletvsimulator CODE_SIGNING_ALLOWED=NO build
 
-# the app's code on the Mac, 18 checks (a small window opens for ~30 s)
+# the app's code on the Mac, 23 checks (a small window opens for ~40 s)
 Tools/catalyst-smoke.sh
 ```
 

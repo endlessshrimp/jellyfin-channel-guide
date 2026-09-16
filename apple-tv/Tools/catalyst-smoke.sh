@@ -7,7 +7,7 @@
 # HOMER, and lets the Debug self-test press remote buttons. Then it runs again
 # with the web view's storage wiped, to check the sign-in comes back.
 #
-# A small window opens on the Mac for about 30 seconds. It never loads HOMER
+# A small window opens on the Mac for about 40 seconds. It never loads HOMER
 # or Jellyfin. Everything it saves is removed at the end.
 #
 #   apple-tv/Tools/catalyst-smoke.sh
@@ -69,7 +69,7 @@ sleep 1
 run() {
     NSUnbufferedIO=YES "$APP/Contents/MacOS/HOMER" -HomerURL "http://127.0.0.1:$PORT/index.html${2:-}" -HomerSelfTest YES >"$WORK/app$1.log" 2>&1 &
     local pid=$!
-    sleep 10
+    sleep 12
     kill "$pid" 2>/dev/null
     wait "$pid" 2>/dev/null
 }
@@ -107,6 +107,11 @@ check "keyboard text lands in the box"        'input value=smoke'
 check "Done presses Enter in the box"         'keydown key="Enter" .*target=q'
 check "sign-in saved by the app"              '\[HOMER\] saved sign-in: .*homer-smoke'
 check "sign-in restored after a wipe"         'restored=saved-[0-9]+'
+check "hold OK: HOMER's menu, no Enter"      'homer-tv action=menu'
+check "swipe up / down: HOMER's swipes"       'homer-tv action=swipe-(up|down)'
+check "swipe sideways stays an arrow"         'keydown key="ArrowLeft"'
+check "a HOMER screen is never zoomed"        'zoomstate plain=false .* cssZoom=none'
+check "Jellyfin's own pages are zoomed"       'zoomstate plain=true .* cssZoom=1.5'
 check "sign-in form: arrow focuses, typed"   'plain input user=smoke'
 check "sign-in form: Done moves to password"  'plain input pass=smoke'
 check "sign-in form: OK clicks the button"    'plain click go user=smoke'

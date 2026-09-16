@@ -31,6 +31,8 @@
         + `repeat=${e.repeat} target=${e.target.id || e.target.tagName}`), true);
     document.addEventListener('keyup', (e) => log(`keyup key=${JSON.stringify(e.key)}`), true);
     document.getElementById('q').addEventListener('input', (e) => log('input value=' + e.target.value));
+    window.addEventListener('homer-tv', (e) => log('homer-tv action=' + e.detail.action));
+    setTimeout(() => log(`zoomstate plain=${plain} dpr=${devicePixelRatio} innerWidth=${innerWidth} cssZoom=${document.documentElement.style.zoom || 'none'}`), 5000);
     if (plain) {
         // arrows move focus (the app's fallback); Done on the keyboard moves on to the next field
         document.getElementById('screen').remove();
@@ -41,7 +43,7 @@
         document.getElementById('go').addEventListener('click', () => log(`plain click go user=${document.getElementById('user').value}`));
     } else {
         // after the remote's presses (the app's self-test ends by 4.5 s), a text box takes focus
-        setTimeout(() => document.getElementById('q').focus(), 6000);
+        setTimeout(() => document.getElementById('q').focus(), 7500);
     }
 </script>
 </body>

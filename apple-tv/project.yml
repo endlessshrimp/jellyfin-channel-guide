@@ -22,9 +22,10 @@ targets:
     settings:
       base:
         PRODUCT_NAME: HOMER
-        # Free Apple IDs can't share a bundle id with anyone else's app. If
-        # Xcode says this one is taken, change the last part.
-        PRODUCT_BUNDLE_IDENTIFIER: org.nelsons.homer.appletv
+        # Free Apple IDs can't share a bundle id with anyone else's app. This
+        # is the one signed onto Jason's Apple TV: keep it, or the app becomes
+        # a different app and loses its saved sign-in.
+        PRODUCT_BUNDLE_IDENTIFIER: org.nelsons.homer.appletv3
         INFOPLIST_FILE: HOMER/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "3"
