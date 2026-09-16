@@ -25,7 +25,9 @@
  *
  * On a phone every HOMER screen gets the phone chrome: a top bar (HOMER, the
  * screen's name, the weather, Search) and a tab bar (Home, Guide, Movies,
- * Shows, Recordings). Navigation still goes through HomerPlayer, so a video
+ * Shows, Recordings). A tap on the HOMER mark opens the menu sheet
+ * (shared/menu.js): every screen there is, in one list, since the tab bar
+ * only has five. Navigation still goes through HomerPlayer, so a video
  * playing in a preview window keeps playing.
  *
  * window.HomerLayout = { platform, isPhone, isTouch, onChange, register, usePhone,
@@ -164,6 +166,14 @@
         if (P()) P().goHome();
         else location.hash = HOME;
     };
+    // The HOMER mark's tap: the menu sheet, or Home when menu.js isn't loaded.
+    const M = () => (window.HomerMenu && typeof window.HomerMenu.toggleSheet === 'function' ? window.HomerMenu : null);
+    const openMenu = () => {
+        const m = M();
+        if (m) m.toggleSheet();
+        else goHome();
+        syncChrome();
+    };
 
     // the library views, for the Movies and Shows tabs (fetched once)
     let viewsP = null;
@@ -237,7 +247,7 @@
         top = document.createElement('div');
         top.id = 'homer-phone-top';
         top.innerHTML = `
-            <div class="hp-brand" role="button" aria-label="Home"><span class="hp-mark"></span>HOMER<span class="hp-sub"></span></div>
+            <div class="hp-brand" role="button" tabindex="0" aria-label="Menu" aria-haspopup="dialog" aria-expanded="false"><span class="hp-mark"></span>HOMER<span class="hp-sub"></span><span class="material-icons hp-brand-caret" aria-hidden="true">expand_more</span></div>
             <span class="hp-spacer"></span>
             <div class="hp-wx"><div class="hp-clock"></div></div>
             <button type="button" class="hp-icon hp-search" aria-label="Search"><span class="material-icons" aria-hidden="true">search</span></button>`;
@@ -247,7 +257,13 @@
         tabs.innerHTML = TABS.map((t) => `<button type="button" class="hp-tab" data-tab="${t.key}"><span class="material-icons" aria-hidden="true">${t.icon}</span><span class="hp-tab-label">${t.label}</span></button>`).join('');
         document.body.appendChild(top);
         document.body.appendChild(tabs);
-        top.querySelector('.hp-brand').addEventListener('click', goHome);
+        // The mark opens the menu sheet (shared/menu.js): every screen in one
+        // list, Home first. Without menu.js it does what it always did and
+        // goes Home.
+        top.querySelector('.hp-brand').addEventListener('click', openMenu);
+        top.querySelector('.hp-brand').addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openMenu(); }
+        });
         top.querySelector('.hp-search').addEventListener('click', () => {
             // the phone search takes the tap when it can: back to its box if
             // it's up, else the keyboard starts coming up (inside the tap, as
@@ -274,6 +290,8 @@
                 top.querySelector('.hp-sub').textContent = where.name;
                 tabs.querySelectorAll('.hp-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === where.tab));
             }
+            const m = M();
+            top.querySelector('.hp-brand').setAttribute('aria-expanded', String(!!(m && m.isSheetOpen())));
         }
         document.documentElement.classList.toggle('homer-chrome', want);
         if (want !== shown) {
@@ -338,6 +356,7 @@
         chromeShown: () => shown,
         force,
         destroy() {
+            if (M()) M().closeSheet();
             if (phoneMq && phoneMq.removeEventListener) phoneMq.removeEventListener('change', onMq);
             if (touchMq && touchMq.removeEventListener) touchMq.removeEventListener('change', onMq);
             window.removeEventListener('hashchange', queue);

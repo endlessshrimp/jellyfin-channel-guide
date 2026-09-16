@@ -48,7 +48,9 @@ localStorage.setItem('homer-menu', 'rail');   // B: an icon rail down the side
   ![Home, the icon rail](docs/screenshots/menu-b-rail.jpg)
 
 Both work with a remote (▲▼ move, OK selects, ▲ off the top item goes to the
-search box), a mouse and touch.
+search box), a mouse and touch. On a phone there's no column for either, so
+the same list is a sheet: tap the HOMER mark in the top bar (see
+[On a phone](#on-a-phone)).
 
 ## Watching while you browse
 
@@ -575,9 +577,18 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 - A **top bar** (HOMER and the screen's name, the weather, **Search**) and a
   **tab bar** (Home, Guide, Movies, Shows, Recordings) on every HOMER screen.
-  The weather opens the Weather screen; Settings is on Home, and so are Now
-  Playing, Sports, News, Books, Music, Cameras and Rooms (the row of buttons
-  under the date). The phone shows the time, so HOMER doesn't.
+  The weather opens the Weather screen. The phone shows the time, so HOMER
+  doesn't.
+- **A tap on the HOMER mark opens the menu**: a sheet with every screen there
+  is, in the same order as the TV's menu, Home first and the one you're on
+  ticked. The tab bar only has five, so this is how Now Playing, Books, Music,
+  Weather, Sports, News, Rooms, Cameras and Settings are reached. Tap a row to
+  go there; tap outside, swipe the sheet down, or press **Back** to put it
+  away. (Back closes the sheet rather than leaving the screen.) Home is the
+  first row, and the tab bar still has Home too.
+
+  ![The phone menu over Home](docs/screenshots/phone-menu-home.jpg)
+  ![The phone menu over Now Playing](docs/screenshots/phone-menu-playing.jpg)
 - **The guide** is a list: one row per channel with what's on (time left and a
   progress bar), what's next, and a **●** button. The time rail picks what the
   rows show: **Now**, or any half hour ahead. Category and country chips work

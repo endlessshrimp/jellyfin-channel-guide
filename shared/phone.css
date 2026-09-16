@@ -4,6 +4,10 @@
  * finger (44px targets at least) and kept clear of the status bar, the notch
  * and the home indicator with the safe-area insets.
  *
+ * The HOMER mark in the top bar opens the menu sheet (shared/menu.js, styled
+ * in shared/menu.css): the tab bar only has five screens, so that's how the
+ * rest are reached.
+ *
  * html.homer-phone: the phone layout. html.homer-chrome: the bars are up.
  * Screens with a phone layout place themselves between the bars with
  * --homer-phone-top and --homer-phone-tabs; a TV-layout screen's root is
@@ -101,6 +105,22 @@ html.homer-chrome #homer-phone-tabs {
     text-transform: uppercase;
     white-space: nowrap;
 }
+
+/* the mark opens the menu sheet (shared/menu.js), so it says it can */
+#homer-phone-top .hp-brand-caret {
+    flex: none;
+    margin-left: -4px;
+    font-size: 20px !important;
+    color: var(--homer-dim);
+    transition: transform 180ms ease, color 180ms ease;
+}
+
+#homer-phone-top .hp-brand[aria-expanded="true"] .hp-brand-caret {
+    transform: rotate(180deg);
+    color: var(--homer-accent-2);
+}
+
+#homer-phone-top .hp-brand:active .hp-mark { transform: scale(0.94); }
 
 #homer-phone-top .hp-spacer { flex: 1; }
 

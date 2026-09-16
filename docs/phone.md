@@ -2,7 +2,8 @@
 
 HOMER runs on phones: Jellyfin's Android and iOS apps are wrappers around the
 server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
-so do mobile browsers. Every HOMER screen has a phone layout of its own: the
+so do mobile browsers. Every screen is reachable from the tab bar or from the
+menu sheet the HOMER mark opens (below). Every HOMER screen has a phone layout of its own: the
 guide, Home, Movies and TV Shows with their details pages, Search,
 Recordings, Settings, Weather, Rooms, Cameras, Music and Now Playing. A screen
 without one would draw its TV layout, shrunk to fit.
@@ -26,6 +27,37 @@ Shows, Recordings), `html.homer-chrome` while they're up. Their heights are
 `shared/phone.css`). Jellyfin's viewport tag already has `viewport-fit=cover`,
 so `env(safe-area-inset-*)` works; `layout.js` adds it on phones if it's ever
 missing.
+
+## The menu on a phone: `HomerMenu.openSheet()`
+
+The tab bar has five screens and HOMER has fourteen, so the rest were only
+reachable from a row of buttons on Home — which you had to know was there. The
+HOMER mark in the top bar opens the whole list instead (`shared/menu.js`,
+styled in `shared/menu.css`): the same items in the same order as the TV's
+rail, with **Home** added first, the one you're on ticked.
+
+- `shared/layout.js` only wires the tap: `.hp-brand` calls
+  `HomerMenu.toggleSheet()`, and falls back to `goHome()` if menu.js isn't
+  loaded. Everything else is in menu.js, so there's one list, not two.
+- **The sheet sits between the bars**, not over them: `#hm-sheet-root` is
+  `top: var(--homer-phone-top); bottom: var(--homer-phone-tabs)`, so the top
+  bar and the tab bar stay visible and unblocked. A tap outside — the bars
+  included — dismisses the sheet and does nothing else, the way a sheet
+  behaves anywhere else on a phone; tap again to use what's under it.
+- **Back closes the sheet, not the screen.** Opening it pushes one history
+  entry at the *same address* (`history.pushState(…, location.href)`, with
+  whatever state was there kept, so `shared/player.js`'s own docked mark
+  survives). No router sees an address change; the browser's Back takes that
+  entry instead of the page, and `popstate` closes the sheet.
+- **Take the entry away before navigating, never after.** `history.back()` is
+  asynchronous, so closing the sheet and going somewhere in the same tick
+  would pop the page you just went to. A row tap calls
+  `closeSheet(then)`, which drops the entry and runs `then` once the
+  `popstate` has come back (with a timeout in case it doesn't) — the same
+  shape as `dropMark(then)` in `shared/player.js`. The result: one history
+  entry per screen change, and Back from there lands where you started.
+- A swipe down closes it, but only from the top of the list, so a scrolled
+  list scrolls instead of dismissing.
 
 ## A screen without a phone layout
 
@@ -267,10 +299,11 @@ everything that isn't drawing already lives somewhere else:
   (when that position was read). Each layout runs its own cheap interval — 250
   ms on TV, 500 ms on the phone — and computes `position + (now − at)` for
   anything playing, so the bars move smoothly between samples.
-- **The phone layout has no menu.** The TV layout draws `shared/menu.js` down
-  the left so the screen doubles as a way into everything else; on a phone the
-  tab bar and Home's row of buttons already do that, so the phone layout is
-  just the cards.
+- **The phone layout draws no menu of its own.** The TV layout puts
+  `shared/menu.js` down the left so the screen doubles as a way into
+  everything else; on a phone that job belongs to the chrome — the tab bar and
+  the menu sheet the HOMER mark opens — so the phone layout is just the
+  cards.
 
 ## The shared TV shell: `shared/shell.css`
 

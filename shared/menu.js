@@ -29,8 +29,18 @@
  * .hm-focusable, with ._act), so a screen's own focus and click handling
  * doesn't have to know which treatment is up.
  *
+ * On a phone there's no column to put a menu in, so the same list is a sheet:
+ * a tap on the HOMER mark in the phone's top bar (shared/layout.js) slides it
+ * up from the bottom with every screen on it, Home first, the one you're on
+ * marked. A tap on a row goes there; a tap outside, a swipe down, or Back
+ * closes it. Back closes the sheet rather than leaving the screen because
+ * opening it puts one history entry at the same address on top (the trick
+ * shared/player.js already uses for a docked video), which the browser's Back
+ * takes away instead of the page.
+ *
  * window.HomerMenu = { style, setStyle, STYLES, items, build, width, onChange,
- *                      destroy, version }
+ *                      openSheet, closeSheet, toggleSheet, isSheetOpen,
+ *                      currentId, destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -289,6 +299,235 @@
         return self;
     };
 
+    // ---------- The phone's menu sheet ----------
+
+    const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
+    const MARK = 'homerPhoneMenu'; // our history entry, so Back closes the sheet
+    const SWIPE_CLOSE = 70; // px dragged down before it goes away
+
+    const HP = () => window.HomerPlayer || null;
+    const safe = (fn, fallback) => {
+        try { return fn(); } catch (err) { console.warn('[HOMER Menu]', err); return fallback; }
+    };
+    // the route HOMER thinks it's on (a docked video keeps the address on
+    // Jellyfin's player page, so the address bar isn't the answer)
+    const routeNow = () => {
+        const p = HP();
+        if (p && typeof p.route === 'function') {
+            const r = safe(() => p.route(), null);
+            if (typeof r === 'string') return r;
+        }
+        return location.hash || '';
+    };
+    const goTo = (hash) => {
+        const p = HP();
+        if (p && typeof p.go === 'function') p.go(hash);
+        else location.hash = hash;
+    };
+    const goHome = () => {
+        const p = HP();
+        if (p && typeof p.goHome === 'function') p.goHome();
+        else if (window.HomerHome && window.HomerHome.goHome) window.HomerHome.goHome();
+        else location.hash = '#/home';
+    };
+
+    // currentId(): which item in the list is the screen that's up, or ''
+    const currentId = () => {
+        if (document.getElementById('cg-root')) return 'guide';
+        const h = routeNow();
+        if (/^#!?\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h)) return 'recordings';
+        if (/^#!?\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h)) return 'guide';
+        if (/^#!?\/movies(\.html)?\?/.test(h)) return 'movies';
+        if (/^#!?\/tv(\.html)?\?/.test(h)) return 'shows';
+        if (/^#!?\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return 'settings';
+        const own = h.match(/^#!?\/(weather|rooms|cameras|sports|news|books|music|playing)(\?|$)/);
+        if (own) return own[1];
+        if (h === '' || h === '#/' || /^#!?\/(home(\.html)?)?(\?.*)?$/.test(h)) return 'home';
+        return '';
+    };
+
+    // The list the sheet shows: Home, then the same items in the same order
+    // as the rail. (The mark used to go Home on its own, so Home stays the
+    // first thing under your thumb — and the tab bar still has it.)
+    const sheetItems = () => [{ id: 'home', icon: 'home', label: 'Home', act: goHome }]
+        .concat(items({ go: goTo }));
+
+    let sheet = null; // { root, teardown } while it's up
+    let pushed = false; // our history entry is on top
+    let dropping = null; // taking it away ourselves: what to do once it's gone
+    let dropTimer = 0;
+
+    const pushEntry = () => {
+        // keep whatever state was there (shared/player.js keeps its own mark
+        // in it) and add ours, at the same address, so no router sees a change
+        try {
+            history.pushState(Object.assign({}, history.state, { [MARK]: true }), '', location.href);
+            pushed = true;
+        } catch { pushed = false; } // no history API: Back just leaves, as before
+    };
+    // Take our entry away, then do `then`. Never the other way round: a
+    // history.back() is asynchronous, so navigating first and popping after
+    // would pop the page we just went to. (shared/player.js drops its docked
+    // mark the same way.)
+    const dropEntry = (then) => {
+        const done = then || (() => {});
+        if (!pushed || !(history.state && history.state[MARK])) {
+            pushed = false;
+            done();
+            return;
+        }
+        pushed = false;
+        dropping = done;
+        history.back();
+        clearTimeout(dropTimer);
+        dropTimer = setTimeout(() => {
+            if (dropping !== done) return;
+            dropping = null;
+            done();
+        }, 600); // in case the popstate never comes
+    };
+
+    // One listener for both jobs: the Back that closes the sheet, and the
+    // history.back() we do ourselves when it closes some other way.
+    const onPop = () => {
+        if (dropping) {
+            const then = dropping;
+            dropping = null;
+            clearTimeout(dropTimer);
+            then();
+            return;
+        }
+        if (!sheet) return;
+        pushed = false; // that Back was our entry going away
+        closeSheet({ history: false });
+    };
+    window.addEventListener('popstate', onPop);
+
+    // closeSheet({ history: false }) when a Back has already taken the entry;
+    // closeSheet(fn) runs fn once the entry is gone (a row going somewhere).
+    const closeSheet = (opts) => {
+        if (!sheet) {
+            if (typeof opts === 'function') opts();
+            return false;
+        }
+        const s = sheet;
+        sheet = null;
+        s.teardown();
+        if (typeof opts === 'function') dropEntry(opts);
+        else if (!opts || opts.history !== false) dropEntry();
+        else pushed = false;
+        return true;
+    };
+
+    const openSheet = () => {
+        if (sheet) return false;
+        ensureCss();
+        const list = sheetItems();
+        const here = currentId();
+
+        const root = el('div', 'hm-sheet');
+        root.id = 'hm-sheet-root';
+        root.innerHTML = `
+            <div class="hm-sheet-scrim"></div>
+            <div class="hm-sheet-panel" role="dialog" aria-modal="true" aria-label="HOMER menu">
+                <div class="hm-sheet-grip" aria-hidden="true"></div>
+                <div class="hm-sheet-head">HOMER</div>
+                <div class="hm-sheet-list"></div>
+            </div>`;
+        const panel = root.querySelector('.hm-sheet-panel');
+        const rows = root.querySelector('.hm-sheet-list');
+        rows.innerHTML = list.map((m) => `
+            <button type="button" class="hm-sheet-row${m.id === here ? ' on' : ''}" data-menu="${esc(m.id)}"${m.id === here ? ' aria-current="page"' : ''}>
+                <span class="material-icons" aria-hidden="true">${esc(m.icon)}</span>
+                <span class="hm-sheet-label">${esc(m.label)}</span>
+                <span class="material-icons hm-sheet-tick" aria-hidden="true">check</span>
+            </button>`).join('');
+        document.body.appendChild(root);
+        requestAnimationFrame(() => root.classList.add('show'));
+
+        const pick = (id) => {
+            const m = list.find((x) => x.id === id);
+            // the sheet goes, our history entry goes, and only then does the
+            // screen change — so Back from there lands where you started
+            closeSheet(() => { if (m) setTimeout(() => safe(m.act), 0); });
+        };
+        const onClick = (ev) => {
+            const row = ev.target.closest('.hm-sheet-row');
+            if (row) { pick(row.dataset.menu); return; }
+            if (!ev.target.closest('.hm-sheet-panel')) closeSheet();
+        };
+        // A tap anywhere else — the top bar and the tab bar included, which
+        // stay visible and unblocked — puts the sheet away and does nothing
+        // else, the way a sheet anywhere else on a phone behaves. Tap again to
+        // use what's under it.
+        const onOutside = (ev) => {
+            if (ev.target.closest('#hm-sheet-root')) return;
+            if (ev.target.closest('.hp-brand')) return; // the mark toggles it itself
+            ev.preventDefault();
+            ev.stopPropagation();
+            closeSheet();
+        };
+        const onKey = (ev) => {
+            if (!BACK_KEYS.includes(ev.key)) return;
+            ev.preventDefault();
+            ev.stopImmediatePropagation(); // the screen underneath doesn't go back too
+            closeSheet();
+        };
+
+        // a swipe down puts it away, but only from the top of the list
+        let startY = null;
+        let dy = 0;
+        const onStart = (ev) => {
+            if (rows.scrollTop > 0 || ev.touches.length !== 1) { startY = null; return; }
+            startY = ev.touches[0].clientY;
+            dy = 0;
+        };
+        const onMove = (ev) => {
+            if (startY == null) return;
+            dy = ev.touches[0].clientY - startY;
+            if (dy <= 0) { panel.style.transform = ''; return; }
+            panel.style.transition = 'none';
+            panel.style.transform = `translateY(${dy}px)`;
+        };
+        const onEnd = () => {
+            if (startY == null) return;
+            startY = null;
+            panel.style.transition = '';
+            panel.style.transform = '';
+            if (dy > SWIPE_CLOSE) closeSheet();
+            dy = 0;
+        };
+
+        root.addEventListener('click', onClick);
+        panel.addEventListener('touchstart', onStart, { passive: true });
+        panel.addEventListener('touchmove', onMove, { passive: true });
+        panel.addEventListener('touchend', onEnd);
+        panel.addEventListener('touchcancel', onEnd);
+        document.addEventListener('keydown', onKey, true);
+        // not this same tap: it's still on its way up from the mark
+        const armOutside = setTimeout(() => document.addEventListener('click', onOutside, true), 0);
+
+        pushEntry();
+        sheet = {
+            root,
+            teardown() {
+                clearTimeout(armOutside);
+                root.removeEventListener('click', onClick);
+                document.removeEventListener('click', onOutside, true);
+                document.removeEventListener('keydown', onKey, true);
+                root.classList.remove('show');
+                setTimeout(() => root.remove(), 200);
+            }
+        };
+        return true;
+    };
+
+    // the phone layout going away (rotating onto a tablet, a screen closing)
+    // takes the sheet with it
+    if (window.HomerLayout && typeof window.HomerLayout.onChange === 'function') {
+        window.HomerLayout.onChange((now) => { if (now && now.phone === false) closeSheet(); });
+    }
+
     // The stylesheet: screens that draw a menu load their own CSS, but the
     // menu's own rules live here so both treatments look the same everywhere.
     const ensureCss = () => {
@@ -311,7 +550,16 @@
         build,
         // what a screen should leave clear on the left, in stage px
         width: (s) => WIDTH[s || style()],
+        // the phone's sheet (the HOMER mark in the top bar opens it)
+        openSheet,
+        closeSheet,
+        toggleSheet() { return sheet ? (closeSheet(), false) : openSheet(); },
+        isSheetOpen: () => !!sheet,
+        currentId,
         destroy() {
+            closeSheet();
+            window.removeEventListener('popstate', onPop);
+            clearTimeout(dropTimer);
             live.forEach((m) => m.destroy());
             live.clear();
             listeners.clear();

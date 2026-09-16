@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+- **A tap on the HOMER mark on a phone opens the menu** (`HomerMenu.openSheet`,
+  `shared/menu.js`). The tab bar has five screens and HOMER has fourteen, so
+  Now Playing, Books, Music, Weather, Sports, News, Rooms, Cameras and Settings
+  were only reachable from a row of buttons on Home that you had to know was
+  there. The mark now slides up a sheet with the whole list: the same items in
+  the same order and with the same icons as the TV's rail, **Home** added
+  first, and the screen you're on ticked.
+  - `shared/layout.js` only wires the tap (`.hp-brand` →
+    `HomerMenu.toggleSheet()`, still `goHome()` when menu.js isn't loaded), so
+    there's one list rather than a phone copy of it. The mark grew a caret
+    that turns over while the sheet is up.
+  - The sheet sits *between* the bars, so the top bar and the tab bar stay
+    visible and unblocked. A tap outside — the bars included — dismisses it
+    and does nothing else, the way a sheet behaves anywhere else on a phone;
+    tap again to use what's under it.
+  - **Back closes the sheet rather than leaving the screen.** Opening it
+    pushes one history entry at the same address, keeping whatever state was
+    there (so `shared/player.js`'s docked mark survives), and the browser's
+    Back takes that entry instead of the page. Tapping a row drops the entry
+    *before* it navigates — `history.back()` is asynchronous, so doing it the
+    other way round popped the screen you'd just gone to — which leaves one
+    history entry per screen change and Back landing where you started.
+  - A swipe down closes it too, but only from the top of the list, so a
+    scrolled list scrolls instead of dismissing. Esc and the Apple TV's Back
+    close it without the screen underneath going back as well.
+
 ## v0.4.8
 
 - **Now Playing** (`#/playing`, the menu's **Now Playing** item): everything
