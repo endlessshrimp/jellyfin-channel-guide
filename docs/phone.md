@@ -408,6 +408,33 @@ everything that isn't drawing already lives somewhere else:
   the menu sheet the HOMER mark opens — so the phone layout is just the
   cards.
 
+## The alert crawl on a phone: `shared/alerts.js`
+
+The crawl isn't a screen and has no phone layout of its own: it's one strip,
+`position: fixed`, drawn once and shown over whatever is up — a HOMER screen,
+Jellyfin's own pages, or a video playing full screen. On a phone it only
+changes shape.
+
+- `shared/alerts.js` puts `.al-phone` on the strip while
+  `HomerLayout.isPhone()`, and re-checks on every render, so a rotation or a
+  layout change is picked up without the strip being rebuilt.
+- `.al-phone` swaps the vh type for px, and sits on
+  `bottom: var(--homer-phone-tabs)` — above the tab bar, never under it — with
+  the safe-area insets on its left and right padding. Over full-screen video
+  there is no tab bar, so `.al-phone.al-video` goes back to `bottom: 0`.
+- Under 420px the crawl line is dropped and the headline and its detail stay:
+  the words you need are "TORNADO WARNING" and where, not the NWS's four
+  paragraphs, and a 375px phone can't crawl them fast enough to be read.
+- Nothing on the strip is in the tab order or the screen's focus ring, so it
+  changes nothing about how a phone screen scrolls or what a tap lands on.
+  The ✕ is a 38px control inside a 44px-tall strip; the rest of the strip is
+  a tap that opens Weather for a weather alert.
+
+`home/home-phone.js` draws the same **who's home** row TV Home draws — it's
+`home/home.js`'s `peopleRow(box)`, handed over in the phone context — under
+the date, above the hub buttons, scrolling sideways rather than wrapping so it
+stays one line however many people the house has.
+
 ## The shared TV shell: `shared/shell.css`
 
 The TV screens' stage, palette, top bar (brand and clock), key legend, toast,
@@ -439,3 +466,7 @@ whose sizes are outer sizes says so itself (Now Playing does, once, for
   `div.videoPlayerContainer.homer-pinned` at z-index 99995 over the preview's
   rect. The layouts' "the video is in" checks see it as the real thing.
 - Never play live TV from an automated tab: the provider allows two streams.
+- For the **alert crawl**, `HomerLayout.force({ phone: true })` is enough to
+  see `.al-phone` — it reads the layout, not the viewport. Feed it a real NWS
+  alert with `HomerAlerts._fetch(...)` (see the README's Alerts section) and
+  `HomerAlerts._live()` to put it back.

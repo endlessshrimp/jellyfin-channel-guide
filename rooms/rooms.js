@@ -561,9 +561,11 @@
     };
     const numberText = (N) => (N.unavailable ? 'Unavailable' : `${Math.round(N.value * 100) / 100}${N.unit && N.unit !== '%' ? ' ' + N.unit : N.unit}`);
 
-    // At a glance: a room's temperature and humidity, a door or window left
-    // open, motion now, the air, a leak or smoke. Read only; nothing else
-    // of Home Assistant's hundreds of sensors.
+    // At a glance: who Home Assistant puts in the room, its temperature and
+    // humidity, a door or window left open, motion now, the air, a leak or
+    // smoke. Read only; nothing else of Home Assistant's hundreds of sensors.
+    // (shared/alerts.js reads the same buckets for the alert crawl, so there
+    // is one list of what matters, not two.)
     const DOOR_ICONS = { window: 'window', garage_door: 'garage' };
     const ALERT_TEXT = { smoke: 'Smoke', carbon_monoxide: 'Carbon monoxide', gas: 'Gas', moisture: 'Leak' };
     const glance = (room) => {
@@ -577,6 +579,13 @@
         // "SmartSensor", and the thermostat's own is "Thermostat"
         const thermostat = (id) => !!h.device(id) && h.house().climates.some((c) => h.device(c) === h.device(id));
         const label = (id, words) => (thermostat(id) ? 'Thermostat' : h.name(id, room.name).replace(words, '').replace(/\s+/g, ' ').trim());
+        // Who's in this room, where Home Assistant knows: a person entity is
+        // placed by the tracker that decided for them (person.source), and
+        // most houses have put none of those in an area, so most rooms show
+        // nothing here. Cheap either way \u2014 it's the same people() the rest
+        // of HOMER reads.
+        const here = typeof h.peopleIn === 'function' ? h.peopleIn(room.id) : [];
+        here.forEach((p) => out.push({ icon: 'person', text: p.name, kind: 'live' }));
         const temps = g.temps.filter((id) => num(id) != null);
         temps.forEach((id) => out.push({ icon: 'thermostat', text: temps.length > 1 ? `${label(id, /\b(current\s+)?temperature\b/i)} ${deg(num(id))}` : deg(num(id)) }));
         const hums = g.hums.filter((id) => num(id) != null);

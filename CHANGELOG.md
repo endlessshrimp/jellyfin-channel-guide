@@ -1,5 +1,78 @@
 # Changelog
 
+## Unreleased
+
+- **The alert crawl (`shared/alerts.js`).** One strip, over any HOMER screen
+  and over full-screen video, carrying severe weather and the house.
+  - **Severe weather** from the National Weather Service
+    (`api.weather.gov/alerts/active?point=lat,lon` — free, no key, and it
+    answers a browser directly: `access-control-allow-origin: *`, and its
+    preflight names `User-Agent` in `access-control-allow-headers`, so HOMER
+    can identify itself the way the NWS asks). Where the house is comes from
+    Home Assistant's own config (`get_config`, now kept as
+    `HomerHA.location()`); HOMER's weather location answers when Home
+    Assistant isn't connected. Polled every 5 minutes, every minute while a
+    warning is up.
+  - **Three levels, from the NWS's own fields rather than the event's name**:
+    `severity` Extreme and happening now or expected is **extreme** (red, the
+    edge pulses, stays up); Severe and happening now or expected is
+    **warning** (red, stays up); everything else — watches, which are Severe
+    but `urgency` Future, advisories, statements — is a **notice** (quiet, and
+    it takes itself down after 24 seconds, 10 over video). That pair of fields
+    is the whole difference between a Flood Watch and a Flash Flood Warning,
+    and it's why the crawl can tell them apart without knowing either name.
+    Test and exercise messages and cancellations never show; an alert a newer
+    one replaces is dropped.
+  - **The house**, from the same buckets a room's "at a glance" line reads
+    (`shared/homeassistant.js`'s `GLANCE_BINARY`), so there is one list of
+    which sensors matter and one set of device classes, not two. Smoke, carbon
+    monoxide or gas is extreme at once; water is a warning at once; a door or
+    window open 10 minutes, or the garage open 5, is a notice; the doorbell
+    ringing (`HomerHA.onRing`) is a notice for 3 minutes. Open is normal —
+    open *for a while* is the thing worth saying. Motion and occupancy raise
+    nothing.
+  - **One strip, one message**: loudest level first, newest within a level.
+    **Esc** or the ✕ dismisses the one showing and the next takes its place;
+    HOMER remembers what you've dismissed until that alert itself clears
+    (`localStorage: homer-alerts-seen`), so the same door doesn't announce
+    itself on every screen, and the same door tomorrow does.
+  - **It never takes focus and never moves the screen underneath**: fixed at
+    `z-index: 100000` (over the guide's 99999 and Jellyfin's transport
+    controls, under the Actions strip's 100001 and the quick panel's 100002),
+    nothing in the tab order, and Esc is only the strip's while a message is
+    showing — the next Esc is the screen's own Back. It hides itself while the
+    Actions strip, the quick controls panel or the phone's menu sheet is up.
+  - **Over full-screen video** it's a lower third (`bottom: 11vh`), clear of
+    Jellyfin's transport controls, never a dialog; a notice gets 10 seconds
+    there instead of 24, so an advisory never sits on a picture.
+  - The crawl only crawls when the words don't fit, at about 110px a second,
+    and stops crawling under `prefers-reduced-motion`. The NWS's own wording,
+    its `instruction` before its `description`, with the product code some
+    offices put on its own front line dropped and a 560-character cap — a
+    crawl that takes two minutes to come round again is one nobody finishes.
+  - A remote with no Esc reaches it through the Actions strip: **Dismiss
+    alert**, and **Weather** for a weather alert.
+  - **No made-up alert ships.** `HomerAlerts._fetch(url)` takes a real NWS
+    payload (`?event=Tornado Warning&message_type=alert&limit=1`) and re-dates
+    it to now so a past one isn't read as expired; `_live()` goes back to the
+    house's own. Nothing else about the payload is changed.
+- **Who's home.** `HomerHA.people()` answers with Home Assistant's `person.*`
+  entities — its deduplicated view of somebody across their phones, with their
+  picture — and falls back to `device_tracker.*` in a house that never set
+  people up. Read only: nothing here calls a service.
+  - **Home** shows them in the top bar beside the clock, a person each, their
+    picture where Home Assistant has one and their initials where it doesn't;
+    in reads lit, out reads flat and grey. The phone layout draws the same row
+    (`home/home.js`'s `peopleRow`) under the date.
+  - **Rooms** adds whoever Home Assistant places in a room to that room's "at
+    a glance" line (`HomerHA.peopleIn(areaId)`). A person is placed by the
+    tracker that decided for them (`person.source`); most houses have put none
+    of those in an area, and then no room mentions anybody.
+  - The made-up house (`homer-ha-mock`) gained three people, a garage door, a
+    leak and a smoke sensor, a latitude and longitude, and a front door that
+    has been open half an hour — enough to see every rule above without a real
+    alert and without touching Home Assistant.
+
 ## v0.4.16
 
 - **The phone's top bar is two buttons, not one.** The HOMER mark still opens

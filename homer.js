@@ -72,6 +72,7 @@
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
     css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
+    css('shared/alerts.css', 'homer-alerts-css'); // the alert crawl, over every screen
     css('music/playon.css', 'homer-playon-css'); // "Play on…", the Music screens' device picker
     js('shared/loading.js'); // first of all: HOMER's loading screen, over Jellyfin's 404
     js('shared/layout.js'); // first: TV or phone layout, and touch
@@ -82,6 +83,7 @@
     js('shared/player.js'); // every screen plays through it
     js('shared/skip.js'); // commercial skip in the full-screen player
     js('shared/weather.js');
+    js('shared/alerts.js'); // the alert crawl: severe weather and the house, over any screen
     js('shared/logos.js'); // before the screens: they hand it their channel logos
     js('shared/arr.js'); // before the screens: Sonarr and Radarr through HOMER's NAS helper
     js('guide/guide-model.js'); // the guide's channels, listings and recordings

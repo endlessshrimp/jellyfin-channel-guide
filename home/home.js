@@ -210,7 +210,10 @@
                     <span class="material-icons" aria-hidden="true">search</span>
                     <input type="text" placeholder="Search movies, shows and people" autocomplete="off" spellcheck="false" aria-label="Search">
                 </label>
-                <div class="hm-clock"><div class="hm-clock-time"></div><div class="hm-clock-date"></div></div>
+                <div class="hm-right">
+                    <div class="hm-people" aria-label="Who's home"></div>
+                    <div class="hm-clock"><div class="hm-clock-time"></div><div class="hm-clock-date"></div></div>
+                </div>
             </div>
             <div class="hm-menu"></div>
             <div class="hm-hero">
@@ -260,6 +263,7 @@
         };
         tick();
         const clockTimer = setInterval(tick, 1000);
+        const people = peopleRow($('.hm-people'));
         const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hm-clock')) : () => {};
 
         // ---------- Focus (spatial, like a remote) ----------
@@ -650,6 +654,7 @@
                 window.removeEventListener('resize', fit);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 clearInterval(clockTimer);
+                people.off();
                 wxDetach();
                 clearInterval(mirrorTimer);
                 offMenuStyle();
@@ -681,6 +686,67 @@
     };
 
     // The phone layout: shared/layout.js says when; home/home-phone.js draws
+    // ---------- Who's home ----------
+    //
+    // shared/homeassistant.js's people(): the person entities Home Assistant
+    // keeps (its own deduplicated view of somebody across their phones), or
+    // its device trackers in a house that never set people up. Their picture
+    // where Home Assistant has one, their initials where it doesn't.
+    //
+    // Home is already busy, so this is one quiet row in the top bar next to
+    // the clock: who's in reads lit, who's out reads flat and grey. Read only
+    // — HOMER asks Home Assistant where people are and changes nothing.
+    const MAX_PEOPLE = 4;
+    const peopleList = () => {
+        const h = window.HomerHA;
+        if (!h || typeof h.people !== 'function' || !h.isSetUp()) return [];
+        try { return h.people(); } catch { return []; }
+    };
+    const personHtml = (p) => `
+        <span class="hm-person${p.home ? ' in' : ''}" title="${esc(p.name + ' \u00b7 ' + p.where)}">
+            <span class="hm-person-face" data-person="${esc(p.id)}">${esc(p.initials)}</span>
+            <span class="hm-person-name">${esc(p.name.split(' ')[0])}</span>
+        </span>`;
+    const peopleHtml = (list) => {
+        if (!list.length) return '';
+        const show = list.slice(0, MAX_PEOPLE);
+        const rest = list.length - show.length;
+        return show.map(personHtml).join('') + (rest ? `<span class="hm-person hm-person-more">+${rest}</span>` : '');
+    };
+    // Home Assistant's picture for a person needs its address and a token, and
+    // isn't always there; loadPicture is the one that checks it actually draws,
+    // so the initials stay put until a real picture turns up.
+    const paintFaces = (box) => {
+        const h = window.HomerHA;
+        if (!h || typeof h.loadPicture !== 'function') return;
+        box.querySelectorAll('.hm-person-face[data-person]').forEach((face) => {
+            const id = face.dataset.person;
+            if (face.dataset.tried === id) return;
+            face.dataset.tried = id;
+            h.loadPicture(id).then((url) => {
+                if (!url || face.dataset.tried !== id) return;
+                face.style.backgroundImage = `url("${url}")`;
+                face.classList.add('hm-has-pic');
+            }, () => { /* no picture: the initials stay */ });
+        });
+    };
+    // repaints only when somebody's whereabouts actually change
+    const peopleRow = (box) => {
+        let sig = '';
+        const sync = () => {
+            const list = peopleList();
+            const next = list.map((p) => p.id + ':' + p.state).join('|');
+            if (next === sig) return;
+            sig = next;
+            box.innerHTML = peopleHtml(list);
+            box.classList.toggle('on', list.length > 0);
+            paintFaces(box);
+        };
+        sync();
+        const off = window.HomerHA && window.HomerHA.onChange ? window.HomerHA.onChange(sync) : () => {};
+        return { sync, off };
+    };
+
     // it (and registers it with the layout once it has loaded).
     const phoneLayout = () => !!(window.HomerLayout && window.HomerHomePhone && window.HomerLayout.usePhone('home'));
     const draw = (server) => (phoneLayout()
@@ -694,6 +760,7 @@
             openGuide,
             go,
             watch: startPreview,
+            peopleRow,
             isOpen: (v) => home === v
         })
         : createHome(server, data));

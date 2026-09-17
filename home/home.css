@@ -130,6 +130,95 @@
     font-weight: 500;
 }
 
+/* the right-hand end of the top bar: who's home, then the weather bug
+   (shared/weather.js inserts itself here, around the clock), then the clock */
+.hm-right {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    min-width: 0;
+}
+
+/* ---------- Who's home ---------- */
+/* One quiet row. Who's in is lit; who's out is flat and grey, which is the
+   whole of the reading from across the room. It takes no focus and nothing on
+   it is a control: Home Assistant is told nothing by this screen. */
+
+.hm-people {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    max-width: 460px;
+    overflow: hidden;
+}
+
+.hm-people.on { display: flex; }
+
+.hm-person {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 44px;
+    padding: 0 14px 0 5px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--homer-line);
+    white-space: nowrap;
+}
+
+.hm-person-face {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #1c2940 center / cover no-repeat;
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--homer-dim);
+}
+
+/* a real picture: the initials underneath would show through it */
+.hm-person-face.hm-has-pic { color: transparent; }
+
+.hm-person-name {
+    font-family: var(--homer-font-cond);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--homer-dim);
+}
+
+/* in */
+.hm-person.in {
+    background: rgba(47, 140, 255, 0.14);
+    border-color: rgba(47, 140, 255, 0.4);
+}
+
+.hm-person.in .hm-person-face {
+    border-color: var(--homer-accent);
+    box-shadow: 0 0 0 2px rgba(47, 140, 255, 0.35);
+    color: var(--homer-text);
+}
+
+.hm-person.in .hm-person-name { color: var(--homer-text); }
+
+/* out: flat, grey, and the picture greys out with it */
+.hm-person:not(.in) { opacity: 0.55; }
+.hm-person:not(.in) .hm-person-face { filter: grayscale(1); }
+
+.hm-person-more {
+    padding: 0 14px;
+    font-family: var(--homer-font-cond);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--homer-faint);
+}
+
 .hm-clock {
     text-align: right;
     line-height: 1;
