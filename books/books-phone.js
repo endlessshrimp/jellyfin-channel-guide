@@ -314,6 +314,16 @@
         };
         document.addEventListener('keydown', onKey, true);
 
+        // the top bar's name (BOOKS) closes the book and listening sheets and
+        // leaves the shelf (shared/layout.js)
+        const offHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (!open) return false;
+                while (sheets.length) closeSheet();
+                return true;
+            }, { atTop: () => !open })
+            : () => {};
+
         render();
         reload();
 
@@ -323,6 +333,7 @@
             sync() {},
             teardown() {
                 try { player().pause(); } catch { /* nothing loaded */ }
+                offHome();
                 off();
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();

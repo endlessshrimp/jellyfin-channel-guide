@@ -523,6 +523,16 @@
         render();
         reload();
 
+        // the top bar's screen name (MUSIC) comes back here: close any open
+        // sheet, in order, until browse is what's left
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (!open) return false;
+                while (sheets.length) closeSheet();
+                return true;
+            }, { atTop: () => !open })
+            : () => {};
+
         return {
             phone: true,
             show() { root.style.visibility = ''; },
@@ -531,6 +541,7 @@
             teardown() {
                 // the music keeps playing; only the screen goes
                 if (PO()) PO().close();
+                offScreenHome();
                 off();
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();

@@ -768,6 +768,19 @@
             if (root.contains(ev.target)) ev.stopPropagation();
         };
 
+        // the top bar's name (ROOMS) backs out of the color picker, a remote or
+        // a camera, to the rooms themselves (shared/layout.js)
+        const atTop = () => !pick && !rmId && !cam;
+        const offHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (pick) closePicker();
+                else if (rmId) closeRemote();
+                else if (cam) closeCamera();
+                else return false;
+                return true;
+            }, { atTop })
+            : () => {};
+
         root.addEventListener('click', onClick);
         root.addEventListener('pointerdown', onDown);
         root.addEventListener('pointermove', onMove);
@@ -861,6 +874,7 @@
             openRemote: (id) => { if (rooms.length) remoteFromRoute(id); else wantRemote = id; },
             teardown() {
                 alive = false;
+                offHome();
                 offHA();
                 stopStills();
                 stopCam();

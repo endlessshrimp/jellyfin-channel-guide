@@ -25,13 +25,35 @@
  *
  * On a phone every HOMER screen gets the phone chrome: a top bar (HOMER, the
  * screen's name, the weather, Search) and a tab bar (Home, Guide, Movies,
- * Shows, Recordings). A tap on the HOMER mark opens the menu sheet
- * (shared/menu.js): every screen there is, in one list, since the tab bar
- * only has five. Navigation still goes through HomerPlayer, so a video
+ * Shows, Recordings). Navigation still goes through HomerPlayer, so a video
  * playing in a preview window keeps playing.
  *
+ * The top bar's two halves do two different things:
+ *   the HOMER mark   opens the menu sheet (shared/menu.js): every screen
+ *                    there is, in one list, since the tab bar only has five
+ *   the screen name  goes back to the top of the screen you're on — Music's
+ *                    browse page from an album, Cameras' wall from one
+ *                    camera, the library's grid from a show's page
+ *
+ * A screen says what its top is while it's mounted:
+ *
+ *   const off = HomerLayout.setScreenHome(() => {
+ *       if (!sheetOpen) return false;   // already at the top: not mine
+ *       closeSheets();
+ *       return true;                    // handled
+ *   }, { atTop: () => !sheetOpen });    // optional: hides the ‹ when there's
+ *   // …and off() in teardown()            nowhere to go
+ *
+ * Nothing registered, or a registration that returns false, falls through to
+ * the defaults, which need no cooperation from the screen: the same route
+ * with its query stripped (#/music?album=… → #/music), then the tab a
+ * details page belongs to (#/details?id=… → the Movies or TV Shows grid),
+ * then a rebuild of the screen's own module, which lands it at its top. At
+ * the top of a flat screen it does nothing, and the ‹ isn't drawn.
+ *
  * window.HomerLayout = { platform, isPhone, isTouch, onChange, register, usePhone,
- *                        stageBox, chromeShown, force, destroy, version }
+ *                        stageBox, chromeShown, force, setScreenHome,
+ *                        screenHome, canScreenHome, destroy, version }
  */
 (() => {
     const VERSION = '0.3.0';
@@ -175,6 +197,94 @@
         syncChrome();
     };
 
+    // ---------- The top of the screen you're on ----------
+    //
+    // The top bar's screen name is a button back to the top of that screen.
+    // A screen registers what that means while it's mounted; the defaults
+    // below cover the ones that don't.
+
+    const screenHomes = [];
+    const setScreenHome = (fn, opts = {}) => {
+        if (typeof fn !== 'function') return () => {};
+        const entry = { fn, atTop: typeof opts.atTop === 'function' ? opts.atTop : null };
+        screenHomes.push(entry);
+        queue();
+        return () => {
+            const i = screenHomes.indexOf(entry);
+            if (i >= 0) screenHomes.splice(i, 1);
+            queue();
+        };
+    };
+    // the screen in front: the last one still registered
+    const topScreenHome = () => screenHomes[screenHomes.length - 1] || null;
+
+    // HOMER's own single-route screens: everything after the '?' is a way in
+    // (#/music?album=…, #/rooms?remote=…, #/books?id=…), so dropping it is
+    // the top of that screen. Jellyfin's own routes carry what they need in
+    // the query (#/movies?topParentId=…), so they're not in here.
+    const OWN_SCREEN = /^#!?\/(weather|rooms|cameras|sports|news|books|music|playing)(\?|$)/i;
+    // The last resort, for a screen that keeps its sub-views to itself (they're
+    // in no route, so there's nothing to strip) and hasn't registered a
+    // setScreenHome: rebuild its module, which opens it at its top. It costs a
+    // reload of that screen and it can't tell whether you're already at the
+    // top, so a registration is always better — this is only here so a screen
+    // works before it has one. Books, Cameras and Rooms register and never
+    // reach it; flat screens (Weather, Now Playing, Home) have no sub-views,
+    // so they're not in here and their name stays a plain label.
+    const SCREEN_MODULES = [
+        [/^#!?\/music(\?|$)/i, 'HomerMusic']
+    ];
+    const moduleFor = (h) => {
+        const hit = SCREEN_MODULES.find(([re]) => re.test(h));
+        const mod = hit && window[hit[1]];
+        return mod && typeof mod.close === 'function' && typeof mod.open === 'function' ? mod : null;
+    };
+    // a details page belongs to the library grid it came from
+    const tabHome = () => {
+        const where = whereAmI();
+        const h = route();
+        if (where.tab === 'movies' && !/^#!?\/movies(\.html)?\?/i.test(h)) return () => goLibrary('movies');
+        if (where.tab === 'shows' && !/^#!?\/tv(\.html)?\?/i.test(h)) return () => goLibrary('tvshows');
+        return null;
+    };
+
+    // canScreenHome(): is there anywhere above where we are? (what draws the ‹)
+    const canScreenHome = () => {
+        if (!screenUp()) return false;
+        const top = topScreenHome();
+        if (top && top.atTop) return !top.atTop();
+        if (top) return true; // it hasn't said; assume it can
+        const h = route();
+        if (OWN_SCREEN.test(h)) return h.includes('?') || !!moduleFor(h);
+        return !!tabHome();
+    };
+
+    // screenHome(): go there
+    const screenHome = () => {
+        for (let i = screenHomes.length - 1; i >= 0; i--) {
+            const e = screenHomes[i];
+            let handled = false;
+            try { handled = !!e.fn(); } catch (err) { console.error('[HOMER Layout]', err); }
+            if (handled) { queue(); return true; }
+        }
+        const h = route();
+        // the same screen without its way in
+        if (OWN_SCREEN.test(h) && h.includes('?')) { go(h.split('?')[0]); return true; }
+        // a show's or movie's page: the grid it belongs to
+        const tab = tabHome();
+        if (tab) { tab(); return true; }
+        // nothing said otherwise: rebuild the screen, which opens it at its top
+        const mod = moduleFor(h);
+        if (mod) {
+            try {
+                mod.close();
+                setTimeout(() => { try { mod.open(); } catch (err) { console.error('[HOMER Layout]', err); } }, 0);
+                return true;
+            } catch (err) { console.error('[HOMER Layout]', err); }
+        }
+        return false; // already at the top of a flat screen
+    };
+
     // the library views, for the Movies and Shows tabs (fetched once)
     let viewsP = null;
     const views = () => {
@@ -247,7 +357,8 @@
         top = document.createElement('div');
         top.id = 'homer-phone-top';
         top.innerHTML = `
-            <div class="hp-brand" role="button" tabindex="0" aria-label="Menu" aria-haspopup="dialog" aria-expanded="false"><span class="hp-mark"></span>HOMER<span class="hp-sub"></span><span class="material-icons hp-brand-caret" aria-hidden="true">expand_more</span></div>
+            <div class="hp-brand" role="button" tabindex="0" aria-label="Menu" aria-haspopup="dialog" aria-expanded="false"><span class="hp-mark"></span>HOMER<span class="material-icons hp-brand-caret" aria-hidden="true">expand_more</span></div>
+            <button type="button" class="hp-here" hidden><span class="material-icons hp-here-back" aria-hidden="true">chevron_left</span><span class="hp-sub"></span></button>
             <span class="hp-spacer"></span>
             <div class="hp-wx"><div class="hp-clock"></div></div>
             <button type="button" class="hp-icon hp-search" aria-label="Search"><span class="material-icons" aria-hidden="true">search</span></button>`;
@@ -263,6 +374,14 @@
         top.querySelector('.hp-brand').addEventListener('click', openMenu);
         top.querySelector('.hp-brand').addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openMenu(); }
+        });
+        // the screen's name goes back to the top of that screen
+        top.querySelector('.hp-here').addEventListener('click', () => {
+            const m = M();
+            if (m && m.isSheetOpen()) m.closeSheet(); // the sheet is over it
+            if (!canScreenHome()) return; // already at the top of this screen
+            screenHome();
+            syncHere();
         });
         top.querySelector('.hp-search').addEventListener('click', () => {
             // the phone search takes the tap when it can: back to its box if
@@ -281,6 +400,22 @@
         if (window.HomerWeather) wxDetach = window.HomerWeather.attach(top.querySelector('.hp-clock'));
     };
 
+    // The name is drawn as a button only while there's somewhere above to go.
+    // Opening a sub-view inside a screen changes no route and adds nothing to
+    // <body>, so nothing tells the chrome it happened: this one boolean is
+    // checked on a slow timer instead (it's a class toggle, nothing more).
+    let hereName = '';
+    const syncHere = (name) => {
+        if (!top) return;
+        const here = top.querySelector('.hp-here');
+        if (!here || here.hidden) return;
+        if (name) hereName = name;
+        const can = canScreenHome();
+        if (here.classList.contains('can') === can) return;
+        here.classList.toggle('can', can);
+        here.setAttribute('aria-label', can ? `Back to ${hereName}` : hereName);
+    };
+
     const syncChrome = () => {
         const want = isPhone() && screenUp();
         if (want && !top && document.body) build();
@@ -289,6 +424,8 @@
             if (where) {
                 top.querySelector('.hp-sub').textContent = where.name;
                 tabs.querySelectorAll('.hp-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === where.tab));
+                top.querySelector('.hp-here').hidden = false;
+                syncHere(where.name);
             }
             const m = M();
             top.querySelector('.hp-brand').setAttribute('aria-expanded', String(!!(m && m.isSheetOpen())));
@@ -323,6 +460,7 @@
         }, 30);
     };
 
+    let hereTimer = 0;
     const onMq = () => sync();
     if (phoneMq && phoneMq.addEventListener) phoneMq.addEventListener('change', onMq);
     if (touchMq && touchMq.addEventListener) touchMq.addEventListener('change', onMq);
@@ -339,6 +477,7 @@
         // screens put their roots straight on <body>
         observer = new MutationObserver(() => { hookPlayer(); queue(); });
         observer.observe(document.body, { childList: true });
+        hereTimer = setInterval(() => { if (shown && !document.hidden) syncHere(); }, 500);
         sync();
     };
     if (document.body) start();
@@ -355,7 +494,13 @@
         stageBox,
         chromeShown: () => shown,
         force,
+        // a screen says what the top bar's name goes back to, while it's up
+        setScreenHome,
+        screenHome,
+        canScreenHome,
         destroy() {
+            screenHomes.length = 0;
+            clearInterval(hereTimer);
             if (M()) M().closeSheet();
             if (phoneMq && phoneMq.removeEventListener) phoneMq.removeEventListener('change', onMq);
             if (touchMq && touchMq.removeEventListener) touchMq.removeEventListener('change', onMq);

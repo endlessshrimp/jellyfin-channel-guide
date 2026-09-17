@@ -432,6 +432,16 @@
         syncDock();
         if (ctx.openAt) openCamera(ctx.openAt);
 
+        // the top bar's name (CAMERAS) comes back to the wall from one camera
+        // (shared/layout.js)
+        const offHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (!cam) return false;
+                closeCamera();
+                return true;
+            }, { atTop: () => !cam })
+            : () => {};
+
         return {
             phone: true,
             show() { root.style.visibility = ''; },
@@ -439,6 +449,7 @@
             state: () => ({ cam, sel: Math.max(0, tiles.findIndex((t) => t.id === cam)) }),
             teardown() {
                 alive = false;
+                offHome();
                 offHA();
                 offRing();
                 stopLive();
