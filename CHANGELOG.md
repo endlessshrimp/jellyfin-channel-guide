@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+- **Movies and TV Shows can be narrowed down.** Two rows of chips sit above the
+  list, in the guide's chip language rather than a second pattern to learn: the
+  order on top, then what the list is narrowed to.
+  - **Genre** and **decade**, both read off the library itself — the ten genres
+    it actually leans on, most-used first, and the decades its years really
+    fall in, rather than a list of forty and a range nothing is in.
+  - **Unwatched** (a movie you haven't finished, a show with episodes left),
+    **Favourites**, and **4K**. The 4K set comes from Jellyfin's own `Is4K`
+    filter in one small extra query beside the main one — ids only, no second
+    pass over every title's media — so a library with nothing in 2160p simply
+    doesn't get the chip. Nor does one nobody has hearted.
+  - **Everything combines**, and the search box (**/**) narrows what's left.
+    Every chip carries the number of titles it would leave, counted against
+    everything else that's on, so a dead end is visible before you press it: a
+    chip that would leave nothing goes dim and dashed.
+  - **Sorting** is now Recently added, A–Z, Year and Rating, plus **Recently
+    aired** on TV Shows (by premiere date). The sort moved out of the list
+    header into the chip row and is still remembered per library.
+  - **The arrows reach all of it**, exactly as they reach the guide's
+    categories: **▲** off the top title goes up into the genre/decade row,
+    **▲** again into the order row, **◀ ▶** run along a row, **OK** presses
+    (a lit chip turns off), and **▼** drops back onto the title you left.
+  - **One press clears it.** **ESC** takes every chip and the search box off
+    together, an amber **Clear** chip appears while anything is on, and the
+    Actions strip (**M**, or holding OK on the Siri Remote) carries Filters,
+    Sort and Clear filters for a remote with no letters.
+  - **Nothing matched** now says which filters did it, over the whole stage
+    (the preview window has nothing to preview, so it stands aside), with the
+    same one press out.
+  - **What's on is readable from the sofa**: the lit chips are filled and
+    ringed, an active chip that has scrolled off the end is pulled back into
+    view, and the list header reads `COMEDY · 1980S` beside `11 of 178`.
+  - **Remembered for the sitting, not for good.** Leave Movies and come back
+    and the chips are where you left them; come back tomorrow (or after two
+    hours) and the whole library is there again. A filter isn't a setting.
+  - **On a phone**, the same filters are a row you flick, with the count beside
+    the sorts and an amber **Clear** pinned outside the row so it's still
+    reachable when the row has been flicked to its end. The row is built once
+    and then only updated, so tapping a chip near the end doesn't throw the row
+    back to its start.
+  - Both layouts take the chips, the counts and the sort order from one place,
+    `HomerLibraryModel.makeFilters` / `sortsFor` / `sortCompare`, so they can't
+    drift apart. Filtering is one pass over the titles the screen already has —
+    178 movies and 18 shows here — not another round trip.
+
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.

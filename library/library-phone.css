@@ -186,16 +186,88 @@
     font-size: 17px;
 }
 
-.hl-phone .lp-sorts {
+/* the sorts and the filters, one flickable row each, with the count pinned
+   beside the sorts so it can't scroll out of sight */
+.hl-phone .lp-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.hl-phone .lp-sortrow,
+.hl-phone .lp-filterrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.hl-phone .lp-sorts,
+.hl-phone .lp-filters {
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* the sort row stops short of the count, so a chip half off the end fades out
+   instead of being sliced down the middle */
+.hl-phone .lp-sorts {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+}
+
+/* the filter row runs off the right edge of the screen, so it reads as
+   something to flick (the sort row can't: the count sits beside it) */
+.hl-phone .lp-filters {
+    margin-right: calc(-16px - var(--homer-phone-right));
+    padding-right: calc(16px + var(--homer-phone-right));
+}
+
+.hl-phone .lp-sorts::-webkit-scrollbar,
+.hl-phone .lp-filters::-webkit-scrollbar { display: none; }
+
+/* a chip that would empty the grid says so before you tap it */
+.hl-phone .lp-chip.none { opacity: 0.45; }
+
+.hl-phone .lp-chip.none::before { border-style: dashed; }
+
+.hl-phone .lp-chip-num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--homer-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.hl-phone .lp-chip.on .lp-chip-num { color: rgba(255, 255, 255, 0.85); }
+
+/* the way out, in the colour nothing else in the head uses. It sits beside the
+   filter row rather than in it, so a row flicked to its far end still has it. */
+.hl-phone .lp-chip.lp-clear-chip {
+    flex: none;
+    color: #1d1200;
+    padding-left: 10px;
+}
+
+.hl-phone .lp-chip.lp-clear-chip::before {
+    border-color: transparent;
+    background: var(--homer-needle, #ffb020);
+}
+
+.hl-phone .lp-chip.lp-clear-chip .material-icons {
+    font-size: 17px;
+    margin-right: -3px;
 }
 
 .hl-phone .lp-count {
-    margin-left: auto;
-    padding-left: 8px;
+    flex: none;
+    padding-left: 4px;
     font-family: var(--homer-font-cond);
     font-size: 13px;
     font-weight: 700;
@@ -1083,7 +1155,7 @@
     }
 
     .hl-phone .lp-filter { flex: 0 1 300px; }
-    .hl-phone .lp-sorts { flex: 1; }
+    .hl-phone .lp-rows { flex: 1; }
 
     .hl-phone .lp-grid {
         grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));

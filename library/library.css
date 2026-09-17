@@ -268,12 +268,197 @@
     box-shadow: 0 0 12px var(--accent-2);
 }
 
+/* ---------- Library: the sort and filter chips ---------- */
+/* Two rows above both panels, in the guide's chip language so there's only one
+   of these to learn: the top row is the order plus the state filters, the
+   bottom one is decade and genre. What's on is filled and ringed — the point is
+   that you can tell from the sofa why the list is short. The padding is room
+   for a focused chip's ring, which would otherwise be clipped. */
+
+.hl-filters {
+    position: absolute;
+    left: 66px;
+    right: 66px;
+    top: 114px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px;
+    z-index: 3;
+}
+
+.hl-frow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    overflow: hidden; /* wider than the stage: the focused chip slides into view */
+}
+
+.hl-frow[hidden] { display: none; }
+
+.hl-fchip,
+.hl-fsort {
+    flex: none;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 13px;
+    border-radius: 21px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d6e0ec;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.hl-fchip:hover,
+.hl-fsort:hover { background: rgba(255, 255, 255, 0.12); }
+
+.hl-fcount {
+    color: var(--dim);
+    font-weight: 600;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* a genre is a genre wherever it turns up in HOMER */
+.hl-fchip.hl-f-genre { border-color: rgba(111, 211, 255, 0.28); }
+
+/* a chip that would leave the list empty says so before you press it */
+.hl-fchip.none {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+.hl-fchip.on,
+.hl-fsort.on {
+    background: linear-gradient(180deg, #3a95ff, #1c64d8);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 8px 24px rgba(47, 140, 255, 0.45);
+}
+
+.hl-fchip.on .hl-fcount { color: rgba(255, 255, 255, 0.85); }
+
+/* the chip the remote is on: HOMER's focus ring, so "where I am" and "what's
+   on" stay telling apart at ten feet */
+.hl-fchip.foc,
+.hl-fsort.foc {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--focus-ring);
+    opacity: 1;
+}
+
+.hl-fchip.on.foc,
+.hl-fsort.on.foc {
+    background: var(--focus-fill);
+    color: #fff;
+}
+
+.hl-fchip.foc .hl-fcount { color: rgba(255, 255, 255, 0.85); }
+
+/* the sort: one segmented switch, so it doesn't read as five more filters */
+.hl-fseg {
+    flex: none;
+    display: inline-flex;
+    height: 42px;
+    padding: 3px;
+    gap: 3px;
+    border-radius: 21px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid var(--line-strong);
+}
+
+.hl-fseg .hl-fsort {
+    height: 34px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    font-size: 17px;
+    padding: 0 12px;
+    color: var(--dim);
+}
+
+.hl-fseg .hl-fsort.on {
+    background: var(--accent);
+    box-shadow: none;
+    color: #fff;
+}
+
+.hl-fseg .hl-fsort.foc {
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: var(--focus-ring);
+    color: #fff;
+}
+
+.hl-fseg .hl-fsort.on.foc { background: var(--focus-fill); }
+
+.hl-fspace { flex: 1; }
+
+/* the way out, in the colour nothing else on this screen uses */
+.hl-fclear {
+    background: var(--needle);
+    border-color: transparent;
+    color: #1d1200;
+    padding-left: 12px;
+}
+
+.hl-fclear:hover { background: #ffc44d; }
+
+.hl-fclear .material-icons {
+    font-size: 22px;
+    margin-right: -2px;
+}
+
+.hl-fclear.foc {
+    background: var(--needle);
+    color: #1d1200;
+}
+
+/* nothing matched: the preview window has nothing to preview, so it goes, and
+   the list takes the whole stage so the message sits where you're looking */
+#hl-root.no-results .hl-detail { display: none; }
+
+#hl-root.no-results .hl-list {
+    width: auto;
+    right: 72px;
+}
+
+/* and the same way out on an empty screen */
+.hl-clear-btn {
+    margin-top: 20px;
+    height: 54px;
+    padding: 0 28px;
+    border-radius: 27px;
+    border: 0;
+    background: var(--needle);
+    color: #1d1200;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.hl-clear-btn:hover { background: #ffc44d; }
+
 /* ---------- Library: title list + detail panel ---------- */
 
 .hl-list {
     position: absolute;
     left: 72px;
-    top: 132px;
+    top: 228px;
     width: 780px;
     bottom: 96px;
     border-radius: 16px;
@@ -296,16 +481,22 @@
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
 }
 
-.hl-sort {
-    display: flex;
-    gap: 6px;
-    padding: 5px;
-    border-radius: 11px;
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid var(--line);
+/* what the list is narrowed to, beside the count, so the answer to "why am I
+   only seeing eleven of these" is next to the eleven */
+.hl-active {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.hl-sort-opt,
+.hl-active.on { color: var(--accent-2); }
+
 .hl-tab {
     font-family: var(--cond);
     font-size: 18px;
@@ -320,19 +511,14 @@
     transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
-.hl-sort-opt:hover,
 .hl-tab:hover { color: var(--text); }
 
-.hl-sort-opt.on,
 .hl-tab.on {
     background: var(--accent);
     color: #fff;
 }
 
-/* the sort option or season tab the remote is on: HOMER's focus ring, so it
-   reads from the couch (the sort switch follows the remote, so the one in
-   effect and the one under it are the same option) */
-.hl-zone-sort .hl-sort-opt.on,
+/* the season tab the remote is on: HOMER's focus ring, so it reads from the couch */
 .hl-tab.focus {
     background: var(--focus-fill);
     box-shadow: var(--focus-ring);
@@ -560,14 +746,16 @@
     position: absolute;
     left: 900px;
     right: 72px;
-    top: 132px;
+    top: 228px;
     bottom: 96px;
     display: flex;
     flex-direction: column;
 }
 
+/* the chip rows took 96px off the top of both panels; the preview gives it up
+   so the title, its chips, the overview and the buttons all still fit */
 .hl-detail .hl-preview {
-    height: 460px;
+    height: 396px;
     flex: none;
 }
 

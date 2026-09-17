@@ -174,6 +174,33 @@ worth copying for a small screen:
 - A tap opens a sheet; anything that throws something away is a sheet button
   that arms on the first tap ("Tap again to delete") and ignores a second tap
   within 400ms (a double tap isn't a decision).
+### Movies and TV Shows: rows that flick, and a button that doesn't
+
+`library/library-phone.js` gets the same sort and filter chips as the TV
+layout, and both build them from the same place —
+`HomerLibraryModel.makeFilters(items, uhd)` works out which chips a library
+can offer and what each one would leave, and `sortsFor`/`sortCompare` say how
+it can be ordered. The layouts only differ in how they draw them:
+
+- **Two scrolling rows, not two arrow-reachable ones.** The sorts and the
+  filters each get a row with `overflow-x: auto`. The sort row stops short of
+  the count and fades at its right edge (`mask-image`) so a chip half off the
+  end isn't sliced through the middle; the filter row bleeds past the screen's
+  padding with a negative margin, which is what makes it look like something
+  to flick.
+- **Clear sits outside the scroller.** A Clear chip inside the row would be
+  off the left end exactly when you'd want it. It's a sibling of
+  `.lp-filters` in `.lp-filterrow`, shown by dropping its `hidden`.
+- **The row is built once and then only updated.** Rewriting its `innerHTML`
+  on every change would throw `scrollLeft` back to 0 — tap a genre near the
+  end of the row and the row would jump away under your thumb. `renderChips`
+  writes the chips on the first pass and after that only sets counts and
+  classes. When *what's on* changes it scrolls the lit chip into view, so the
+  reason the grid is short isn't off the end of the screen.
+- **44px targets.** The chips are the existing `.lp-chip` (36px of paint in a
+  44px box), so the filters are the same thing to hit as the season and sort
+  chips already were.
+
 ## Settings and Weather: a screen under the bars
 
 The guide's phone layout sits above the bars (99997) and leaves its video
