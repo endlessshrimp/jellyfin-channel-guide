@@ -11,6 +11,10 @@
  *   Playing    (tap the bar) the big cover, the controls, and the lyrics,
  *              the line you're on lit
  *
+ * A star sits on every track row, on an album's header and on Now playing. It
+ * is Jellyfin's favourite, not HOMER's, and the **Favorites** chip is the
+ * tracks that have one.
+ *
  * A mini player sits above the tab bar whenever something is loaded. Leaving
  * Music does not stop it: music/music-strip.js takes over on other screens.
  *
@@ -32,6 +36,7 @@
         { id: 'artists', label: 'Artists', list: () => M().artists() },
         { id: 'albums', label: 'Albums', list: () => M().albums() },
         { id: 'songs', label: 'Songs', list: () => M().songs() },
+        { id: 'favorites', label: 'Favorites', list: () => M().favorites() },
         { id: 'playlists', label: 'Playlists', list: () => M().playlists() },
         { id: 'genres', label: 'Genres', list: () => M().genres() },
     ];
@@ -40,6 +45,31 @@
         const { esc, icon, artImg, metaOf, subOf } = ctx;
         const player = () => M().player;
         const f = () => M().fmt;
+
+        // Jellyfin's star: a real button beside the row, so a thumb on it
+        // doesn't also start the track.
+        const starBtn = (it) => {
+            const on = M().isFavorite(it);
+            const b = el('button', `mup-star${on ? ' on' : ''}`, icon(on ? 'star' : 'star_border'));
+            b.type = 'button';
+            b.setAttribute('aria-label', on ? 'Remove from Favorites' : 'Add to Favorites');
+            b._item = it;
+            b.onclick = (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                M().setFavorite(it, !M().isFavorite(it)).catch(() => {});
+            };
+            return b;
+        };
+
+        const paintStars = () => {
+            document.querySelectorAll('.mu-phone .mup-star').forEach((b) => {
+                const on = M().isFavorite(b._item);
+                b.classList.toggle('on', on);
+                b.innerHTML = icon(on ? 'star' : 'star_border');
+                b.setAttribute('aria-label', on ? 'Remove from Favorites' : 'Add to Favorites');
+            });
+        };
 
         const root = el('div', 'homer-screen mu-phone');
         root.id = 'mu-root';
@@ -97,22 +127,31 @@
             const box = $('.mup-grid');
             const t = TABS.find((x) => x.id === tab) || TABS[0];
             const list = t.list() || [];
-            box.className = `mup-grid ${tab === 'songs' ? 'list' : 'wall'}`;
+            const rows = tab === 'songs' || tab === 'favorites';
+            box.className = `mup-grid ${rows ? 'list' : 'wall'}`;
             box.innerHTML = '';
-            if (!list.length) { box.innerHTML = '<div class="mup-note">Nothing here yet.</div>'; return; }
-            if (tab === 'songs') {
+            if (!list.length) {
+                box.innerHTML = `<div class="mup-note">${tab === 'favorites'
+                    ? 'No favorites yet. Tap the star beside a track.' : 'Nothing here yet.'}</div>`;
+                return;
+            }
+            if (rows) {
+                const name = tab === 'favorites' ? 'Favorites' : 'Songs';
                 list.slice(0, 400).forEach((s, i) => {
-                    const row = el('button', 'mup-song', `
+                    const row = el('div', 'mup-song-row');
+                    const btn = el('button', 'mup-song', `
                         <span class="mup-song-art">${artImg(s, 120, 'mu-img')}</span>
                         <span class="mup-song-t"><b>${esc(s.name)}</b><i>${esc(s.artist || '')}</i></span>
                         <span class="mup-song-d">${f().clock(s.duration)}</span>`);
-                    row.type = 'button';
-                    row.onclick = () => {
-                        player().play(list, i, { source: { kind: 'songs', name: 'Songs' } });
+                    btn.type = 'button';
+                    btn.onclick = () => {
+                        player().play(list, i, { source: { kind: tab, name } });
                         push('playing');
                         drawPlaying();
                         syncSheets();
                     };
+                    row.appendChild(btn);
+                    row.appendChild(starBtn(s));
                     box.appendChild(row);
                 });
                 return;
@@ -212,6 +251,7 @@
                         <h1>${esc(it.name)}</h1>
                         <div class="mup-page-sub">${esc(it.kind === 'album' ? it.artist || '' : subOf(it))}</div>
                         <div class="mup-page-meta">${metaOf(it).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
+                        <div class="mup-page-star"></div>
                         <div class="mup-page-acts">
                             <button type="button" class="mup-btn primary" data-a="play">${icon('play_arrow')}Play</button>
                             <button type="button" class="mup-btn" data-a="shuffle">${icon('shuffle')}Shuffle</button>
@@ -222,6 +262,7 @@
                     <div class="mup-page-body"></div>
                 </div>`;
             box.querySelector('.mup-back').onclick = closeSheet;
+            box.querySelector('.mup-page-star').appendChild(starBtn(it));
             box.querySelector('[data-a="play"]').onclick = () => playPage(false);
             box.querySelector('[data-a="shuffle"]').onclick = () => playPage(true);
             box.querySelector('[data-a="mix"]').onclick = mixPage;
@@ -246,6 +287,7 @@
             if (!pageTracks.length) { body.innerHTML = '<div class="mup-note">No tracks.</div>'; return; }
             pageTracks.forEach((t, i) => {
                 const here = !!(s.track && s.track.id === t.id);
+                const line = el('div', 'mup-track-row');
                 const row = el('button', `mup-track${here ? ' here' : ''}`, `
                     <span class="mup-track-n">${here ? icon('graphic_eq') : (t.no || i + 1)}</span>
                     <span class="mup-track-t"><b>${esc(t.name)}</b>${t.artist && t.artist !== it.artist ? `<i>${esc(t.artist)}</i>` : ''}</span>
@@ -257,7 +299,9 @@
                     drawPlaying();
                     syncSheets();
                 };
-                body.appendChild(row);
+                line.appendChild(row);
+                line.appendChild(starBtn(t));
+                body.appendChild(line);
             });
         };
 
@@ -275,6 +319,7 @@
                     <div class="mup-np-a"></div>
                     <div class="mup-np-seek"><span class="mup-np-track"><b></b></span><span class="mup-np-times"><i class="at"></i><i class="left"></i></span></div>
                     <div class="mup-np-ctl">
+                        <button type="button" class="mup-rb" data-k="fav">${icon('star_border')}</button>
                         <button type="button" class="mup-rb" data-k="shuffle">${icon('shuffle')}</button>
                         <button type="button" class="mup-rb" data-k="prev">${icon('skip_previous')}</button>
                         <button type="button" class="mup-rb big" data-k="play">${icon('play_arrow')}</button>
@@ -288,6 +333,7 @@
             box.querySelector('.mup-back').onclick = closeSheet;
             const P = player();
             const acts = {
+                fav: () => { const t = P.state().track; if (t) M().setFavorite(t, !M().isFavorite(t)).catch(() => {}); },
                 shuffle: () => P.toggleShuffle(),
                 prev: () => P.prev(),
                 play: () => P.toggle(),
@@ -361,6 +407,13 @@
             q('.mup-np-times .at').textContent = f().clock(s.position);
             q('.mup-np-times .left').textContent = '−' + f().clock(Math.max(0, dur - s.position));
             q('[data-k="play"]').innerHTML = icon(s.playing ? 'pause' : 'play_arrow');
+            const fav = q('[data-k="fav"]');
+            if (fav) {
+                fav._item = s.track;
+                const on = M().isFavorite(s.track);
+                fav.innerHTML = icon(on ? 'star' : 'star_border');
+                fav.classList.toggle('star-set', on);
+            }
             q('[data-k="shuffle"]').classList.toggle('set', s.shuffle);
             const rep = q('[data-k="repeat"]');
             rep.innerHTML = icon(s.repeat === 'one' ? 'repeat_one' : 'repeat');
@@ -445,6 +498,15 @@
                 return;
             }
             if (what === 'lyrics') { if (open === 'playing') paintLyrics(true); return; }
+            if (what === 'favorite') {
+                // repaint the stars where they are rather than rebuild the
+                // lists: a thumb is usually still on one
+                paintStars();
+                if (open === 'playing') paintPlaying();
+                drawChips();
+                if (tab === 'favorites' && !open) drawGrid();
+                return;
+            }
             render();
         });
 

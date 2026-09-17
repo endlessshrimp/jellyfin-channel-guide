@@ -282,6 +282,18 @@ worth copying for anything that plays:
   drawn twice. A repaint arrives about four times a second, so anything the
   finger is on (the queue list) is only redrawn when the track actually
   changes.
+- **A star that a thumb can hit.** The favorite star is a `<button>` of its own
+  beside the row button, not an element inside it — a row that plays when
+  tapped can't also hold a control that doesn't. The pair lives in a
+  `.mup-song-row` / `.mup-track-row` flex wrapper, which is also where the
+  hairline between rows moved to. The star's handler calls
+  `stopPropagation()` and `preventDefault()` anyway, for the browsers that
+  synthesise a click on the ancestor.
+- **A star changing repaints stars, not lists.** `music-model.js` emits
+  `'favorite'`; both layouts walk the stars already on screen and swap the
+  glyph rather than rebuilding the list, because on a phone a thumb is usually
+  still resting on one. Only the Favorites list itself is redrawn, since that
+  is the one list a star actually changes.
 - **One picker, two sizes.** "Play on…" (`music/playon.js`) is the same list on
   both layouts, with no layout-specific code in it: the screen passes `tv:
   true/false` and a host element, and `music/playon.css` switches between stage

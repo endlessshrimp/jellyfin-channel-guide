@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **A star on every track, and a Favorites list.** The star is on every track
+  row — the Songs list, an album, **Up next**, Now playing — and on an album's
+  own header, on the TV screen and on a phone. Outline when it isn't a
+  favorite, filled and amber when it is. **F** stars whatever the focus is on
+  (the track under the cursor, or the album, artist or playlist the page is
+  about), the star itself does the same without starting the track, and it's in
+  the Actions strip so a remote with no letter keys reaches it. The on-screen
+  legend says **Favorite** or **Unfavorite** for what F will actually do.
+  - **Favorites** is a tab of its own beside Songs (a chip on a phone): every
+    track with a star, in artist and album order, and Play / Shuffle / Instant
+    Mix work on it like any other list.
+  - These are **Jellyfin's own favorites**, so a star here is a star in
+    Jellyfin Web, Swiftfin and anywhere else. Nothing is fetched twice:
+    `UserData.IsFavorite` already comes back on every item HOMER asks for, and
+    the list itself is one `Filters=IsFavorite` query with the rest of the
+    library.
+  - The star flips the instant it's pressed and is **put back if Jellyfin
+    disagrees**; the server's own answer is written over the optimistic one.
+    Written with `POST /UserItems/{id}/UserData` (Jellyfin 10.11, which is what
+    this server runs), falling back to the older `POST`/`DELETE
+    /Users/{userId}/FavoriteItems/{id}`.
+  - A star changing repaints the stars on screen rather than rebuilding the
+    lists, so the focus — or a thumb — stays where it was.
+
 - **Play on… — an album on a speaker, not in the browser.** A fourth button
   beside Play / Shuffle / Instant Mix on an album, a playlist, an artist or a
   genre (and the same one on a phone) opens a list: **This screen** first, then

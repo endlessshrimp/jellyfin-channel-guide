@@ -131,8 +131,45 @@
     border-radius: 10px;
 }
 
-.mup-song + .mup-song,
-.mup-track + .mup-track { border-top: 1px solid var(--line, rgba(160, 190, 230, 0.12)); }
+/* the rows are a button and a star side by side, so the hairline between
+   them belongs to the pair, not to the button */
+.mup-song-row,
+.mup-track-row { display: flex; align-items: center; gap: 2px; }
+.mup-song-row .mup-song,
+.mup-track-row .mup-track { flex: 1 1 auto; min-width: 0; }
+
+.mup-song-row + .mup-song-row,
+.mup-track-row + .mup-track-row { border-top: 1px solid var(--line, rgba(160, 190, 230, 0.12)); }
+
+/* ---------- The favorite star ---------- */
+/* Jellyfin's own star. 44px so a thumb hits it and not the row behind it. */
+
+.mup-star {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--faint, #5a6f89);
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mup-star .material-icons { font-size: inherit; }
+.mup-star.on { color: var(--needle, #ffb020); }
+.mup-star:active { background: rgba(255, 255, 255, 0.1); }
+
+.mup-page-star { margin-top: 10px; display: flex; justify-content: center; }
+.mup-page-star .mup-star { width: 52px; height: 52px; font-size: 28px; }
+
+.mup-rb.star-set { color: var(--needle, #ffb020); background: rgba(255, 176, 32, 0.16); }
 
 .mup-song-art {
     flex: none;
@@ -255,7 +292,7 @@
     color: var(--dim, #8ea3bd);
 }
 
-.mup-page-acts { margin: 18px 0 6px; display: flex; gap: 10px; }
+.mup-page-acts { margin: 18px 0 6px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 
 .mup-btn {
     min-height: 46px;

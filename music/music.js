@@ -27,11 +27,16 @@
  *
  * #/music?np=1 opens Now playing; #/music?album=<id> opens that album.
  *
+ * A star sits on every track — on a list, on an album, in the queue and on Now
+ * playing — and on an album's own header. It is Jellyfin's favourite, not
+ * HOMER's, so it is the same star in every other Jellyfin client. F toggles
+ * whatever the focus is on; the Favorites tab is the tracks with one.
+ *
  * Remote/keyboard: arrows move, OK selects, Esc/Backspace goes back a view
  * (then back a screen), H goes Home. Space or P plays and pauses anywhere on
  * the screen, N and B (and the media keys) change track, S shuffles, R cycles
- * repeat, I starts an Instant Mix from whatever the focus is on, + and − are
- * the volume.
+ * repeat, I starts an Instant Mix from whatever the focus is on, F stars it,
+ * + and − are the volume.
  *
  * On a phone (shared/layout.js) Music draws music/music-phone.js instead.
  *
@@ -62,6 +67,7 @@
         { id: 'artists', label: 'Artists', list: () => M().artists() },
         { id: 'albums', label: 'Albums', list: () => M().albums() },
         { id: 'songs', label: 'Songs', list: () => M().songs() },
+        { id: 'favorites', label: 'Favorites', list: () => M().favorites() },
         { id: 'playlists', label: 'Playlists', list: () => M().playlists() },
         { id: 'genres', label: 'Genres', list: () => M().genres() },
     ];
@@ -388,6 +394,7 @@
         // Play / Shuffle / Instant Mix for anything the hero or a page is about
         const tracksOf = (it) => {
             if (!it) return Promise.resolve([]);
+            if (it.kind === 'favorites') return Promise.resolve(M().favorites());
             if (it.kind === 'album') return M().albumTracks(it.id);
             if (it.kind === 'playlist') return M().playlistTracks(it.id);
             if (it.kind === 'artist') return M().artistAllSongs(it.id);
@@ -398,8 +405,12 @@
         const playItem = (it, shuffle) => {
             if (!it) return;
             if (it.kind === 'track') {
-                const list = tab === 'songs' && view === 'browse' ? M().songs() : [it];
-                startPlaying(list, Math.max(0, list.indexOf(it)), { shuffle: !!shuffle, source: { kind: 'songs', name: 'Songs' } });
+                const from = view === 'browse' && (tab === 'songs' || tab === 'favorites') ? tab : null;
+                const list = from === 'songs' ? M().songs() : from === 'favorites' ? M().favorites() : [it];
+                startPlaying(list, Math.max(0, list.findIndex((t) => t.id === it.id)), {
+                    shuffle: !!shuffle,
+                    source: { kind: from || 'songs', name: from === 'favorites' ? 'Favorites' : 'Songs' },
+                });
                 return;
             }
             toast(shuffle ? `Shuffling ${it.name}` : `Playing ${it.name}`);
@@ -408,6 +419,39 @@
                 startPlaying(list, 0, { shuffle: !!shuffle, source: { kind: it.kind, id: it.id, name: it.name } });
             }).catch((err) => toast(err.message, true));
         };
+        // ----- favorites -----
+        // Jellyfin's star, drawn wherever a track is. The model flips it at
+        // once and puts it back if the server disagrees, so nothing here waits.
+        const starHtml = (it) => {
+            if (!it || !it.id) return '';
+            const on = M().isFavorite(it);
+            return `<span class="mu-star${on ? ' on' : ''}" data-fav="${esc(it.id)}" role="button"
+                aria-label="${on ? 'Remove from Favorites' : 'Add to Favorites'}">${icon(on ? 'star' : 'star_border')}</span>`;
+        };
+        // hand the element the item itself, so a click doesn't have to find it
+        const bindStar = (host, it) => {
+            const e = host && host.querySelector('.mu-star');
+            if (e) e._item = it;
+            return host;
+        };
+        // a star changing repaints the stars, not the lists: the focus stays
+        // where the finger or the remote left it
+        const paintStars = () => {
+            stage.querySelectorAll('.mu-star').forEach((e) => {
+                const on = M().isFavorite(e._item || e.dataset.fav);
+                e.classList.toggle('on', on);
+                e.innerHTML = icon(on ? 'star' : 'star_border');
+                e.setAttribute('aria-label', on ? 'Remove from Favorites' : 'Add to Favorites');
+            });
+        };
+        const favOf = (e) => (e && e._fav) || null;
+        const toggleFav = (it) => {
+            if (!it || !it.id) return;
+            const want = !M().isFavorite(it);
+            toast(want ? `${it.name} — a favorite` : `${it.name} — no longer a favorite`);
+            M().setFavorite(it, want).catch((err) => toast(err.message, true));
+        };
+
         // Play on…: the same album, but out of a speaker. The picker owns its
         // own keys while it is open (onKey below stands aside for it).
         const PO = () => window.HomerPlayOn || null;
@@ -510,24 +554,29 @@
             const list = t.list() || [];
             box.scrollTop = 0;
             box.innerHTML = '';
-            box.className = `mu-content mu-scroll-y ${tab === 'songs' ? 'mu-list' : 'mu-wall'} mu-${tab}`;
+            const rows = tab === 'songs' || tab === 'favorites';
+            box.className = `mu-content mu-scroll-y ${rows ? 'mu-list' : 'mu-wall'} mu-${tab}`;
             if (!list.length) {
-                box.innerHTML = `<div class="mu-empty-row">Nothing here yet.</div>`;
+                box.innerHTML = `<div class="mu-empty-row">${tab === 'favorites'
+                    ? 'No favorites yet. Press <em>F</em> on a track, or click its star.'
+                    : 'Nothing here yet.'}</div>`;
                 return;
             }
-            if (tab === 'songs') {
+            if (rows) {
                 const f = M().fmt;
-                list.slice(0, 500).forEach((s, i) => {
+                list.slice(0, 500).forEach((s) => {
                     const row = el('div', 'mu-song', `
                         <div class="mu-song-art">${artImg(s, 120, 'mu-img')}</div>
                         <div class="mu-song-t">${esc(s.name)}</div>
                         <div class="mu-song-a">${esc(s.artist || '')}</div>
                         <div class="mu-song-al">${esc(s.album || '')}</div>
-                        <div class="mu-song-d">${f.clock(s.duration)}</div>`);
+                        <div class="mu-song-d">${f.clock(s.duration)}</div>
+                        ${starHtml(s)}`);
+                    bindStar(row, s);
                     focusable(row, 'song:' + s.id, () => playItem(s), 'Play');
+                    row._fav = s;
                     row._onFocus = () => { heroItem = s; drawHero(); };
                     box.appendChild(row);
-                    void i;
                 });
                 return;
             }
@@ -611,7 +660,7 @@
                     <div class="mu-pg-acts"></div>
                 </div>
                 <div class="mu-pg-right">
-                    <div class="mu-eyebrow"><span class="mu-chip">${esc(subOf(it))}</span></div>
+                    <div class="mu-eyebrow"><span class="mu-chip">${esc(subOf(it))}</span>${starHtml(it)}</div>
                     <h1 class="mu-title">${esc(it.name)}</h1>
                     <div class="mu-pg-sub">${esc(it.kind === 'album' ? it.artist || '' : '')}</div>
                     <div class="mu-meta">${metaOf(it).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
@@ -620,6 +669,7 @@
                     <div class="mu-tracks mu-scroll-y"></div>
                 </div>`;
             box.querySelector('.mu-title').classList.toggle('long', it.name.length > 26);
+            bindStar(box.querySelector('.mu-eyebrow'), it);
             const acts = box.querySelector('.mu-pg-acts');
             const btn = (key, ic, label, fn, primary) => {
                 const e = el('div', `mu-btn${primary ? ' primary' : ''}`, `${icon(ic)}<span>${esc(label)}</span>`);
@@ -665,11 +715,14 @@
                     <span class="mu-track-n">${here ? (s.playing ? '<span class="mu-eq"><i></i><i></i><i></i></span>' : icon('pause')) : (t.no || i + 1)}</span>
                     <span class="mu-track-t">${esc(t.name)}</span>
                     <span class="mu-track-a">${esc(t.artist && t.artist !== (pageItem && pageItem.artist) ? t.artist : '')}</span>
-                    <span class="mu-track-d">${f.clock(t.duration)}</span>`);
+                    <span class="mu-track-d">${f.clock(t.duration)}</span>
+                    ${starHtml(t)}`);
+                bindStar(row, t);
                 focusable(row, 'tr:' + t.id, () => startPlaying(list, i, {
                     shuffle: false,
                     source: { kind: pageItem.kind, id: pageItem.id, name: pageItem.name },
                 }), 'Play');
+                row._fav = t;
                 box.appendChild(row);
             });
         };
@@ -776,6 +829,7 @@
                         <div class="mu-round" data-k="fwd">${icon('forward_10')}</div>
                         <div class="mu-round" data-k="next">${icon('skip_next')}</div>
                         <span class="mu-pl-gap"></span>
+                        <div class="mu-round small" data-k="fav">${icon('star_border')}</div>
                         <div class="mu-round small" data-k="shuffle">${icon('shuffle')}</div>
                         <div class="mu-round small" data-k="repeat">${icon('repeat')}</div>
                         <div class="mu-vol" data-k="vol">${icon('volume_up')}<span class="mu-vol-bar"><b></b></span><span class="mu-vol-n"></span></div>
@@ -797,6 +851,7 @@
                 play: [() => P.toggle(), 'Play / pause'],
                 fwd: [() => P.skip(10), 'Forward 10 s'],
                 next: [() => P.next(), 'Next'],
+                fav: [() => toggleFav(P.state().track), 'Favorite'],
                 shuffle: [() => { P.toggleShuffle(); toast(P.state().shuffle ? 'Shuffle on' : 'Shuffle off'); }, 'Shuffle'],
                 repeat: [() => { P.cycleRepeat(); const r = P.state().repeat; toast(r === 'off' ? 'Repeat off' : r === 'all' ? 'Repeat all' : 'Repeat one'); }, 'Repeat'],
                 vol: [() => P.toggleMute(), 'Mute'],
@@ -844,8 +899,11 @@
                     const row = el('div', `mu-q${i === s.index ? ' here' : ''}${i < s.index ? ' done' : ''}`, `
                         <span class="mu-q-n">${i === s.index ? (s.playing ? '<span class="mu-eq"><i></i><i></i><i></i></span>' : icon('pause')) : i + 1}</span>
                         <span class="mu-q-t">${esc(t.name)}<i>${esc(t.artist || '')}</i></span>
-                        <span class="mu-q-d">${f.clock(t.duration)}</span>`);
+                        <span class="mu-q-d">${f.clock(t.duration)}</span>
+                        ${starHtml(t)}`);
+                    bindStar(row, t);
                     focusable(row, 'q:' + i, () => player().jump(i), 'Play');
+                    row._fav = t;
                     body.appendChild(row);
                 });
                 const here = body.querySelector('.mu-q.here');
@@ -927,6 +985,13 @@
             const play = q('[data-k="play"]');
             play.innerHTML = icon(s.playing ? 'pause' : 'play_arrow');
             play.dataset.okLabel = s.playing ? 'Pause' : 'Play';
+            const fav = q('[data-k="fav"]');
+            if (fav) {
+                const on = M().isFavorite(t);
+                fav.innerHTML = icon(on ? 'star' : 'star_border');
+                fav.classList.toggle('star-set', on);
+                fav.dataset.okLabel = on ? 'Unfavorite' : 'Favorite';
+            }
             q('[data-k="shuffle"]').classList.toggle('set', s.shuffle);
             const rep = q('[data-k="repeat"]');
             rep.innerHTML = icon(s.repeat === 'one' ? 'repeat_one' : 'repeat');
@@ -975,6 +1040,24 @@
                 return;
             }
             if (what === 'library') { render(); return; }
+            if (what === 'favorite') {
+                paintStars();
+                updateLegend(); // F's own label is "Favorite" or "Unfavorite"
+                // the Actions strip asks its providers when it opens, so it
+                // is already right
+                if (view === 'playing') paintPlaying();
+                // the Favorites tab is the one list a star actually changes
+                if (view === 'browse') {
+                    drawTabs();
+                    if (tab === 'favorites') {
+                        const k = focused ? keyOf(focused) : null;
+                        drawGrid();
+                        const e = k && focusables().find((x) => keyOf(x) === k);
+                        setFocus(e || focusables()[0], { instant: true });
+                    }
+                }
+                return;
+            }
             if (what === 'lyrics') { if (view === 'playing' && rightPane === 'lyrics') paintLyrics(true); return; }
             if (view === 'album') {
                 const k = focused ? keyOf(focused) : null;
@@ -1054,6 +1137,10 @@
             else if (focused) items.push({ key: 'OK', label: 'Select', action: 'ok' });
             if (s.track) items.push({ key: 'P', label: s.playing ? 'Pause' : 'Play', action: 'toggle' });
             if (s.track && view !== 'playing') items.push({ key: '▶', label: 'Now playing', action: 'np' });
+            const favIt = favOf(focused) || subject();
+            if (favIt && favIt.id) {
+                items.push({ key: 'F', label: M().isFavorite(favIt) ? 'Unfavorite' : 'Favorite', action: 'fav' });
+            }
             if (view === 'playing') items.push({ key: 'S', label: 'Shuffle', action: 'shuffle' }, { key: 'R', label: 'Repeat', action: 'repeat' });
             else items.push({ key: 'I', label: 'Instant Mix', action: 'mix' });
             items.push('spacer',
@@ -1127,6 +1214,9 @@
                 return;
             }
             if (k === 'i' || k === 'I') { eat(ev); if (!ev.repeat) instantMix(subject()); return; }
+            // F stars the track the focus is on, or — with a button focused —
+            // the album, artist or playlist the page is about
+            if (k === 'f' || k === 'F') { eat(ev); if (!ev.repeat) toggleFav(favOf(focused) || subject()); return; }
             if (k === '+' || k === '=') { eat(ev); P.nudgeVolume(0.05); toast(`Volume ${Math.round(P.state().volume * 100)}%`); return; }
             if (k === '-' || k === '_') { eat(ev); P.nudgeVolume(-0.05); toast(`Volume ${Math.round(P.state().volume * 100)}%`); return; }
             const dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
@@ -1149,6 +1239,13 @@
             ev.stopImmediatePropagation();
         };
         const onClick = (ev) => {
+            // a star is its own target: tapping one doesn't also start the track
+            const st = ev.target.closest('.mu-star');
+            if (st && root.contains(st)) {
+                ev.stopPropagation();
+                toggleFav(st._item || M().find(st.dataset.fav));
+                return;
+            }
             if (ev.target.closest('.mu-brand')) { goHome(); return; }
             if (ev.target.closest('.mu-np-pill')) { showView('playing'); return; }
             if (ev.target.closest('.mu-preview')) { const p = HP(); if (p && p.fullscreen) p.fullscreen(); return; }
@@ -1161,6 +1258,7 @@
                 else if (a === 'toggle') togglePlay();
                 else if (a === 'np') showView('playing');
                 else if (a === 'mix') instantMix(subject());
+                else if (a === 'fav') toggleFav(favOf(focused) || subject());
                 else if (a === 'shuffle') { player().toggleShuffle(); toast(player().state().shuffle ? 'Shuffle on' : 'Shuffle off'); }
                 else if (a === 'repeat') player().cycleRepeat();
                 return;
@@ -1229,6 +1327,18 @@
             }
             if (sub && sub.kind !== 'track' && canPlayOn()) {
                 out.push({ id: 'playon', icon: 'speaker', label: 'Play on…', sub: sub.name, run: () => playOn(sub) });
+            }
+            const favIt = favOf(focused) || sub;
+            if (favIt && favIt.id) {
+                const on = M().isFavorite(favIt);
+                out.push({
+                    id: 'fav',
+                    key: 'F',
+                    icon: on ? 'star' : 'star_border',
+                    label: on ? 'Unfavorite' : 'Favorite',
+                    sub: favIt.name,
+                    run: () => toggleFav(favIt),
+                });
             }
             if (sub) out.push({ id: 'mix', key: 'I', icon: 'radio', label: 'Instant Mix', sub: sub.name, run: () => instantMix(sub) });
             if (s.track && view !== 'playing') out.push({ id: 'np', icon: 'graphic_eq', label: 'Now playing', run: () => showView('playing') });

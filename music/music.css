@@ -358,6 +358,44 @@
     color: #fff;
 }
 
+/* ---------- The favorite star ---------- */
+/* Jellyfin's own star, on every track row, in the queue, on an album's header
+   and on Now playing. Outline when it isn't one, filled and amber when it is.
+   It is its own click target inside a row that plays when clicked, so it
+   carries its own padding rather than relying on the glyph's box. */
+
+.mu-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    font-size: 30px;
+    line-height: 1;
+    border-radius: 50%;
+    color: var(--faint);
+    cursor: pointer;
+    transition: color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.mu-star:hover { color: var(--needle); background: rgba(255, 255, 255, 0.1); }
+.mu-star.on { color: var(--needle); }
+.mu-star.on:hover { transform: scale(1.08); }
+
+/* on a focused row the whole row is blue: keep the star readable on it */
+.mu-song.focus .mu-star,
+.mu-track.focus .mu-star,
+.mu-q.focus .mu-star { color: rgba(255, 255, 255, 0.7); }
+.mu-song.focus .mu-star.on,
+.mu-track.focus .mu-star.on,
+.mu-q.focus .mu-star.on { color: #fff; }
+
+/* the album page header's star sits on the eyebrow line, beside the chip */
+.mu-eyebrow .mu-star { width: 42px; height: 42px; font-size: 30px; margin-left: 6px; vertical-align: middle; }
+
+/* Now playing's star is one of the round controls */
+.mu-round.star-set { color: var(--needle); }
+
 .mu-empty-row {
     grid-column: 1 / -1;
     padding: 20px 0;
@@ -573,7 +611,7 @@
 
 .mu-song {
     display: grid;
-    grid-template-columns: 62px 1fr 300px 300px 90px;
+    grid-template-columns: 62px 1fr 300px 280px 90px 54px;
     align-items: center;
     gap: 22px;
     height: 78px;
@@ -698,7 +736,7 @@
 
 .mu-track {
     display: grid;
-    grid-template-columns: 56px 1fr 260px 80px;
+    grid-template-columns: 56px 1fr 240px 80px 50px;
     align-items: center;
     gap: 20px;
     height: 66px;
@@ -1131,7 +1169,7 @@
 /* the queue */
 .mu-q {
     display: grid;
-    grid-template-columns: 48px 1fr 76px;
+    grid-template-columns: 48px 1fr 76px 46px;
     align-items: center;
     gap: 16px;
     height: 68px;
