@@ -387,6 +387,7 @@
         // two "Doorbell stills" automations. Only the doorbell has one; every
         // other camera skips this entirely.
         const STILLS = 'media-source://media_source/local/doorbell';
+        const STILL_DAY = /^\d{4}-\d{2}-\d{2}$/; // the automations' folder per day, and only those
         const STILL_NAME = /^(ring|person)-(\d{8})-(\d{6})\.jpe?g$/i;
         const STILL_KIND = {
             ring: { label: 'Ring', icon: 'doorbell', ring: true },
@@ -405,8 +406,10 @@
             const root = await h.browseMedia(STILLS).catch(() => null);
             // no folder at all is the ordinary case before the first ring, and
             // the whole strip still works without it
+            // dated folders only: anything else someone has dropped in /media/doorbell
+            // shouldn't cost one of the four days that do get walked
             const folders = ((root && root.children) || [])
-                .filter((c) => c.can_expand)
+                .filter((c) => c.can_expand && STILL_DAY.test(c.title || ''))
                 .sort((a, b) => String(b.title).localeCompare(String(a.title))); // newest day first
             const out = [];
             for (const day of folders.slice(0, days)) {
