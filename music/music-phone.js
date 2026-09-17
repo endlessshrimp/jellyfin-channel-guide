@@ -3,6 +3,11 @@
  * shared/layout.js says phone (music/music.js decides). The same library and
  * the same player (music/music-model.js), sized for a thumb:
  *
+ *   Radio      the first chip: internet radio, which isn't in Jellyfin at all
+ *              — SomaFM, the local Dallas stations, a search box across Radio
+ *              Browser, and the stations starred on this device. Tap one to
+ *              play it here; its sheet also offers a speaker (music/playon.js
+ *              in its radio mode, which goes through Music Assistant).
  *   Browse     chips for Recently Added / Artists / Albums / Songs /
  *              Playlists / Genres, and the art two across under them
  *   A page     (tap a cover) a sheet: the art, Play / Shuffle / Play on… /
@@ -23,6 +28,7 @@
 (() => {
     const VERSION = '0.1.0';
     const M = () => window.HomerMusicModel;
+    const RM = () => window.HomerRadioModel || null;
 
     const el = (tag, cls, html) => {
         const e = document.createElement(tag);
@@ -32,6 +38,7 @@
     };
 
     const TABS = [
+        { id: 'radio', label: 'Radio', radio: true, list: () => (RM() ? RM().soma().concat(RM().local()) : []) },
         { id: 'recent', label: 'New', list: () => M().recent() },
         { id: 'artists', label: 'Artists', list: () => M().artists() },
         { id: 'albums', label: 'Albums', list: () => M().albums() },
@@ -88,6 +95,9 @@
         const $ = (s) => root.querySelector(s);
 
         let tab = 'recent';
+        let radioQuery = '';
+        let radioResults = null;
+        let radioSaid = '';
         let sheets = [];
         let open = null;
         let pageItem = null;
@@ -116,16 +126,175 @@
             box.innerHTML = '';
             TABS.forEach((t) => {
                 const n = (t.list() || []).length;
-                if (!n && t.id !== tab) return;
+                if (!n && t.id !== tab && !t.radio) return; // Radio's chip is there before its stations are
                 const c = el('button', `mup-chip${t.id === tab ? ' on' : ''}`, `${esc(t.label)}${n ? ` <i>${n}</i>` : ''}`);
                 c.type = 'button';
                 c.onclick = () => { tab = t.id; drawChips(); drawGrid(); $('.mup-scroll').scrollTop = 0; };
                 box.appendChild(c);
             });
         };
+        // ----- Radio -----
+        const stationTile = (st) => `<span class="mu-img mu-noart mu-st-tile" data-kind="station"
+            style="--st-h:${RM() ? RM().hue(st) : 210}"><span>${esc(RM() ? RM().initials(st) : '?')}</span></span>`;
+        const stationArt = (st, h) => {
+            const url = RM() ? RM().art(st, h) : '';
+            if (url) return `<img class="mu-img mu-st-img" src="${esc(url)}" alt="" draggable="false" loading="lazy">`;
+            return stationTile(st);
+        };
+        // A Radio Browser favicon is as likely to 404 as not, and when it does
+        // load it is often a 32px .ico blown up to fill a card. Either way the
+        // letter tile is the better picture, so measure it (off to one side,
+        // out of the same cache) and swap the tile back in when it's a crumb.
+        const MIN_ART = 64;
+        const bindStationArt = (host, st) => {
+            const img = host && host.querySelector('.mu-st-img');
+            if (!img) return host;
+            const tile = () => { if (img.parentNode) img.outerHTML = stationTile(st); };
+            img.onerror = tile;
+            if (st.source === 'soma') return host; // SomaFM draws its own, properly
+            const probe = new Image();
+            probe.onload = () => { if (probe.naturalWidth < MIN_ART) tile(); };
+            probe.onerror = tile;
+            probe.src = img.src;
+            return host;
+        };
+        const playStation = (st) => {
+            const R = RM();
+            if (!R) return;
+            if (!R.playable(st)) { showStation(st); return; } // it can't play here; the sheet says where it can
+            R.tune(st).then((t) => {
+                if (!t) { showStation(st); return; }
+                player().play([t], 0, { source: { kind: 'station', id: st.id, name: st.name } });
+                push('playing');
+                drawPlaying();
+                syncSheets();
+            }).catch(() => showStation(st));
+        };
+        const playOnStation = (st) => {
+            const p = PO();
+            if (!p || !st) return;
+            p.open(document.body, {
+                tv: false,
+                station: st,
+                onHere: () => playStation(st),
+                onNowPlaying: () => { push('playing'); drawPlaying(); syncSheets(); },
+            });
+        };
+        const stationCard = (st) => {
+            const can = RM() ? RM().playable(st) : false;
+            const card = el('button', `mup-card station${can ? '' : ' off'}`, `
+                <span class="mup-card-art">${stationArt(st, 320)}</span>
+                ${st.source === 'soma' ? '<span class="mup-st-badge">SomaFM</span>' : ''}
+                <span class="mup-card-t">${esc(st.name)}</span>
+                <span class="mup-card-s">${esc(st.sub || '')}</span>`);
+            card.type = 'button';
+            card.onclick = () => showStation(st);
+            bindStationArt(card, st);
+            return card;
+        };
+        const drawRadio = (box) => {
+            const R = RM();
+            box.className = 'mup-grid mup-radio';
+            box.innerHTML = '';
+            if (!R) { box.innerHTML = '<div class="mup-note">Radio didn\u2019t load.</div>'; return; }
+            const search = el('div', 'mup-radio-search', `
+                ${icon('search')}
+                <input class="mup-radio-input" type="search" enterkeyhint="search" autocomplete="off"
+                    spellcheck="false" placeholder="Search Radio Browser" value="${esc(radioQuery)}">
+                <button type="button" class="mup-radio-go">Search</button>`);
+            const input = search.querySelector('.mup-radio-input');
+            const go = () => {
+                const term = (input.value || '').trim();
+                radioQuery = term;
+                if (term.length < 2) { radioResults = null; radioSaid = ''; drawGrid(); return; }
+                radioSaid = 'Searching…';
+                R.search(term).then((list) => {
+                    radioResults = list;
+                    radioSaid = list.length ? `${list.length} found` : 'Nothing found';
+                    if (tab === 'radio') drawGrid();
+                }).catch((err) => { radioSaid = err.message; if (tab === 'radio') drawGrid(); });
+                drawGrid();
+            };
+            input.oninput = () => { radioQuery = input.value; };
+            input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); go(); } };
+            search.querySelector('.mup-radio-go').onclick = go;
+            box.appendChild(search);
+
+            const section = (title, note, list) => {
+                if (!list || !list.length) return;
+                box.appendChild(el('div', 'mup-radio-head', `<h3>${esc(title)}</h3>${note ? `<span>${esc(note)}</span>` : ''}`));
+                const wall = el('div', 'mup-radio-wall');
+                list.forEach((st) => wall.appendChild(stationCard(st)));
+                box.appendChild(wall);
+            };
+            if (radioResults) section(radioResults.length ? 'Found' : 'Nothing found', radioSaid, radioResults);
+            section('Favorites', 'Kept on this phone', R.favorites());
+            section('Local', 'Dallas–Fort Worth', R.local());
+            section('SomaFM', 'Listener-supported', R.soma());
+            if (!box.querySelector('.mup-card')) {
+                box.appendChild(el('div', 'mup-note', R.loaded() ? 'No stations. Search above.' : 'Finding stations…'));
+            }
+        };
+
+        // a station's sheet: play here, send it to a speaker, or star it
+        let stationItem = null;
+        const showStation = (st) => {
+            stationItem = st;
+            pageItem = null;
+            push('page');
+            drawStation();
+            syncSheets();
+        };
+        const drawStation = () => {
+            const box = $('.mup-page');
+            const st = stationItem;
+            const R = RM();
+            if (!st || !R) { box.innerHTML = ''; return; }
+            const p = R.playUrl(st);
+            const canHere = R.playable(st);
+            const np = liveNow[st.id];
+            box.innerHTML = `
+                <div class="mup-bar"><button type="button" class="mup-back">${icon('arrow_back_ios_new')}</button><span>${esc(st.name)}</span></div>
+                <div class="mup-sheet-scroll">
+                    <div class="mup-page-head">
+                        <div class="mup-page-art">${stationArt(st, 600)}</div>
+                        <h1>${esc(st.name)}</h1>
+                        <div class="mup-page-sub">${esc(st.sub || '')}</div>
+                        <div class="mup-page-meta">${[st.codec && (st.bitrate ? `${st.codec} ${st.bitrate}k` : st.codec),
+                            st.source === 'soma' ? 'SomaFM' : st.local ? 'Local' : 'Radio Browser'].filter(Boolean)
+                            .map((x) => `<span>${esc(x)}</span>`).join('')}</div>
+                        <div class="mup-page-star"></div>
+                        <div class="mup-page-acts">
+                            ${canHere ? `<button type="button" class="mup-btn primary" data-a="play">${icon('play_arrow')}Play</button>` : ''}
+                            <button type="button" class="mup-btn${canHere ? '' : ' primary'}" data-a="on">${icon('speaker')}Play on…</button>
+                        </div>
+                    </div>
+                    <div class="mup-page-body">
+                        ${np && (np.title || np.artist) ? `<div class="mup-st-note"><span class="mup-live-pill">On now</span> ${esc([np.artist, np.title].filter(Boolean).join(' — '))}</div>` : ''}
+                        ${st.overview ? `<div class="mup-st-note">${esc(st.overview)}</div>` : ''}
+                        <div class="mup-st-note">${esc(p.url || p.pending
+                            ? (p.proxied ? 'Plain http, so HOMER plays it through the NAS helper.' : 'Plays here and on a speaker.')
+                            : (p.why || ''))}</div>
+                        <div class="mup-st-note">${esc(st.source === 'soma'
+                            ? 'SomaFM publishes what it\u2019s playing, so the track shows up on Now playing.'
+                            : 'Track information depends on the station: HOMER asks the NAS helper for the stream\u2019s own metadata, and many talk and sports stations send none.')}</div>
+                    </div>
+                </div>`;
+            box.querySelector('.mup-back').onclick = closeSheet;
+            bindStationArt(box, st);
+            const star = el('button', `mup-star${R.isFavorite(st) ? ' on' : ''}`, icon(R.isFavorite(st) ? 'star' : 'star_border'));
+            star.type = 'button';
+            star.onclick = () => { R.toggleFavorite(st); drawStation(); if (tab === 'radio') drawGrid(); };
+            box.querySelector('.mup-page-star').appendChild(star);
+            const playBtn = box.querySelector('[data-a="play"]');
+            if (playBtn) playBtn.onclick = () => playStation(st);
+            box.querySelector('[data-a="on"]').onclick = () => playOnStation(st);
+        };
+
         const drawGrid = () => {
             const box = $('.mup-grid');
             const t = TABS.find((x) => x.id === tab) || TABS[0];
+            if (t.radio) { drawRadio(box); return; }
             const list = t.list() || [];
             const rows = tab === 'songs' || tab === 'favorites';
             box.className = `mup-grid ${rows ? 'list' : 'wall'}`;
@@ -175,6 +344,7 @@
             return M().genreSongs(it.id);
         };
         const showPage = (it) => {
+            stationItem = null;
             pageItem = it;
             pageTracks = null;
             pageAlbums = null;
@@ -354,11 +524,42 @@
             drawLyrics();
             paintPlaying();
         };
+        // What a live station is playing, where anyone says: SomaFM publishes
+        // it, and for everyone else the NAS helper reads the stream's own ICY
+        // metadata (a browser can't).
+        const liveNow = {};
+        const pollLive = () => {
+            const s = player().state();
+            const t = s.track;
+            if (!t || !t.live || !RM()) return;
+            const st = RM().station(t.stationId);
+            if (!st) return;
+            RM().nowPlaying(st).then((np) => {
+                const was = liveNow[t.stationId];
+                const same = (was && np && was.title === np.title && was.artist === np.artist) || (!was && !np);
+                liveNow[t.stationId] = np;
+                if (!same) { paintPlaying(); drawLyrics(); }
+            });
+        };
+        const liveTimer = setInterval(pollLive, 20000);
+
         let lyricsFor = '';
         const drawLyrics = () => {
             const box = $('.mup-lyrics');
             const s = player().state();
             if (!box || !s.track) return;
+            if (s.track.live) {
+                const st = RM() && RM().station(s.track.stationId);
+                const np = liveNow[s.track.stationId];
+                box.innerHTML = `<div class="mup-note">${np && (np.title || np.artist)
+                    ? esc([np.artist, np.title].filter(Boolean).join(' — '))
+                    : 'No track information from this station.'}</div>
+                    <div class="mup-note">${esc(st && st.source === 'soma'
+                        ? 'SomaFM publishes what it\u2019s playing.'
+                        : 'A browser can\u2019t read a stream\u2019s metadata, so HOMER asks the NAS helper; talk and sports stations usually send none.')}</div>`;
+                pollLive();
+                return;
+            }
             lyricsFor = s.track.id;
             box.innerHTML = '<div class="mup-note">Looking for lyrics…</div>';
             M().lyrics(s.track.id).then((ly) => {
@@ -400,12 +601,17 @@
             const s = player().state();
             if (!s.track) return;
             const q = (sel) => box.querySelector(sel);
+            const live = s.track.live;
+            const np = live ? liveNow[s.track.stationId] : null;
             q('.mup-np-t').textContent = s.track.name;
-            q('.mup-np-a').textContent = [s.track.artist, s.track.album].filter(Boolean).join(' · ');
-            const dur = s.duration || s.track.duration || 0;
-            q('.mup-np-track b').style.width = (dur ? (s.position / dur) * 100 : 0).toFixed(2) + '%';
-            q('.mup-np-times .at').textContent = f().clock(s.position);
-            q('.mup-np-times .left').textContent = '−' + f().clock(Math.max(0, dur - s.position));
+            q('.mup-np-a').textContent = live
+                ? (np && (np.title || np.artist) ? [np.artist, np.title].filter(Boolean).join(' — ') : (s.track.artist || ''))
+                : [s.track.artist, s.track.album].filter(Boolean).join(' · ');
+            const dur = s.duration || (live ? 0 : s.track.duration) || 0;
+            box.classList.toggle('mup-live', !!live);
+            q('.mup-np-track b').style.width = (live ? 100 : dur ? (s.position / dur) * 100 : 0).toFixed(2) + '%';
+            q('.mup-np-times .at').textContent = live ? 'Live' : f().clock(s.position);
+            q('.mup-np-times .left').textContent = live ? f().clock(s.position) + ' in' : '−' + f().clock(Math.max(0, dur - s.position));
             q('[data-k="play"]').innerHTML = icon(s.playing ? 'pause' : 'play_arrow');
             const fav = q('[data-k="fav"]');
             if (fav) {
@@ -478,7 +684,7 @@
             if (!open) setWash(player().state().track || M().recent()[0] || M().albums()[0]);
             drawChips();
             drawGrid();
-            if (open === 'page') drawPage();
+            if (open === 'page') { if (stationItem) drawStation(); else drawPage(); }
             else if (open === 'playing') drawPlaying();
             syncMini();
         };
@@ -509,6 +715,14 @@
             }
             render();
         });
+
+        // Radio is its own model, loaded beside the library
+        const offRadio = RM() ? RM().onChange(() => {
+            drawChips();
+            if (tab === 'radio' && !open) drawGrid();
+            if (open === 'page' && stationItem) drawStation();
+        }) : () => {};
+        if (RM()) RM().load().catch(() => {});
 
         const onKey = (ev) => {
             if (!['Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(ev.key)) return;
@@ -543,6 +757,8 @@
                 if (PO()) PO().close();
                 offScreenHome();
                 off();
+                offRadio();
+                clearInterval(liveTimer);
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();
                 if (window.HomerMusicStrip) window.HomerMusicStrip.sync();

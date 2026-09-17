@@ -9,6 +9,10 @@
  * shows all of this much bigger), while the guide is open, and in full-screen
  * video. On a phone it sits above the tab bar.
  *
+ * A radio station (music/radio-model.js) rides in the same strip: the same
+ * cover, name and play button, with ◀◀ ▶▶ gone — there's nothing either side
+ * of it — and no hairline of progress, because it has no length.
+ *
  * The media keys work from anywhere while something is loaded: Play/Pause,
  * Next, Previous. HOMER's own screens keep their letters; the strip only
  * claims keys nothing else wants. It also registers a Music action, so the
@@ -81,6 +85,8 @@
         if (!show) return;
         const t = s.track;
         const key = t.id + '|' + s.playing + '|' + Math.floor(s.position);
+        // a radio station has nothing before or after it (music/radio-model.js)
+        root.classList.toggle('live', !!t.live);
         if (key === lastKey) return;
         lastKey = key;
         const art = M().art(t, 120);

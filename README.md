@@ -672,13 +672,16 @@ a small now-playing strip in the corner with the cover, the track and
 
 - **Browse** is a column down the left — whatever the focus is on, its cover
   big, who it's by, and **Play**, **Shuffle** and **Instant Mix** — beside a
-  wall of album art. Tabs across it: Recently Added, Artists, Albums, Songs,
-  Playlists, Genres.
+  wall of album art. Tabs across it: Radio, Recently Added, Artists, Albums,
+  Songs, Playlists, Genres.
 - **An album** (or a playlist): the cover large and every track, the one
   playing lit. OK on a track starts there.
 - **An artist** (or a genre): their albums, with Play all / Shuffle / Instant
   Mix for the lot.
 - **Play on…** sends the album to a speaker in the house instead (below).
+- **Radio** is a tab of its own: internet radio, which isn't in Jellyfin at
+  all — SomaFM, the local Dallas stations, and a search across Radio Browser
+  (below).
 - **Favorites** is a tab of its own, and a star sits on every track (below).
 - **Instant Mix** is Jellyfin's own "radio from this" (`/Items/{id}/InstantMix`)
   and works on an album, an artist, a genre or a track. **I** starts one from
@@ -768,17 +771,126 @@ A speaker handed one address mostly reports the address as its title, so
 **Now Playing** uses what HOMER remembers sending there: the album's name, who
 it's by, and its cover.
 
+### Radio (SomaFM, and real stations)
+
+![The Radio tab](docs/screenshots/music-radio-tv.jpg)
+
+**Radio** is the first tab on the Music screen, and it is the one thing there
+that isn't in Jellyfin: live internet radio. It plays in HOMER through the same
+player as the library — so the now-playing strip, the media keys, the volume
+and Now playing all work on it unchanged — or it goes out to a speaker through
+**Music Assistant**.
+
+- **SomaFM**, all 46 channels with their own artwork, in listener order.
+  Jason's favourite, so it gets its own row.
+- **Local**, the Dallas–Fort Worth four: **KERA 90.1**, **KXT 91.7**,
+  **The Ticket 1310** and **105.3 The Fan**.
+- **Search** across **Radio Browser** — the open, volunteer-run catalogue
+  behind most radio apps, and the closest thing to an open TuneIn. OK on the
+  search box starts typing, Enter searches, Esc clears it.
+- **Favorites**, the stations you've starred, at the top.
+
+OK on a station plays it here. **O** (or **Play on…** on the hero) sends it to
+a speaker. **F** stars it.
+
+#### Where the stations come from
+
+SomaFM is read straight from the browser — `somafm.com/channels.json`, which
+answers CORS `*` and whose streams are all https.
+
+Everything else is a **Radio Browser lookup, not a saved URL**. Each of the
+four local stations is a name and a station UUID; HOMER resolves the address
+fresh each time, and if that UUID has gone it searches the catalogue by name
+and takes the best-voted match. So a stream that dies can be resolved again
+instead of 404-ing forever. (**105.3 The Fan** is the exception: Radio Browser
+doesn't list it at all, so it carries Audacy's own address and says so on its
+card.)
+
+Radio Browser asks that apps identify themselves and don't hammer it, and a
+browser can't set a `User-Agent`, so HOMER goes through its **helper on the
+NAS** (`/radio/rb`), which sends a real one and caches every answer for ten
+minutes. Only `/json/stations/...`-shaped paths are passed on. With the helper
+unreachable HOMER asks Radio Browser directly.
+
+A Radio Browser station's picture is usually a 32-pixel favicon or a dead link,
+so HOMER measures it and, below 64 pixels or on an error, draws a **letter
+tile** in a colour of the station's own instead — its call sign if it has one.
+
+#### Playing it
+
+![A station on Now playing](docs/screenshots/music-radio-playing.jpg)
+
+**In HOMER**, a station is a track with no length: the progress bar is a lit
+rail, the clock counts up from when you tuned in, and prev/next, shuffle and
+repeat are gone — there's nothing to shuffle. Nothing about a station is
+reported to Jellyfin's sessions, because Jellyfin has never heard of it.
+
+**On a speaker**, *Play on…* opens the same picker an album uses, in a radio
+mode: the list is **Music Assistant's** own players. HOMER calls
+`music_assistant.play_media` with `media_type: radio` and the station's plain
+stream address, which Music Assistant turns into a `builtin://radio/<url>`
+item and fetches itself.
+
+![Play on, for a station](docs/screenshots/music-radio-playon.jpg)
+
+Music Assistant's players are separate entities from the speakers' own (a WiiM
+appears twice in Home Assistant, once as `linkplay` and once as
+`music_assistant`) and they carry no area, so this is its own list rather than
+the room-ordered one an album gets. A player that Music Assistant has grouped
+with another says so on its row — **"with Office Wiim"** — because sending to
+one of a pair sounds both rooms.
+
+#### What's actually playing on the station
+
+This is the part that varies, so HOMER says which it is rather than pretending:
+
+| Where | What you get |
+| --- | --- |
+| **SomaFM, in HOMER** | The real track: artist, title and album, from `somafm.com/songs/<id>.json`, asked every 20 seconds |
+| **Any other station, in HOMER** | The stream's own **ICY metadata**, where it sends any — usually `Artist - Title`. A browser **cannot** read this off an `<audio>` element at all, so HOMER asks the NAS helper (`/radio/icy`), which opens the stream, reads one metadata block and hangs up |
+| **Talk and sports stations** | Usually nothing but the station's own name. HOMER says "this station sends no track information" rather than inventing one |
+| **On a speaker** | Music Assistant reads the ICY itself, server-side, and reports it in the entity's state — so a station on a speaker names its track even where the browser couldn't |
+
+#### https, and the stations it breaks
+
+HOMER on the LAN is plain http and plays anything. At `https://media.nel.sn` a
+plain-http stream is **mixed content** and the browser kills it silently, so
+those go through a narrow relay on the NAS helper
+(`/radio/stream?url=…` — http only, since https needs no help, and only if the
+far end really answers with audio). A station routed that way says so on its
+card: *"Plain http, so HOMER plays it through the NAS helper."* Of the four
+locals, only **KERA** needs it; KXT, The Ticket and The Fan are all https.
+
+With the helper unreachable, a plain-http station is marked unplayable here and
+stays playable on a speaker — Music Assistant is on the NAS's side of the
+problem, not the browser's.
+
+Stations that publish **only HLS** (the BBC's, among others) are marked
+unplayable in HOMER on Chrome, which won't play HLS without a library, and play
+on a speaker as normal.
+
+#### Favourites are HOMER's here, not Jellyfin's
+
+Every other star in Music is a **Jellyfin** favourite, the same in every client,
+because those are Jellyfin items. **A radio station isn't one.** So a starred
+station is kept **per device**, in this browser's `localStorage`
+(`homer-radio-favorites`), with enough of the station saved that the star still
+works when Radio Browser is unreachable. Stars on stations do not follow you to
+another device, and nothing about them reaches Jellyfin.
+
 **Keys on the Music screen:** arrows move and OK selects; **Space** or **P**
 plays and pauses; **N** and **B** change track; **S** shuffles; **R** cycles
-repeat; **I** starts an Instant Mix; **F** stars what the focus is on; **+**
+repeat; **I** starts an Instant Mix; **O** opens **Play on…** for a radio
+station; **F** stars what the focus is on; **+**
 and **−** are the volume; **Esc**
 goes back a view, then back a screen (the music keeps playing). On Now playing,
 ◀ ▶ on the progress bar seeks 10 seconds and on the volume pill changes the
 volume. The media keys (Play/Pause, Next, Previous) work from any HOMER screen
 while something is loaded.
 
-Nothing is stored outside Jellyfin except the volume, shuffle and repeat, which
-are kept per device.
+Nothing is stored outside Jellyfin except the volume, shuffle and repeat, the
+speaker you last sent something to — and **starred radio stations**, which
+Jellyfin has no item for. All of it is kept per device.
 
 ## Getting shows and movies (Sonarr and Radarr)
 

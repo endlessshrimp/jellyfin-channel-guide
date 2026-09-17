@@ -396,6 +396,46 @@ worth copying for anything that plays:
   inherits it; and the picker's own `keydown` listener is registered later than
   the Music screen's, so capture-phase order alone won't keep the screen's keys
   out — `music.js` asks `HomerPlayOn.isOpen()` and stands aside.
+- **Radio is a second kind of thing in the same screen.** The Radio tab
+  (`music/radio-model.js`) adds stations, which are not Jellyfin items, to a
+  screen built entirely around Jellyfin items. Three decisions made that cheap
+  on both layouts:
+
+  ![The Radio tab on a phone](screenshots/music-radio-phone.jpg)
+
+  + **One player, not two.** A station is handed to
+    `HomerMusicModel.player.play()` as an ordinary track with `live: true` and
+    its own `streamUrl`. The player then skips the four things that only make
+    sense for a Jellyfin track — building a `/Audio/{id}/universal` address,
+    preloading a next track, fetching lyrics, and reporting to
+    `/Sessions/Playing` — and everything else (the strip, the mini player, Now
+    playing, the media keys, the volume) worked with no changes at all. Two
+    `<audio>` elements would have meant touching every one of them.
+  + **The sheet is two sheets.** `.mup-page` draws either an album
+    (`drawPage`) or a station (`drawStation`), chosen by whether `stationItem`
+    is set; `showPage` clears it and `showStation` clears `pageItem`. One
+    sheet, one back stack, no second `push()` target.
+  + **The picker takes a second kind of payload.** `HomerPlayOn.open()` grows
+    an `opts.station` mode that swaps the device list (Music Assistant's
+    players, from `HomerRadioModel.speakers()`) and the send function, and
+    keeps all of the focus, key and CSS work. Radio needs none of the M3U
+    machinery an album does, because `music_assistant.play_media` takes a
+    stream address directly.
+
+  ![A station's sheet](screenshots/music-radio-station-phone.jpg)
+
+  The station sheet is also where the honest answer lives about what HOMER can
+  and can't tell you: a browser cannot read ICY metadata off an `<audio>`
+  element, so anything beyond SomaFM's published now-playing comes from the NAS
+  helper, and plenty of stations send nothing at all. The sheet says which, per
+  station, rather than leaving a blank line.
+- **Typing inside a TV screen.** The Radio tab's search box is a real `<input>`
+  inside `#mu-stage`, and the Music screen eats every letter key for its
+  shortcuts. `music.js`'s `onKey` therefore checks for
+  `.mu-radio-input` *first* and returns for anything but Enter (search), Escape
+  (clear and give the keys back) and ▲▼ (blur and move); the existing
+  `isTyping(ev.target) && !root.contains(ev.target)` guard doesn't help,
+  because this input *is* inside the root.
 ## Now Playing: one model, two layouts, no menu on the phone
 
 `playing/playing-phone.js` is the shortest version of the pattern, because

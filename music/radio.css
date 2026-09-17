@@ -1,0 +1,298 @@
+/*
+ * HOMER Radio: the Radio tab on the Music screen (music/music.js) and its
+ * phone layout (music/music-phone.js). Everything else about Music is styled
+ * by music/music.css and music/music-phone.css — this file is only the bits
+ * radio needs that an album doesn't: the search box, the sections, the letter
+ * tile a station gets instead of a cover, and Now playing with no clock to run.
+ */
+
+/* ---------- The Radio tab (TV) ---------- */
+
+#mu-stage .mu-radio {
+    display: block;
+    padding: 0 64px 120px;
+}
+
+#mu-stage .mu-radio-search {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 10px;
+    padding: 16px 22px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(8, 16, 30, .96), rgba(8, 16, 30, .82));
+    border: 2px solid rgba(255, 255, 255, .10);
+    backdrop-filter: blur(10px);
+}
+#mu-stage .mu-radio-search.focus {
+    border-color: rgba(var(--art, 47, 140, 255), .9);
+    box-shadow: 0 0 0 4px rgba(var(--art, 47, 140, 255), .25);
+}
+#mu-stage .mu-radio-search .material-icons {
+    font-size: 30px;
+    color: rgba(255, 255, 255, .55);
+}
+#mu-stage .mu-radio-input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: none;
+    color: #fff;
+    font: inherit;
+    font-size: 26px;
+    letter-spacing: .01em;
+    padding: 2px 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+#mu-stage .mu-radio-input::placeholder { color: rgba(255, 255, 255, .38); }
+#mu-stage .mu-radio-input::-webkit-search-cancel-button { display: none; }
+#mu-stage .mu-radio-said {
+    flex: none;
+    font-size: 19px;
+    color: rgba(255, 255, 255, .55);
+    white-space: nowrap;
+}
+
+#mu-stage .mu-radio-sec { margin: 26px 0 0; }
+#mu-stage .mu-radio-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin: 0 0 14px;
+    padding: 0 4px;
+}
+#mu-stage .mu-radio-head h3 {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: #fff;
+}
+#mu-stage .mu-radio-head span {
+    font-size: 19px;
+    color: rgba(255, 255, 255, .5);
+}
+#mu-stage .mu-radio-wall {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+    gap: 24px 22px;
+}
+
+/* a station card: the same shape as an album's, with a star and a badge */
+#mu-stage .mu-card-station { position: relative; }
+#mu-stage .mu-card-station .mu-card-art { border-radius: 14px; }
+#mu-stage .mu-card-station.mu-st-off { opacity: .55; }
+#mu-stage .mu-card-station .mu-star {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    padding: 5px;
+    border-radius: 999px;
+    background: rgba(4, 10, 20, .68);
+    opacity: 0;
+    transition: opacity .16s ease;
+}
+#mu-stage .mu-card-station:hover .mu-star,
+#mu-stage .mu-card-station.focus .mu-star,
+#mu-stage .mu-card-station .mu-star.on { opacity: 1; }
+
+#mu-stage .mu-st-badge {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(4, 10, 20, .74);
+    color: rgba(255, 255, 255, .85);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* the letter tile a Radio Browser station gets: its own hue, so one row of
+   call signs doesn't read as one grey block */
+#mu-stage .mu-st-tile,
+.mu-phone .mu-st-tile {
+    background:
+        radial-gradient(120% 100% at 30% 0%, hsl(var(--st-h, 210) 62% 42%), hsl(var(--st-h, 210) 58% 22%));
+}
+#mu-stage .mu-st-tile span,
+.mu-phone .mu-st-tile span {
+    color: rgba(255, 255, 255, .92);
+    font-weight: 800;
+    letter-spacing: .02em;
+}
+
+/* ---------- Now playing, when it's a station ---------- */
+
+/* A live stream has no length, so the bar is a lit rail rather than a
+   position, and the knob goes: there is nothing to drag to. */
+#mu-stage .mu-pl-live .mu-pl-track b {
+    background: linear-gradient(90deg,
+        rgba(var(--art, 47, 140, 255), .35),
+        rgba(var(--art, 47, 140, 255), .85));
+    animation: mu-live-rail 2.4s ease-in-out infinite;
+}
+#mu-stage .mu-pl-live .mu-pl-knob { display: none; }
+#mu-stage .mu-pl-live .mu-pl-at {
+    color: #ff5f56;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+#mu-stage .mu-pl-live [data-k="back"],
+#mu-stage .mu-pl-live [data-k="fwd"],
+#mu-stage .mu-pl-live [data-k="prev"],
+#mu-stage .mu-pl-live [data-k="next"],
+#mu-stage .mu-pl-live [data-k="shuffle"],
+#mu-stage .mu-pl-live [data-k="repeat"] { display: none; }
+@keyframes mu-live-rail {
+    0%, 100% { opacity: .75; }
+    50% { opacity: 1; }
+}
+#mu-stage .mu-lyr-none b {
+    display: block;
+    font-size: 30px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+}
+#mu-stage .mu-lyr-none > span { display: block; }
+#mu-stage .mu-q-link {
+    display: block;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, .5);
+    font-size: 18px;
+}
+
+/* the speaker picker, in its radio mode */
+.po-radio .po-title::after {
+    content: 'Radio';
+    margin-left: 10px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(255, 95, 86, .18);
+    color: #ff8078;
+    font-size: .62em;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+/* ---------- The Radio tab (phone) ---------- */
+
+.mu-phone .mup-radio { padding: 0 14px 20px; }
+.mu-phone .mup-radio-search {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(8, 16, 30, .95);
+    border: 1px solid rgba(255, 255, 255, .12);
+}
+.mu-phone .mup-radio-search .material-icons {
+    font-size: 22px;
+    color: rgba(255, 255, 255, .5);
+}
+.mu-phone .mup-radio-input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: none;
+    color: #fff;
+    font: inherit;
+    font-size: 16px;
+    padding: 4px 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.mu-phone .mup-radio-input::placeholder { color: rgba(255, 255, 255, .38); }
+.mu-phone .mup-radio-go {
+    flex: none;
+    border: 0;
+    border-radius: 10px;
+    padding: 7px 12px;
+    background: rgba(var(--art, 47, 140, 255), .22);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+}
+.mu-phone .mup-radio-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 18px 2px 10px;
+}
+.mu-phone .mup-radio-head h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+}
+.mu-phone .mup-radio-head span {
+    font-size: 12px;
+    color: rgba(255, 255, 255, .5);
+    text-align: right;
+}
+.mu-phone .mup-radio-wall {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 12px;
+}
+.mu-phone .mup-card.station { position: relative; }
+.mu-phone .mup-card.station.off { opacity: .55; }
+.mu-phone .mup-st-badge {
+    position: absolute;
+    left: 6px;
+    top: calc(100% / 1.6);
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(4, 10, 20, .76);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .85);
+}
+.mu-phone .mup-st-note {
+    margin: 10px 2px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, .6);
+}
+.mu-phone .mup-live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 95, 86, .2);
+    color: #ff8078;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+}
+
+/* ---------- The now-playing strip, when it's a station ---------- */
+
+/* Nothing comes before or after a radio station, and it has no length. */
+#mu-strip.live .mu-strip-b[data-k="prev"],
+#mu-strip.live .mu-strip-b[data-k="next"],
+#mu-strip.live .mu-strip-bar { display: none; }
