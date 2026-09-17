@@ -28,7 +28,7 @@
  * window.HomerLibraryPhone = { create, version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     const PLAY_GUARD_MS = 1500; // a second tap while playback starts doesn't start it again
 
@@ -84,6 +84,17 @@
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => { toastEl.className = 'lp-toast'; }, 3200);
         };
+
+        // ---------- "Play on…" (library/castvideo.js) ----------
+        // Home Assistant and Jellyfin's own /Sessions both usually settle
+        // after this page has already drawn once, so whether the button
+        // belongs here is re-asked on every change rather than decided once
+        // at draw time — the same shape music-phone.js uses for its own
+        // device button (syncPageActs, HomerHA.onChange).
+        const CV = () => window.HomerCastVideo || null;
+        const canPlayOn = () => { const c = CV(); return !!c && c.ready(); };
+        let onCVChange = null; // set by movieView/showView while they're up
+        const offCV = CV() ? CV().onChange(() => { if (alive && onCVChange) onCVChange(); }) : () => {};
 
         // ---------- Playing ----------
         let lastPlay = 0;
@@ -495,6 +506,15 @@
             let it = item;
             let status = 'loading';
 
+            const actsFor = () => {
+                const list = posOf(it) > 0
+                    ? [{ act: 'resume', icon: 'play_arrow', label: 'Resume', primary: true }, { act: 'restart', icon: 'replay', label: 'Restart' }]
+                    : [{ act: 'play', icon: 'play_arrow', label: 'Play', primary: true }];
+                if (canPlayOn()) list.push({ act: 'playon', icon: 'cast', label: 'Play on…' });
+                return list;
+            };
+            const drawActs = () => { page.querySelector('.lp-acts').innerHTML = actsHtml(actsFor()); };
+
             const render = (full) => {
                 const chips = [
                     { text: it.ProductionYear ? String(it.ProductionYear) : '' },
@@ -509,15 +529,14 @@
                 page.querySelector('.lp-pills').innerHTML = pillsHtml(chips);
                 const left = posOf(it) > 0 ? `${fmtMins(minsLeft(it))} left` : '';
                 page.querySelector('.lp-when').textContent = [left, endsAt(it)].filter(Boolean).join(' · ');
-                page.querySelector('.lp-acts').innerHTML = actsHtml(posOf(it) > 0
-                    ? [{ act: 'resume', icon: 'play_arrow', label: 'Resume', primary: true }, { act: 'restart', icon: 'replay', label: 'Restart' }]
-                    : [{ act: 'play', icon: 'play_arrow', label: 'Play', primary: true }]);
+                drawActs();
                 drawDesc(page, it.Overview);
                 if (!full) return;
                 const rows = M.facts(it);
                 page.querySelector('.lp-facts').innerHTML = factsHtml(rows);
                 page.querySelector('.lp-about').hidden = !rows.length;
             };
+            onCVChange = drawActs;
 
             const load = async () => {
                 status = 'loading';
@@ -542,6 +561,11 @@
                 if (ev.target.closest('.lp-more')) { onMore(page); return; }
                 const a = ev.target.closest('.lp-act');
                 if (!a || status !== 'ready') return;
+                if (a.dataset.act === 'playon') {
+                    const c = CV();
+                    if (c) c.open(document.body, { tv: false, item: it, startTicks: posOf(it), toast, onNowPlaying: () => { M.nav('#/playing'); } });
+                    return;
+                }
                 playItem(it, a.dataset.act === 'restart');
             });
 
@@ -617,10 +641,13 @@
                 }
                 const code = epCode(next);
                 when.innerHTML = `<b>${esc(code || 'Next')}</b>${esc(next.Name || '')}${posOf(next) > 0 ? ` · <em>${esc(fmtMins(minsLeft(next)))} left</em>` : ''}`;
-                acts.innerHTML = actsHtml(posOf(next) > 0
+                const list = posOf(next) > 0
                     ? [{ act: 'resume', icon: 'play_arrow', label: code ? `Resume ${code}` : 'Resume', primary: true }, { act: 'restart', icon: 'replay', label: 'Restart' }]
-                    : [{ act: 'play', icon: 'play_arrow', label: code ? `Play ${code}` : 'Play', primary: true }]);
+                    : [{ act: 'play', icon: 'play_arrow', label: code ? `Play ${code}` : 'Play', primary: true }];
+                if (canPlayOn()) list.push({ act: 'playon', icon: 'cast', label: 'Play on…' });
+                acts.innerHTML = actsHtml(list);
             };
+            onCVChange = drawNext;
 
             // ----- seasons -----
             const drawSeasons = () => {
@@ -727,7 +754,13 @@
                 }
                 const a = ev.target.closest('.lp-act');
                 if (a) {
-                    if (next && status === 'ready') playItem(next, a.dataset.act === 'restart');
+                    if (!next || status !== 'ready') return;
+                    if (a.dataset.act === 'playon') {
+                        const c = CV();
+                        if (c) c.open(document.body, { tv: false, item: next, startTicks: posOf(next), toast, onNowPlaying: () => { M.nav('#/playing'); } });
+                        return;
+                    }
+                    playItem(next, a.dataset.act === 'restart');
                     return;
                 }
                 const row = ev.target.closest('.lp-ep');
@@ -881,6 +914,7 @@
                 clearTimeout(toastTimer);
                 clearInterval(dockTimer);
                 offPlayer();
+                offCV();
                 document.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 root.remove();

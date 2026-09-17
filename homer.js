@@ -76,6 +76,7 @@
     css('shared/alerts.css', 'homer-alerts-css'); // the alert crawl, over every screen
     css('music/playon.css', 'homer-playon-css'); // "Play on…", the Music screens' device picker
     css('music/radio.css', 'homer-radio-css'); // the Music screens' Radio tab
+    css('library/castvideo.css', 'homer-castvideo-css'); // "Play on…", the movie/episode device picker
     js('shared/loading.js'); // first of all: HOMER's loading screen, over Jellyfin's 404
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/menu.js'); // before the screens: Home and Now Playing draw its menu
@@ -95,6 +96,7 @@
     js('home/home.js');
     js('home/home-phone.js'); // Home's phone layout
     js('library/library-model.js'); // the library screens' data
+    js('library/castvideo.js'); // before the library screens: "Play on…", a movie or episode on another screen
     js('library/library.js');
     js('library/library-phone.js'); // the library screens' phone layout
     js('settings/settings.js');

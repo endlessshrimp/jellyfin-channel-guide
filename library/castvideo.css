@@ -1,0 +1,161 @@
+/*
+ * HOMER "Play on…" for video (library/castvideo.js): the device picker.
+ * Structurally the same sheet as music/playon.css (one list, two sizes: TV
+ * stage pixels, phone real pixels from the bottom) — its own file, `cv-`
+ * prefixed, because library screens don't otherwise load music/playon.css.
+ */
+
+.cv-root {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    color: var(--homer-text, #f4f7fb);
+}
+
+.cv-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 5, 10, 0.62);
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+
+.cv-root.in .cv-scrim { opacity: 1; }
+
+.cv-sheet {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(14, 30, 54, 0.98), rgba(6, 14, 28, 0.98));
+    border: 1px solid var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+.cv-head { flex: 0 0 auto; }
+.cv-title { font-weight: 800; letter-spacing: 0.2px; }
+.cv-sub { color: var(--homer-dim, #8ea3bd); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cv-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+}
+
+.cv-list::-webkit-scrollbar { width: 0; height: 0; }
+
+.cv-row {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.05);
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.cv-row.dim { color: var(--homer-faint, #5a6f89); }
+.cv-row.off { cursor: default; opacity: 0.55; }
+
+.cv-row.focus {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff);
+    color: #fff;
+}
+
+.cv-row.focus .cv-text i { color: rgba(255, 255, 255, 0.85); }
+.cv-row.busy { opacity: 0.7; }
+
+.cv-ic { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.cv-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.cv-text b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-text i { font-style: normal; font-weight: 600; color: var(--homer-dim, #8ea3bd); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cv-chip {
+    flex: 0 0 auto;
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+/* which route a row is: Jellyfin's own remote control, or Home Assistant's
+   play_media fallback — a quiet color cue beside the honest text */
+.cv-chip-jellyfin { background: rgba(111, 211, 255, 0.22); color: var(--homer-accent-2, #6fd3ff); }
+.cv-chip-ha { background: rgba(255, 176, 32, 0.2); color: var(--homer-needle, #ffb020); }
+
+.cv-said { flex: 0 0 auto; font-weight: 600; color: var(--homer-accent-2, #6fd3ff); }
+.cv-said.err { color: var(--homer-needle, #ffb020); }
+
+.cv-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cv-foot-btn { display: inline-flex; align-items: center; cursor: pointer; font-weight: 700; color: var(--homer-accent-2, #6fd3ff); }
+.cv-hint { color: var(--homer-faint, #5a6f89); font-weight: 600; text-align: right; overflow: hidden; }
+
+/* ---------- The TV: inside the 1920x1080 stage ---------- */
+
+.cv-tv .cv-sheet {
+    left: 50%;
+    top: 50%;
+    width: 900px;
+    max-height: 880px;
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0;
+    border-radius: 20px;
+    transition: transform 170ms ease, opacity 170ms ease;
+}
+
+.cv-tv.in .cv-sheet { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+.cv-tv .cv-head { padding: 28px 34px 14px; }
+.cv-tv .cv-title { font-size: 40px; }
+.cv-tv .cv-sub { font-size: 25px; margin-top: 2px; }
+.cv-tv .cv-list { padding: 6px 22px 10px; }
+.cv-tv .cv-row { gap: 16px; padding: 0 18px; height: 84px; border-radius: 14px; margin: 5px 0; }
+.cv-tv .cv-ic { width: 46px; font-size: 38px; }
+.cv-tv .cv-text b { font-size: 29px; }
+.cv-tv .cv-text i { font-size: 20px; margin-top: 1px; }
+.cv-tv .cv-chip { font-size: 16px; padding: 5px 12px; border-radius: 8px; }
+.cv-tv .cv-said { padding: 4px 34px 0; font-size: 24px; }
+.cv-tv .cv-foot { padding: 16px 34px 26px; }
+.cv-tv .cv-foot-btn { gap: 10px; font-size: 25px; }
+.cv-tv .cv-foot-btn .material-icons { font-size: 1.3em; }
+.cv-tv .cv-hint { font-size: 20px; }
+
+/* ---------- A phone: a sheet from the bottom ---------- */
+
+.cv-phone { position: fixed; z-index: 100002; }
+
+.cv-phone .cv-sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 78vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    transform: translateY(14px);
+    opacity: 0;
+    transition: transform 180ms ease, opacity 180ms ease;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.cv-phone.in .cv-sheet { transform: translateY(0); opacity: 1; }
+.cv-phone .cv-head { padding: 18px 18px 10px; }
+.cv-phone .cv-title { font-size: 22px; }
+.cv-phone .cv-sub { font-size: 15px; }
+.cv-phone .cv-list { padding: 2px 12px 8px; }
+.cv-phone .cv-row { gap: 12px; padding: 0 12px; min-height: 60px; border-radius: 12px; margin: 6px 0; }
+.cv-phone .cv-ic { width: 32px; font-size: 25px; }
+.cv-phone .cv-text b { font-size: 17px; }
+.cv-phone .cv-text i { font-size: 12px; }
+.cv-phone .cv-chip { font-size: 10px; padding: 3px 8px; border-radius: 6px; }
+.cv-phone .cv-said { padding: 2px 18px 0; font-size: 14px; }
+.cv-phone .cv-foot { padding: 10px 18px 18px; }
+.cv-phone .cv-foot-btn { gap: 8px; font-size: 16px; }
+.cv-phone .cv-foot-btn .material-icons { font-size: 1.35em; }
+.cv-phone .cv-hint { font-size: 12px; }
+
+@media (max-width: 380px) {
+    .cv-phone .cv-hint { display: none; }
+}
