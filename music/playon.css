@@ -1,0 +1,160 @@
+/*
+ * HOMER "Play on…": the device picker (music/playon.js).
+ *
+ * One list, two sizes. On the TV it opens inside the 1920x1080 stage, so its
+ * sizes are stage pixels like the rest of music.css and the stage's own
+ * transform scales it. On a phone it is a sheet from the bottom, in real
+ * pixels, with a thumb-sized row.
+ */
+
+.po-root {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    color: var(--homer-text, #f4f7fb);
+}
+
+.po-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 5, 10, 0.62);
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+
+.po-root.in .po-scrim { opacity: 1; }
+
+.po-sheet {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(14, 30, 54, 0.98), rgba(6, 14, 28, 0.98));
+    border: 1px solid var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+.po-head { flex: 0 0 auto; }
+.po-title { font-weight: 800; letter-spacing: 0.2px; }
+.po-sub { color: var(--homer-dim, #8ea3bd); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.po-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+}
+
+.po-list::-webkit-scrollbar { width: 0; height: 0; }
+
+.po-row {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.05);
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.po-row.dim { color: var(--homer-faint, #5a6f89); }
+.po-row.off { cursor: default; opacity: 0.55; }
+
+.po-row.focus {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff);
+    color: #fff;
+}
+
+.po-row.focus .po-text i { color: rgba(255, 255, 255, 0.85); }
+.po-row.busy { opacity: 0.7; }
+
+/* The Music screen sets `#mu-root .material-icons { font-size: inherit }`,
+   which outranks any class here — so the size goes on the box, not the glyph. */
+.po-ic { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.po-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.po-text b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-text i { font-style: normal; font-weight: 600; color: var(--homer-dim, #8ea3bd); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.po-chip {
+    flex: 0 0 auto;
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+.po-said { flex: 0 0 auto; font-weight: 600; color: var(--homer-accent-2, #6fd3ff); }
+.po-said.err { color: var(--homer-needle, #ffb020); }
+
+.po-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.po-foot-btn { display: inline-flex; align-items: center; cursor: pointer; font-weight: 700; color: var(--homer-accent-2, #6fd3ff); }
+.po-hint { color: var(--homer-faint, #5a6f89); font-weight: 600; text-align: right; overflow: hidden; }
+
+/* ---------- The TV: inside the 1920x1080 stage ---------- */
+
+.po-tv .po-sheet {
+    left: 50%;
+    top: 50%;
+    width: 840px;
+    max-height: 880px;
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0;
+    border-radius: 20px;
+    transition: transform 170ms ease, opacity 170ms ease;
+}
+
+.po-tv.in .po-sheet { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+.po-tv .po-head { padding: 28px 34px 14px; }
+.po-tv .po-title { font-size: 40px; }
+.po-tv .po-sub { font-size: 25px; margin-top: 2px; }
+.po-tv .po-list { padding: 6px 22px 10px; }
+.po-tv .po-row { gap: 16px; padding: 0 18px; height: 84px; border-radius: 14px; margin: 5px 0; }
+.po-tv .po-ic { width: 46px; font-size: 38px; }
+.po-tv .po-text b { font-size: 29px; }
+.po-tv .po-text i { font-size: 22px; margin-top: 1px; }
+.po-tv .po-chip { font-size: 18px; padding: 5px 12px; border-radius: 8px; }
+.po-tv .po-said { padding: 4px 34px 0; font-size: 24px; }
+.po-tv .po-foot { padding: 16px 34px 26px; }
+.po-tv .po-foot-btn { gap: 10px; font-size: 25px; }
+.po-tv .po-foot-btn .material-icons { font-size: 1.3em; }
+.po-tv .po-hint { font-size: 20px; }
+
+/* ---------- A phone: a sheet from the bottom ---------- */
+
+.po-phone { position: fixed; z-index: 100002; }
+
+.po-phone .po-sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 78vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    transform: translateY(14px);
+    opacity: 0;
+    transition: transform 180ms ease, opacity 180ms ease;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.po-phone.in .po-sheet { transform: translateY(0); opacity: 1; }
+.po-phone .po-head { padding: 18px 18px 10px; }
+.po-phone .po-title { font-size: 22px; }
+.po-phone .po-sub { font-size: 15px; }
+.po-phone .po-list { padding: 2px 12px 8px; }
+.po-phone .po-row { gap: 12px; padding: 0 12px; min-height: 60px; border-radius: 12px; margin: 6px 0; }
+.po-phone .po-ic { width: 32px; font-size: 25px; }
+.po-phone .po-text b { font-size: 17px; }
+.po-phone .po-text i { font-size: 13px; }
+.po-phone .po-chip { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
+.po-phone .po-said { padding: 2px 18px 0; font-size: 14px; }
+.po-phone .po-foot { padding: 10px 18px 18px; }
+.po-phone .po-foot-btn { gap: 8px; font-size: 16px; }
+.po-phone .po-foot-btn .material-icons { font-size: 1.35em; }
+.po-phone .po-hint { font-size: 12px; }
+
+@media (max-width: 380px) {
+    .po-phone .po-hint { display: none; }
+}

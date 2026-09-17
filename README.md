@@ -459,6 +459,8 @@ a small now-playing strip in the corner with the cover, the track and
   playing lit. OK on a track starts there.
 - **An artist** (or a genre): their albums, with Play all / Shuffle / Instant
   Mix for the lot.
+- **Play on…** sends the album to a speaker in the house instead (below).
+- **Favorites** is a tab of its own, and a star sits on every track (below).
 - **Instant Mix** is Jellyfin's own "radio from this" (`/Items/{id}/InstantMix`)
   and works on an album, an artist, a genre or a track. **I** starts one from
   whatever the focus is on.
@@ -479,9 +481,78 @@ a small now-playing strip in the corner with the cover, the track and
 - Not gapless. The next track is preloaded while the current one finishes, so
   the join is short, but the two aren't stitched sample-accurate.
 
+### Favorites
+
+![The Favorites tab](docs/screenshots/music-favourites.jpg)
+
+A **star** sits on every track — in the Songs list, on an album, in **Up next**,
+and on Now playing — and on an album's own header. Outline when it isn't a
+favorite, filled and amber when it is. **F** stars whatever the focus is on
+(the track under the cursor, or the album, artist or playlist the page is
+about); clicking the star does the same and does *not* start the track. On a
+phone the star is its own 44px button beside the row. It's in the Actions strip
+too, so a remote with no letter keys can reach it.
+
+**Favorites** is a tab of its own, beside Songs: every track with a star, in
+artist and album order, and Play / Shuffle / Instant Mix work on it like any
+other list.
+
+![Stars in Up next, and on Now playing](docs/screenshots/music-favourites-playing.jpg)
+
+These are **Jellyfin's own favorites**, not HOMER's — a star set here is set in
+Jellyfin Web, Swiftfin and anywhere else, and a star set there is already on
+the tracks HOMER fetches (`UserData.IsFavorite`, asked for with the lists, so
+nothing is fetched twice). The star flips the instant you press it and is put
+back if the server disagrees. HOMER writes it with
+`POST /UserItems/{id}/UserData` (Jellyfin 10.11), falling back to the older
+`POST`/`DELETE /Users/{userId}/FavoriteItems/{id}` on an older server.
+
+### Play on… (an album on a speaker)
+
+![Play on, the device picker](docs/screenshots/music-playon.jpg)
+
+**Play on…** sits beside Play and Shuffle on an album, a playlist, an artist or
+a genre, and sends the record to a speaker in the house instead of playing it
+in this browser. It's only there when Home Assistant is connected (Settings →
+Home Assistant). The list is **This screen** — HOMER's own player, where Play
+would have put it — then every Home Assistant player that can take music, with
+the device you used last marked and focused. Speakers playing as a group (two
+WiiMs, a pair of Sonos) are one row naming both rooms. Arrows and OK, a mouse,
+or a thumb on a phone; **Now Playing** at the bottom goes to see it.
+
+**Every row says what that speaker will actually do**, because they don't all
+do the same thing. Home Assistant's `play_media` takes one item and an album is
+eleven, so HOMER's helper on the NAS mints a short-lived **M3U** of the album's
+Jellyfin streams and hands over that one address. From there it's up to the
+player:
+
+| Speaker | What it does |
+| --- | --- |
+| WiiM and other LinkPlay | The whole album, played as one long stream |
+| Sonos | The whole album — Sonos reads a playlist only through its radio player, so HOMER asks it that way, in MP3 (handed FLAC, Sonos skips the record in seconds) |
+| Chromecast, Nest, Google TV | **The first track only** — Home Assistant reads the playlist itself and casts the first entry |
+| Apple TV | **The first track only** — AirPlay takes one address |
+| TVs (Samsung, LG, Android TV) | Nothing: their `play_media` launches apps, not music |
+| Anything else | Queued track by track if it advertises it, otherwise the playlist, and one track if it refuses |
+
+A speaker that never says "the whole album" gets the first track **and says so**
+on the row and in the message after — it never quietly plays one song and lets
+you think the record is on.
+
+**Jellyfin's token never leaves the NAS.** The helper keeps it and hands back
+an opaque address (`/music/p/<key>.m3u`, good for twelve hours); the speaker
+fetches that. A token in `media_content_id` would be written into Home
+Assistant's logbook, its recorder and every debug log that repeats a service
+call.
+
+A speaker handed one address mostly reports the address as its title, so
+**Now Playing** uses what HOMER remembers sending there: the album's name, who
+it's by, and its cover.
+
 **Keys on the Music screen:** arrows move and OK selects; **Space** or **P**
 plays and pauses; **N** and **B** change track; **S** shuffles; **R** cycles
-repeat; **I** starts an Instant Mix; **+** and **−** are the volume; **Esc**
+repeat; **I** starts an Instant Mix; **F** stars what the focus is on; **+**
+and **−** are the volume; **Esc**
 goes back a view, then back a screen (the music keeps playing). On Now playing,
 ◀ ▶ on the progress bar seeks 10 seconds and on the volume pill changes the
 volume. The media keys (Play/Pause, Next, Previous) work from any HOMER screen
@@ -656,11 +727,16 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   Movies and TV Shows with their details pages, Search, Recordings, Settings,
   Weather, Rooms and Cameras. See `docs/phone.md` for how one is built.
 - **Music** on a phone: chips for Recently Added / Artists / Albums / Songs /
-  Playlists / Genres, the art two across, and a sheet for an album (its tracks)
-  or an artist (their albums) with Play / Shuffle / Mix. A **mini player** sits
-  above the tab bar whenever something is loaded — tap it for the full Now
-  playing, with the cover, the controls, a volume slider and the lyrics. The
-  mini player follows the music onto every other HOMER screen too.
+  **Favorites** / Playlists / Genres, the art two across, and a sheet for an
+  album (its tracks) or an artist (their albums) with Play / Shuffle /
+  **Play on…** / Mix. A **star** sits beside every track (its own 44px button,
+  so a thumb on it doesn't start the track), on the album's header, and among
+  Now playing's controls. A **mini player** sits above the tab bar whenever
+  something is loaded — tap it for the full Now playing, with the cover, the
+  controls, a volume slider and the lyrics. The mini player follows the music
+  onto every other HOMER screen too.
+
+  ![Favorites on a phone](docs/screenshots/music-favourites-phone.jpg)
 
 ![Music on a phone](docs/screenshots/music-phone.jpg)
 
@@ -704,13 +780,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.13/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.14/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.4.13`), so an update never changes
+The URL is pinned to a release tag (`@v0.4.14`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

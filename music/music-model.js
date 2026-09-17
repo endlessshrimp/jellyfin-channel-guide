@@ -15,6 +15,7 @@
  *   /Items/{id}/InstantMix                  "radio from this"
  *   /Audio/{id}/universal                   the stream
  *   /Audio/{id}/Lyrics                      synced (or plain) lyrics
+ *   /UserItems/{id}/UserData                a favourite, set and cleared
  *   /Sessions/Playing[/Progress|/Stopped]   what's playing, told to the server
  *
  * The player is one <audio> element on document.body, owned by this file and
@@ -28,9 +29,14 @@
  * the current one finishes, which makes the join short, but the two aren't
  * stitched sample-accurate the way a gapless player would.
  *
+ * Favourites are Jellyfin's own, not HOMER's: a star here is a star in every
+ * other Jellyfin client, and every item HOMER already fetches carries its
+ * UserData.IsFavorite, so nothing is asked twice.
+ *
  * window.HomerMusicModel = { load, library, albums, artists, songs, playlists,
- *   genres, recent, albumTracks, artistAlbums, artistSongs, genreAlbums,
- *   playlistTracks, instantMix, lyrics, art, player, fmt, onChange, destroy }
+ *   genres, recent, favorites, albumTracks, artistAlbums, artistSongs,
+ *   genreAlbums, playlistTracks, instantMix, lyrics, art, player, fmt,
+ *   isFavorite, setFavorite, toggleFavorite, onChange, destroy }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -205,7 +211,7 @@
     let lastError = null;
     let counts = { albums: 0, songs: 0, artists: 0 };
 
-    const lists = { albums: [], artists: [], songs: [], playlists: [], genres: [], recent: [] };
+    const lists = { albums: [], artists: [], songs: [], playlists: [], genres: [], recent: [], favorites: [] };
     const jobs = new Map(); // one request per key at a time
     const once = (key, fn) => {
         if (jobs.has(key)) return jobs.get(key);
@@ -232,7 +238,7 @@
         loading = (async () => {
             const views = await api(`/Users/${uid()}/Views`);
             library = ((views && views.Items) || []).find((v) => v.CollectionType === 'music') || null;
-            const [al, ar, so, pl, ge] = await Promise.all([
+            const [al, ar, so, pl, ge, fav] = await Promise.all([
                 items(`IncludeItemTypes=MusicAlbum&Recursive=true&SortBy=AlbumArtist,SortName&Limit=${LIMIT.albums}&${IMAGES}&${ALBUM_FIELDS}${parent()}`),
                 api(`/Artists/AlbumArtists?userId=${uid()}&Recursive=true&SortBy=SortName&Limit=${LIMIT.artists}&${IMAGES}${parent()}`)
                     .then((r) => (r && r.Items) || []).catch(() => []),
@@ -241,6 +247,8 @@
                     .then((r) => r.filter((p) => !p.MediaType || p.MediaType === 'Audio')).catch(() => []),
                 api(`/MusicGenres?userId=${uid()}&Recursive=true&SortBy=SortName&${IMAGES}${parent()}`)
                     .then((r) => (r && r.Items) || []).catch(() => []),
+                items(`IncludeItemTypes=Audio&Recursive=true&Filters=IsFavorite&SortBy=AlbumArtist,Album,ParentIndexNumber,IndexNumber&Limit=${LIMIT.songs}&${IMAGES}&${TRACK_FIELDS}${parent()}`)
+                    .catch(() => []),
             ]);
             lists.albums = al.map(album);
             lists.artists = ar.map(named('artist'));
@@ -248,6 +256,14 @@
             lists.playlists = pl.map(named('playlist'));
             lists.genres = ge.map(named('genre'));
             lists.recent = lists.albums.slice().sort((a, b) => b.added - a.added).slice(0, 60);
+            lists.favorites = fav.map(track);
+            favs.clear();
+            lists.favorites.forEach((t) => favs.set(t.id, true));
+            // everything else HOMER fetched says so too, so a star is right
+            // the moment a list is drawn rather than after a round trip
+            [...lists.songs, ...lists.albums, ...lists.artists].forEach((x) => {
+                if (x.favorite) favs.set(x.id, true);
+            });
             counts = { albums: lists.albums.length, songs: lists.songs.length, artists: lists.artists.length };
             loaded = true;
             lastError = null;
@@ -309,6 +325,81 @@
     const instantMix = (item) => api(
         `/Items/${item.id}/InstantMix?userId=${uid()}&Limit=150&${IMAGES}&${TRACK_FIELDS}`
     ).then((r) => ((r && r.Items) || []).map(track));
+
+    // ---------- Favourites ----------
+    //
+    // Jellyfin's own, so a star set here is set in Jellyfin Web, Swiftfin and
+    // anywhere else, and a star set there is already on the items HOMER
+    // fetches (UserData.IsFavorite, which the lists ask for with
+    // EnableUserData=true). `favs` is the one truth while this page is open:
+    // a tap writes to it first so the star flips under the finger, and the
+    // server's own answer is written back over it.
+    //
+    // 10.11 moved the call to POST /UserItems/{id}/UserData with the whole
+    // UserData in the body. The older POST/DELETE /Users/{uid}/FavoriteItems/
+    // {id} still answers, and is the fallback, so an older server keeps
+    // working.
+    const favs = new Map(); // item id -> true | false
+
+    const isFavorite = (it) => {
+        const id = typeof it === 'string' ? it : (it && it.id);
+        if (!id) return false;
+        if (favs.has(id)) return favs.get(id);
+        return !!(it && it.favorite);
+    };
+
+    // keep the copies in every list honest, so a redraw from any of them agrees
+    const markFavorite = (id, on) => {
+        favs.set(id, on);
+        const touch = (x) => { if (x && x.id === id) x.favorite = on; };
+        Object.values(lists).forEach((l) => l.forEach(touch));
+        cache.forEach((l) => Array.isArray(l) && l.forEach(touch));
+        player.state().queue.forEach(touch);
+    };
+    // the Favourites list follows the stars without re-asking the server
+    const restackFavorites = (item, on) => {
+        if (!item || item.kind !== 'track') return;
+        const at = lists.favorites.findIndex((t) => t.id === item.id);
+        if (on && at < 0) lists.favorites = lists.favorites.concat([Object.assign({}, item, { favorite: true })]);
+        else if (!on && at >= 0) lists.favorites = lists.favorites.filter((t) => t.id !== item.id);
+    };
+
+    // setFavorite(item, on) — the star moves at once; the promise says whether
+    // Jellyfin agreed, and puts it back if it didn't.
+    const setFavorite = (item, on) => {
+        const id = typeof item === 'string' ? item : (item && item.id);
+        if (!id) return Promise.reject(new Error('No item'));
+        const was = isFavorite(item);
+        const want = on == null ? !was : !!on;
+        if (want === was) return Promise.resolve(want);
+        markFavorite(id, want);
+        restackFavorites(typeof item === 'string' ? trackById(id) : item, want);
+        emit('favorite');
+        // no `soft` here: a 404 has to throw, so the older call gets its turn
+        const modern = () => api(`/UserItems/${id}/UserData?userId=${uid()}`, {
+            method: 'POST', body: { IsFavorite: want },
+        });
+        const classic = () => api(`/Users/${uid()}/FavoriteItems/${id}`, { method: want ? 'POST' : 'DELETE' });
+        return modern()
+            .catch(() => classic())
+            .then((res) => {
+                // Jellyfin answers with the item's UserData: believe that, not us
+                const said = res && typeof res.IsFavorite === 'boolean' ? res.IsFavorite : want;
+                if (said !== want) {
+                    markFavorite(id, said);
+                    restackFavorites(typeof item === 'string' ? trackById(id) : item, said);
+                }
+                emit('favorite');
+                return said;
+            })
+            .catch((err) => {
+                markFavorite(id, was); // Jellyfin said no: put the star back
+                restackFavorites(typeof item === 'string' ? trackById(id) : item, was);
+                emit('favorite');
+                throw err;
+            });
+    };
+    const toggleFavorite = (item) => setFavorite(item, !isFavorite(item));
 
     // ---------- Lyrics ----------
 
@@ -821,6 +912,10 @@
         playlists: () => lists.playlists,
         genres: () => lists.genres,
         recent: () => lists.recent,
+        favorites: () => lists.favorites,
+        isFavorite,
+        setFavorite,
+        toggleFavorite,
         find,
         albumById,
         trackById,
@@ -854,6 +949,7 @@
             listeners.clear();
             cache.clear();
             lyricCache.clear();
+            favs.clear();
         },
     };
 })();

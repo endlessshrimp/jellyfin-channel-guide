@@ -14,6 +14,9 @@
  *              grouping and transport). Home Assistant pushes its state, so
  *              those cards need no polling. Speakers playing together (Sonos,
  *              WiiM multiroom) fold into one card naming the rooms.
+ *              A speaker that HOMER sent an album to (music/playon.js) reports
+ *              the address it was given as its title; the card uses what HOMER
+ *              remembers sending instead, with the album's own cover.
  *   HOMER      the music playing in this browser tab (music/music-model.js).
  *              It's controlled directly, not through Jellyfin — and the
  *              Jellyfin session it reports is dropped, so it isn't on screen
@@ -231,9 +234,20 @@
         // a show goes in the title, with the episode under it, the way the
         // Jellyfin sessions read; music keeps the track on top
         const series = a.media_series_title || '';
-        const track = a.media_title || '';
+        let track = a.media_title || '';
+        // A speaker handed one address plays it happily and then reports the
+        // address as its title ("http://…/music/p/xTd3.m3u"), with no artist
+        // and no cover. HOMER is the only thing that knows that address is
+        // Common Sense by John Prine, so it says so: music/playon.js keeps what
+        // it sent where, for as long as the NAS keeps the playlist.
+        const po = window.HomerPlayOn;
+        const mine = active && po && !series ? po.sent(entry.id) : null;
+        const urlish = /^https?:\/\//i.test(track) || !track;
+        const owned = mine && urlish ? mine : null;
+        if (owned) track = owned.name || track;
         const title = series || track || (a.source && !a.app_name ? a.source : '') || a.app_name || '';
-        const artist = series ? [ep, track].filter(Boolean).join(' · ') : (a.media_artist || a.media_album_artist || '');
+        const artist = series ? [ep, track].filter(Boolean).join(' · ')
+            : owned ? owned.artist : (a.media_artist || a.media_album_artist || '');
         // where it is: Home Assistant gives the position and when it was read
         const updated = a.media_position_updated_at ? Date.parse(a.media_position_updated_at) : 0;
         const pos = a.media_position != null ? a.media_position : null;
@@ -245,9 +259,9 @@
             kind: 'ha',
             title: title || name,
             sub: (series ? artist : [artist || album].filter(Boolean).join(' · ')) || (title ? '' : HA_STATES[state] || state),
-            badge: a.app_name || (a.media_content_type === 'music' ? 'Music' : isTv ? 'TV' : ''),
-            art: a.entity_picture ? h.pictureUrl(entry.id) : '',
-            shape: a.media_content_type === 'music' ? 'square'
+            badge: owned ? 'Music' : a.app_name || (a.media_content_type === 'music' ? 'Music' : isTv ? 'TV' : ''),
+            art: (owned && owned.art) || (a.entity_picture ? h.pictureUrl(entry.id) : ''),
+            shape: owned || a.media_content_type === 'music' ? 'square'
                 : /tvshow|movie|episode|video/.test(a.media_content_type || '') ? 'poster' : 'wide',
             where: name,
             who: '',
@@ -255,7 +269,7 @@
             room: members.length > 1 ? '' : entry.room || '',
             // with no artwork the card falls back to this, so it says what
             // kind of thing is playing rather than what the box is
-            icon: a.media_content_type === 'music' ? 'music_note'
+            icon: owned || a.media_content_type === 'music' ? 'music_note'
                 : /tvshow|episode/.test(a.media_content_type || '') ? 'live_tv'
                 : /movie/.test(a.media_content_type || '') ? 'movie'
                 : isTv ? 'tv' : 'speaker',
@@ -283,7 +297,10 @@
             // library when Home Assistant can't hand over a picture
             _track: track,
             _artist: a.media_artist || a.media_album_artist || '',
-            _album: album,
+            _album: (owned && owned.name) || album,
+            // what HOMER sent here, when it did: the Now Playing screen can
+            // say "11 tracks" rather than nothing
+            _sent: owned || null,
             _active: active
         };
     };
