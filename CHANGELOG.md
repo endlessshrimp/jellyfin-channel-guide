@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.23
 
 - **The menu goes from 14 items to 12.** Live TV absorbs the old Live TV
   Guide and Recordings as tabs (Guide · Recorded · Scheduled · Series);
