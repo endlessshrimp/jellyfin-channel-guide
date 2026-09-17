@@ -4,10 +4,12 @@
  * library/library-model.js.
  *
  * Movies and TV Shows: a poster grid (three across, more in landscape) under
- * a filter field and the sort chips (A–Z, Recently added) with the count.
- * Posters carry their state: a blue dot for unwatched, a progress bar for in
- * progress, a check for watched, and a show's unwatched count. A tap opens
- * the title's page.
+ * a search field, the sort chips with the count, and a row of filter chips you
+ * flick along — genre, decade, Unwatched, Favourites and 4K, all combining,
+ * each saying how many titles it would leave, with a Clear button pinned beside
+ * the row whenever any of them is on. Posters carry their state: a blue dot for
+ * unwatched, a progress bar for in progress, a check for watched, and a show's
+ * unwatched count. A tap opens the title's page.
  *
  * A movie's page: its art, title, chips (year, rating, runtime, score,
  * genres), when it would end, Resume and Restart (or Play), the overview, and
@@ -26,7 +28,7 @@
  * window.HomerLibraryPhone = { create, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     const PLAY_GUARD_MS = 1500; // a second tap while playback starts doesn't start it again
 
@@ -191,21 +193,26 @@
             const nouns = isTv ? 'shows' : 'movies';
             const noun = isTv ? 'show' : 'movie';
             const saved = M.memory.get(route.key) || {};
-            const SORT_KEY = 'homer-library-sort-' + route.collection; // shared with the TV layout
-            let sortMode = 'az';
-            try { sortMode = localStorage.getItem(SORT_KEY) === 'added' ? 'added' : 'az'; } catch { /* default */ }
+            const sorts = M.sortsFor(isTv); // shared with the TV layout, and so is the choice
+            let sortMode = M.sortStore.get(route.collection, isTv);
 
             main.innerHTML = `
                 <div class="lp-head">
                     <label class="lp-filter">
                         ${icon('search')}
-                        <input class="lp-filter-input" type="text" placeholder="Filter ${nouns}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Filter ${nouns}">
-                        <button type="button" class="lp-filter-clear" aria-label="Clear the filter" hidden>${icon('close')}</button>
+                        <input class="lp-filter-input" type="text" placeholder="Search ${nouns}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search ${nouns}">
+                        <button type="button" class="lp-filter-clear" aria-label="Clear the search" hidden>${icon('close')}</button>
                     </label>
-                    <div class="lp-sorts" role="group" aria-label="Sort">
-                        <button type="button" class="lp-chip" data-sort="az">A–Z</button>
-                        <button type="button" class="lp-chip" data-sort="added">Recently added</button>
-                        <span class="lp-count"></span>
+                    <div class="lp-rows">
+                        <div class="lp-sortrow">
+                            <div class="lp-sorts" role="group" aria-label="Sort">${sorts
+        .map((s) => `<button type="button" class="lp-chip" data-sort="${s.key}">${esc(s.label)}</button>`).join('')}</div>
+                            <span class="lp-count"></span>
+                        </div>
+                        <div class="lp-filterrow">
+                            <button type="button" class="lp-chip lp-clear-chip" data-key="clear" hidden>${icon('close')}Clear</button>
+                            <div class="lp-filters" role="group" aria-label="Filter"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="lp-scroll"><div class="lp-grid"></div><div class="lp-state"></div></div>`;
@@ -215,6 +222,9 @@
             const input = main.querySelector('.lp-filter-input');
             const clearBtn = main.querySelector('.lp-filter-clear');
             const countEl = main.querySelector('.lp-count');
+            const chipRow = main.querySelector('.lp-filters');
+            const filterRow = main.querySelector('.lp-filterrow');
+            const clearChip = main.querySelector('.lp-clear-chip');
             const setState = (html) => {
                 stateEl.innerHTML = html || '';
                 stateEl.hidden = !html;
@@ -223,6 +233,9 @@
             let tiles = []; // { it, el }
             let query = '';
             let status = 'loading';
+            // the same chips as the TV layout, as a row you can flick along
+            let F = M.makeFilters([], new Set());
+            const chipMap = new Map();
 
             const tileSub = (it) => {
                 if (it.Type === 'Series') return yearsOf(it);
@@ -265,41 +278,112 @@
                 c.setAttribute('aria-pressed', String(on));
             });
             markSort();
-            const sortKey = (it) => lc(it.SortName || it.Name);
+            const matchesQuery = (it) => !query
+                || lc(`${it.Name} ${it.OriginalTitle || ''} ${it.ProductionYear || ''} ${(it.Genres || []).join(' ')}`).includes(query);
+
+            // Clear first (it's the one you want in a hurry), then Unwatched,
+            // Favourites, 4K, the decades and the genres — the row flicks.
+            // Built once and then only updated: re-writing it would throw the
+            // row back to its start every time you tapped a chip near the end.
+            let built = false;
+            let lastOn = '';
+            const renderChips = (pool) => {
+                chipMap.clear();
+                const chips = F.chips(pool);
+                for (const c of chips) chipMap.set(c.key, c);
+                if (!built) {
+                    chipRow.innerHTML = chips.map((c) => `<button type="button" class="lp-chip lp-f-${c.group}" data-key="${esc(c.key)}"><span class="lp-chip-label">${esc(c.label)}</span><span class="lp-chip-num"></span></button>`).join('');
+                    filterRow.hidden = !chips.length;
+                    built = true;
+                }
+                // Clear sits outside the scroller, so it's still there when the
+                // row has been flicked to the far end
+                clearChip.hidden = !F.on();
+                for (const c of chips) {
+                    const b = chipRow.querySelector(`[data-key="${window.CSS && CSS.escape ? CSS.escape(c.key) : c.key}"]`);
+                    if (!b) continue;
+                    b.classList.toggle('on', c.on);
+                    b.classList.toggle('none', !c.count && !c.on);
+                    b.setAttribute('aria-pressed', String(c.on));
+                    b.querySelector('.lp-chip-num').textContent = c.count;
+                }
+                // what's on changed: bring it into the row, so the answer to
+                // "why am I only seeing eleven" isn't off the end of the screen
+                const on = chips.filter((c) => c.on).map((c) => c.key).join(',');
+                if (on !== lastOn) {
+                    lastOn = on;
+                    const lit = chipRow.querySelector('.lp-chip.on');
+                    if (lit) {
+                        const left = lit.offsetLeft - chipRow.offsetLeft;
+                        if (left < chipRow.scrollLeft || left + lit.offsetWidth > chipRow.scrollLeft + chipRow.clientWidth) {
+                            chipRow.scrollLeft = Math.max(0, left - 12);
+                        }
+                    }
+                }
+            };
+
             const applyView = () => {
-                const order = tiles.slice();
-                if (sortMode === 'added') order.sort((a, b) => String(b.it.DateCreated || '').localeCompare(String(a.it.DateCreated || '')));
-                else order.sort((a, b) => sortKey(a.it).localeCompare(sortKey(b.it), undefined, { numeric: true }));
+                const cmp = M.sortCompare(sortMode);
+                const order = tiles.slice().sort((a, b) => cmp(a.it, b.it));
+                const pool = []; // what the search box left, for the chips' counts
                 let shown = 0;
                 for (const t of order) {
-                    const it = t.it;
-                    const match = !query || lc(`${it.Name} ${it.OriginalTitle || ''} ${it.ProductionYear || ''} ${(it.Genres || []).join(' ')}`).includes(query);
+                    const searched = matchesQuery(t.it);
+                    if (searched) pool.push(t.it);
+                    const match = searched && F.matches(t.it);
                     t.el.hidden = !match;
                     if (match) shown++;
                     grid.appendChild(t.el); // DOM order = display order
                 }
                 markSort();
-                countEl.textContent = query ? `${shown} of ${tiles.length}` : plural(tiles.length, noun);
+                renderChips(pool);
+                const narrowed = !!query || F.on();
+                countEl.textContent = narrowed ? `${shown} of ${tiles.length}` : plural(tiles.length, noun);
                 clearBtn.hidden = !input.value;
-                setState(!shown && tiles.length ? `<div class="lp-state-box"><b>Nothing matches “${esc(query)}”</b><button type="button" class="lp-retry lp-clear">Clear the filter</button></div>` : '');
+                const why = [F.summary(), query ? `“${query}”` : ''].filter(Boolean).join(' · ');
+                setState(!shown && tiles.length && narrowed
+                    ? `<div class="lp-state-box"><b>No ${nouns} match ${esc(why)}</b><span>Clear it to see all ${plural(tiles.length, noun)} again.</span>`
+                        + '<button type="button" class="lp-retry lp-clear">Clear filters</button></div>'
+                    : '');
             };
 
             const setSort = (mode) => {
-                if (mode === sortMode) return;
+                if (mode === sortMode || !sorts.some((s) => s.key === mode)) return;
                 sortMode = mode;
-                try { localStorage.setItem(SORT_KEY, mode); } catch { /* per-viewer nicety only */ }
+                M.sortStore.set(route.collection, mode);
                 applyView();
                 scroll.scrollTop = 0; // a new order starts at its top
             };
-            const clearFilter = () => {
+            // the ✕ in the search field empties the field, and leaves the chips
+            const clearSearch = () => {
                 input.value = '';
                 query = '';
                 applyView();
+            };
+            // the whole library back in one tap, wherever the tap came from
+            const clearAll = () => {
+                input.value = '';
+                query = '';
+                F.clear();
+                M.filters.set(route.key, F.state);
+                applyView();
+                scroll.scrollTop = 0;
             };
 
             main.querySelector('.lp-sorts').addEventListener('click', (ev) => {
                 const c = ev.target.closest('.lp-chip[data-sort]');
                 if (c) setSort(c.dataset.sort);
+            });
+            filterRow.addEventListener('click', (ev) => {
+                const b = ev.target.closest('.lp-chip');
+                if (!b) return;
+                if (b.dataset.key === 'clear') { clearAll(); return; }
+                const c = chipMap.get(b.dataset.key);
+                if (!c) return;
+                F.press(c);
+                M.filters.set(route.key, F.state);
+                applyView();
+                scroll.scrollTop = 0;
             });
             input.addEventListener('input', () => {
                 query = lc(input.value).trim();
@@ -311,7 +395,7 @@
             });
             clearBtn.addEventListener('click', (ev) => {
                 ev.preventDefault(); // (inside the label: don't hand focus back to the field)
-                clearFilter();
+                clearSearch();
             });
 
             // the first tile on screen, for coming back (and for the TV layout)
@@ -323,7 +407,7 @@
             let opened = null; // the title tapped last
             scroll.addEventListener('click', (ev) => {
                 if (ev.target.closest('.lp-retry')) {
-                    if (ev.target.closest('.lp-clear')) clearFilter();
+                    if (ev.target.closest('.lp-clear')) clearAll();
                     else loadList();
                     return;
                 }
@@ -345,9 +429,15 @@
                 countEl.textContent = '';
                 setState(stateHtml('loading', `Loading ${nouns}…`));
                 try {
-                    const { items } = await M.load.library(server, route.parentId, isTv);
+                    // the titles, and beside them which of them are 4K
+                    const [{ items }, uhd] = await Promise.all([
+                        M.load.library(server, route.parentId, isTv),
+                        M.load.uhd(server, route.parentId, isTv)
+                    ]);
                     if (!alive) return;
                     status = 'ready';
+                    F = M.makeFilters(items, uhd);
+                    F.restore(M.filters.get(route.key)); // where you left this screen, this sitting
                     tiles = items.map((it, i) => ({ it, el: makeTile(it, i) }));
                     if (!tiles.length) {
                         countEl.textContent = `0 ${nouns}`;
@@ -377,9 +467,9 @@
 
             return {
                 back() {
-                    if (document.activeElement === input && input.value) { clearFilter(); return; }
+                    if (document.activeElement === input && input.value) { clearSearch(); return; }
                     if (document.activeElement === input) { input.blur(); return; }
-                    if (query) { clearFilter(); return; }
+                    if (query || F.on()) { clearAll(); return; }
                     M.goBack('#/home');
                 },
                 isTyping: () => document.activeElement === input,

@@ -92,11 +92,53 @@ timeline, so the button isn't there.
 ![Movies](screenshots/library-movies.jpg)
 
 Movies and TV Shows open in a "My Shows" style list: titles on the left, the
-selected one's art, details and Play / Resume / Restart on the right. Sort A–Z
-or by Recently Added, and press **/** to filter. A show opens to season tabs
-over an episode list. Arrow keys move, OK plays, Esc goes back.
+selected one's art, details and Play / Resume / Restart on the right. A show
+opens to season tabs over an episode list. Arrow keys move, OK plays, Esc goes
+back.
 
 ![TV Shows](screenshots/library-series.jpg)
+
+### Narrowing it down
+
+![The filter chips over Movies](docs/screenshots/library-filters-movies.jpg)
+
+Two rows of chips sit above the list. The top row is the order — **Recently
+added**, **A–Z**, **Year**, **Rating**, and **Recently aired** on TV Shows —
+then the filters that don't care what a title is about:
+
+- **Unwatched** — a movie you haven't finished, a show with episodes left.
+- **Favourites** — anything hearted in Jellyfin.
+- **4K** — titles in 2160p. Jellyfin answers this one itself, so it costs a
+  second small query and no extra work per title. A library with nothing in 4K
+  doesn't get the chip, and nor does one with no favourites.
+
+The second row is **genre** and **decade**: the genres this library actually
+leans on, most-used first (ten of them, not the forty Jellyfin knows), and the
+decades its years really fall in. Everything combines — Comedy *and* the 1980s
+*and* unwatched — and the search box (**/**) narrows whatever is left.
+
+Every chip carries the number of titles it would leave you with, counted
+against everything else that's already on, so a dead end shows itself before
+you press it (a chip that would leave nothing goes dim and dashed). The list's
+header says what's on — `COMEDY · 1980S` — beside `11 of 178`.
+
+![The remote in the chip rows](docs/screenshots/library-filters-focus.jpg)
+
+**▲** off the top title moves up into the bottom row, **▲** again into the top
+one, **◀ ▶** run along a row, **OK** presses, and **▼** drops back onto the
+title you left — the same as the guide's chips. Pressing a lit chip turns it
+off. **ESC** takes every chip and the search box off in one press, and an amber
+**Clear** chip appears at the end of the top row while anything is on.
+
+![Nothing matched](docs/screenshots/library-filters-empty.jpg)
+
+When a combination leaves nothing, the screen says which filters did it and
+offers the same one press out.
+
+What you were last looking at comes back if you leave Movies and return — but
+only for this sitting. A filter isn't a setting: come back tomorrow and the
+whole library is there again. (The sort *is* a setting, and is remembered per
+library.)
 
 ## Weather
 
@@ -638,7 +680,7 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 | --- | --- |
 | **Guide** | Record / Cancel / Stop (**R**), Get new episodes (**E**), Back to now (**N**, while now is off screen), Filters (**▲**), Next category (**[ ]**), Next country (**C**), Filter channels (**/**), Exit guide |
 | **Search** | What OK does on the highlighted result, Record (**R**), Get new episodes (**E**), Result group (**▲**), Search (**/**) |
-| **Movies / TV Shows** | What OK does on the highlighted title, Sort (**▲**), Filter (**/**) |
+| **Movies / TV Shows** | What OK does on the highlighted title, Filters (**▲**), Clear filters (**ESC**, while anything is on), Sort (**▲▲**), Search (**/**) |
 | **Recordings** | What OK does on the highlighted recording, Next tab (**[ ]**), All recordings (**◀**, inside a show) |
 | **Sports / News** | Next section (**]**), Previous section (**[**), Full screen (**F**, while the video is docked) |
 | **Rooms** | Color (**C**) for the light you're on, Full screen (**F**) |
@@ -730,6 +772,14 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
   ![Cameras on a phone](docs/screenshots/cameras-phone.png)
 
+- **Movies and TV Shows** on a phone are a poster grid under the search field,
+  the sort chips with the count, and the same filter chips as the TV — genre,
+  decade, Unwatched, Favourites and 4K, each with its count — as a row you
+  flick along. An amber **Clear** sits beside the row, outside it, so it's
+  still there when the row has been flicked to its far end.
+
+  ![Movies filtered on a phone](docs/screenshots/library-filters-phone.jpg)
+
 - Every HOMER screen has a phone layout of its own now — the guide, Home,
   Movies and TV Shows with their details pages, Search, Recordings, Settings,
   Weather, Rooms and Cameras. See `docs/phone.md` for how one is built.
@@ -787,13 +837,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.15/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.16/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.4.15`), so an update never changes
+The URL is pinned to a release tag (`@v0.4.16`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

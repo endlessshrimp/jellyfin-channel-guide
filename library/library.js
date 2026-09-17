@@ -11,6 +11,13 @@
  *
  * Remote/keyboard: arrows move, OK/Enter activates, Esc/Back goes back.
  *
+ * Movies and TV Shows carry two rows of chips above the list — how the list is
+ * ordered, and what it's narrowed to (genre, decade, Unwatched, Favourites,
+ * 4K, all combining, each chip saying how many titles it would leave). ▲ off
+ * the top title goes up into them, ◀▶ run along a row, ▲▼ change rows, OK
+ * presses, and ▼ off the bottom row drops back onto the title you left. Esc
+ * clears the lot in one press.
+ *
  * This file draws the TV layout. On a phone (shared/layout.js) the same routes
  * draw library/library-phone.js instead; both take their data from
  * library/library-model.js.
@@ -18,7 +25,7 @@
  * window.HomerLibrary = { open(route), close, destroy, version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     // Loading twice (hot reload, or the loader plus a manual copy) replaces the
     // previous instance.
@@ -367,15 +374,16 @@
     const createLibrary = (server, route) => {
         const isTv = route.collection === 'tvshows';
         const nouns = isTv ? 'shows' : 'movies';
-        const shell = createShell({ kind: 'library', brand: isTv ? 'TV SHOWS' : 'MOVIES', search: isTv ? 'Filter shows' : 'Filter movies' });
+        const shell = createShell({ kind: 'library', brand: isTv ? 'TV SHOWS' : 'MOVIES', search: isTv ? 'Search shows' : 'Search movies' });
         const { root, $, toast } = shell;
         $('.hl-body').innerHTML = `
+            <div class="hl-filters" role="toolbar" aria-label="Sort and filter">
+                <div class="hl-frow" data-row="0"></div>
+                <div class="hl-frow" data-row="1"></div>
+            </div>
             <div class="hl-list">
                 <div class="hl-list-head">
-                    <div class="hl-sort">
-                        <span class="hl-sort-opt" data-sort="az">A–Z</span>
-                        <span class="hl-sort-opt" data-sort="added">Recently added</span>
-                    </div>
+                    <div class="hl-active"></div>
                     <div class="hl-count"></div>
                 </div>
                 <div class="hl-rows"><div class="hl-rows-inner"></div><div class="hl-state"></div></div>
@@ -383,18 +391,24 @@
             <div class="hl-detail">${PREVIEW_HTML}${TEXT_HTML}</div>`;
 
         const saved = memory.get(route.key) || {};
-        const SORT_KEY = 'homer-library-sort-' + route.collection;
-        let sortMode = 'az';
-        try { sortMode = localStorage.getItem(SORT_KEY) === 'added' ? 'added' : 'az'; } catch { /* default */ }
+        const sorts = M.sortsFor(isTv);
+        let sortMode = M.sortStore.get(route.collection, isTv);
 
         let rows = []; // { it, el }
         let view = []; // row indices in display order
         let sel = -1;
-        let zone = 'list'; // list | actions | sort
+        let zone = 'list'; // list | actions | bar
         let act = 0;
         let actions = [];
         let query = '';
         let status = 'loading'; // loading | ready | error
+        // The chips above the list: one genre, one decade, Unwatched,
+        // Favourites and 4K, all combining (library/library-model.js). Empty
+        // until the library is in.
+        let F = M.makeFilters([], new Set());
+        let barRow = 1; // the row nearest the list is the one ▲ lands in
+        let barFocus = 0;
+        const chipMap = new Map(); // a chip's key -> what pressing it does
         const nextUp = new Map(); // seriesId -> episode | null
         let nextUpTimer = 0;
 
@@ -443,31 +457,99 @@
             return r;
         };
 
-        const markSort = () => root.querySelectorAll('.hl-sort-opt').forEach((o) => o.classList.toggle('on', o.dataset.sort === sortMode));
-        markSort();
-        const sortKey = (it) => lc(it.SortName || it.Name);
+        // ----- the chip rows above the list -----
+        // Two rows, both reachable with the arrows the way the guide's category
+        // chips are: the top one is how the list is ordered plus the state
+        // filters, the bottom one is decade and genre. Every chip carries the
+        // number of titles pressing it would leave, counted against everything
+        // else that's already on, so a dead end shows itself before you press it.
+        const bar = $('.hl-filters');
+        const frow = (n) => bar.querySelector(`.hl-frow[data-row="${n}"]`);
+        const rowEls = (n) => (frow(n) ? [...frow(n).querySelectorAll('.hl-fchip, .hl-fsort')] : []);
+
+        const renderBar = (pool) => {
+            chipMap.clear();
+            const chips = F.chips(pool);
+            for (const c of chips) chipMap.set(c.key, c);
+            const chipHtml = (c) => `<button type="button" class="hl-fchip hl-f-${c.group}${c.on ? ' on' : ''}${!c.count && !c.on ? ' none' : ''}"`
+                + ` data-key="${esc(c.key)}" aria-pressed="${c.on}">${esc(c.label)}<span class="hl-fcount">${c.count}</span></button>`;
+            frow(0).innerHTML = `<div class="hl-fseg" role="group" aria-label="Sort">`
+                + sorts.map((s) => `<button type="button" class="hl-fsort${s.key === sortMode ? ' on' : ''}" data-key="s${s.key}" aria-pressed="${s.key === sortMode}">${esc(s.label)}</button>`).join('')
+                + '</div>'
+                + chips.filter((c) => c.row === 0).map(chipHtml).join('')
+                + '<span class="hl-fspace"></span>'
+                + (F.on() ? '<button type="button" class="hl-fchip hl-fclear" data-key="clear"><span class="material-icons" aria-hidden="true">close</span>Clear</button>' : '');
+            frow(1).innerHTML = chips.filter((c) => c.row === 1).map(chipHtml).join('');
+            frow(1).hidden = !chips.some((c) => c.row === 1);
+            bar.classList.toggle('on', F.on());
+        };
+
+        const markBar = () => {
+            // a rebuild can leave the remote past the end of a row (the Clear
+            // chip came or went, a genre dropped out): pull it back in
+            barFocus = clamp(barFocus, 0, Math.max(0, rowEls(barRow).length - 1));
+            for (const n of [0, 1]) {
+                rowEls(n).forEach((b, i) => b.classList.toggle('foc', zone === 'bar' && n === barRow && i === barFocus));
+            }
+            if (zone !== 'bar') {
+                // nobody's in the rows: they sit at their left, except that a
+                // chip that's *on* is kept in sight — a row of nine decades is
+                // wider than the stage, and what's on mustn't hide off the end
+                for (const n of [0, 1]) {
+                    const lit = rowEls(n).find((b) => b.classList.contains('on') && !b.closest('.hl-fseg'));
+                    frow(n).scrollLeft = 0;
+                    if (lit) lit.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                }
+                return;
+            }
+            const b = rowEls(barRow)[barFocus];
+            if (b) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        };
+
+        // what OK would do to the chip the remote is on
+        const focusedChip = () => {
+            const b = rowEls(barRow)[barFocus];
+            if (!b) return null;
+            const key = b.dataset.key;
+            if (key === 'clear') return { label: 'Clear filters', sub: F.summary() };
+            const s = sorts.find((x) => 's' + x.key === key);
+            if (s) return { label: s.label, sub: 'Sort' };
+            const c = chipMap.get(key);
+            if (!c) return null;
+            return { label: c.on ? `${c.label} off` : c.label, sub: c.on ? '' : plural(c.count, isTv ? 'show' : 'movie') };
+        };
+
+        const matchesQuery = (it) => !query
+            || lc(`${it.Name} ${it.OriginalTitle || ''} ${it.ProductionYear || ''} ${(it.Genres || []).join(' ')}`).includes(query);
+
         const applyView = (keepId) => {
-            const order = rows.map((_, i) => i);
-            if (sortMode === 'added') order.sort((a, b) => String(rows[b].it.DateCreated || '').localeCompare(String(rows[a].it.DateCreated || '')));
-            else order.sort((a, b) => sortKey(rows[a].it).localeCompare(sortKey(rows[b].it), undefined, { numeric: true }));
-            view = order.filter((i) => {
-                if (!query) return true;
-                const it = rows[i].it;
-                return lc(`${it.Name} ${it.OriginalTitle || ''} ${it.ProductionYear || ''} ${(it.Genres || []).join(' ')}`).includes(query);
-            });
+            const cmp = M.sortCompare(sortMode);
+            const order = rows.map((_, i) => i).sort((a, b) => cmp(rows[a].it, rows[b].it));
+            const pool = order.filter((i) => matchesQuery(rows[i].it)); // what the search box left
+            view = pool.filter((i) => F.matches(rows[i].it));           // and then the chips
             const shown = new Set(view);
             for (const i of order) {
                 rows[i].el.style.display = shown.has(i) ? '' : 'none';
                 inner.appendChild(rows[i].el); // DOM order = display order
             }
-            markSort();
+            renderBar(pool.map((i) => rows[i].it));
+            markBar();
             const total = rows.length;
-            $('.hl-count').textContent = query ? `${view.length} of ${total}` : plural(total, isTv ? 'show' : 'movie');
+            const narrowed = !!query || F.on();
+            $('.hl-count').textContent = narrowed ? `${view.length} of ${total}` : plural(total, isTv ? 'show' : 'movie');
+            const active = $('.hl-active');
+            active.textContent = [F.summary(), query ? `“${query}”` : ''].filter(Boolean).join(' · ') || `All ${nouns}`;
+            active.classList.toggle('on', narrowed);
             $('.hl-search-count').textContent = query ? `${view.length} ${view.length === 1 ? nouns.slice(0, -1) : nouns}` : '';
-            root.classList.toggle('filtering', !!query);
+            root.classList.toggle('filtering', narrowed);
+            root.classList.toggle('no-results', !view.length); // no title to preview: no preview
             scroller.reset();
             if (!view.length) {
-                setState(query ? `<b>Nothing matches “${esc(query)}”</b><span>Esc clears the filter</span>` : '');
+                const why = [F.summary(), query ? `“${query}”` : ''].filter(Boolean).join(' · ');
+                setState(rows.length && narrowed
+                    ? `<b>No ${nouns} match ${esc(why)}</b><span>Clear it to see all ${plural(total, isTv ? 'show' : 'movie')} again.</span>`
+                        + '<button type="button" class="hl-clear-btn">Clear</button>'
+                    : '');
                 if (rows[sel]) rows[sel].el.classList.remove('sel');
                 sel = -1;
                 showEmptyInfo();
@@ -476,6 +558,19 @@
             setState('');
             const keep = rows.findIndex((r) => r.it.Id === keepId);
             select(keep >= 0 && shown.has(keep) ? keep : view[0]);
+            updateLegend();
+        };
+
+        const rememberFilters = () => M.filters.set(route.key, F.state);
+        const pressChip = (key) => {
+            if (key === 'clear') return clearAll();
+            const s = sorts.find((x) => 's' + x.key === key);
+            if (s) return setSort(s.key);
+            const c = chipMap.get(key);
+            if (!c) return;
+            F.press(c);
+            rememberFilters();
+            applyView(current() && current().Id);
         };
 
         const select = (i, { scroll = true } = {}) => {
@@ -525,15 +620,31 @@
         };
 
         const updateLegend = () => {
-            const back = ['spacer', { key: 'ESC', label: 'Back', action: 'back' }];
+            // Back means "undo the narrowing" while anything is narrowed — one
+            // press takes the search box and every chip off together.
+            const narrowed = !!query || F.on();
+            const back = ['spacer', { key: 'ESC', label: narrowed ? 'Clear filters' : 'Back', action: 'back' }];
             if (status === 'error') return shell.setLegend([{ key: 'OK', label: 'Try again', action: 'ok' }, ...back]);
             if (status !== 'ready' || !rows.length) return shell.setLegend(back);
+            if (zone === 'bar') {
+                const c = focusedChip();
+                return shell.setLegend([
+                    { key: '◀▶', label: 'Move' },
+                    { key: '▲▼', label: 'Rows' },
+                    ...(c ? [{ key: 'OK', label: c.label, action: 'ok' }] : []),
+                    ...back
+                ]);
+            }
+            // nothing left to browse: the only useful keys are the way back up
+            if (!view.length) {
+                return shell.setLegend([{ key: '▲', label: 'Filters' }, { key: '/', label: 'Search', action: 'filter' }, ...back]);
+            }
             const ok = actions[zone === 'actions' ? act : 0];
             shell.setLegend([
                 { key: '▲▼', label: 'Browse' },
                 { key: '◀▶', label: 'Options' },
-                ...(ok || zone === 'sort' ? [{ key: 'OK', label: zone === 'sort' ? 'Sort' : ok.label.replace(/ S\d+.*$/, ''), action: 'ok' }] : []),
-                { key: '/', label: 'Filter', action: 'filter' },
+                ...(ok ? [{ key: 'OK', label: ok.label.replace(/ S\d+.*$/, ''), action: 'ok' }] : []),
+                { key: '/', label: 'Search', action: 'filter' },
                 ...back
             ]);
         };
@@ -625,16 +736,58 @@
 
         const setZone = (z) => {
             zone = z;
-            root.classList.remove('hl-zone-list', 'hl-zone-actions', 'hl-zone-sort');
+            root.classList.remove('hl-zone-list', 'hl-zone-actions', 'hl-zone-bar');
             root.classList.add('hl-zone-' + z);
+            markBar();
             drawActions();
             updateLegend();
         };
 
+        // ----- moving about the chip rows -----
+        const focusChip = (n, i) => {
+            barRow = n;
+            barFocus = i;
+            markBar();
+            updateLegend();
+        };
+        // ▲ off the top title goes up into the bottom row (decade and genre),
+        // ▲ again into the top one, ▼ comes back down to the title you left.
+        const enterBar = (n) => {
+            let row = rowEls(n).length ? n : (n === 1 ? 0 : 1);
+            const els = rowEls(row);
+            if (!els.length) return;
+            const at = Math.max(0, els.findIndex((b) => b.classList.contains('on'))); // start on what's applied
+            barRow = row;
+            barFocus = at;
+            setZone('bar');
+        };
+        const moveChip = (d) => {
+            const els = rowEls(barRow);
+            if (!els.length) return;
+            focusChip(barRow, clamp(barFocus + d, 0, els.length - 1));
+        };
+        // between the rows: the chip nearest where you were, not the first one
+        const crossRow = (d) => {
+            const to = barRow + d;
+            const els = rowEls(to);
+            if (!els.length) return false;
+            const from = rowEls(barRow)[barFocus];
+            const mid = (e) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; };
+            const x = from ? mid(from) : 0;
+            let best = 0;
+            els.forEach((b, i) => { if (Math.abs(mid(b) - x) < Math.abs(mid(els[best]) - x)) best = i; });
+            focusChip(to, best);
+            return true;
+        };
+        const runChip = () => {
+            const b = rowEls(barRow)[barFocus];
+            if (b) pressChip(b.dataset.key);
+        };
+
         const setSort = (mode) => {
-            if (mode === sortMode) return;
+            if (mode === sortMode || !sorts.some((s) => s.key === mode)) return;
             sortMode = mode;
-            try { localStorage.setItem(SORT_KEY, mode); } catch { /* per-viewer nicety only */ }
+            M.sortStore.set(route.collection, mode);
             applyView(null); // a new order starts at its top
         };
 
@@ -652,6 +805,16 @@
         const clearFilter = () => {
             searchInput.value = '';
             applyFilter('');
+        };
+        // The whole library back in one press: the Clear chip, ESC from the
+        // list, and the button on an empty screen all land here.
+        const clearAll = () => {
+            const was = beforeFilter;
+            searchInput.value = '';
+            query = '';
+            F.clear();
+            rememberFilters();
+            applyView((current() && current().Id) || was);
         };
         const focusSearch = () => {
             if (zone !== 'list') setZone('list');
@@ -672,15 +835,33 @@
             }
             if (rows.length) {
                 list.push({
-                    id: 'sort',
+                    id: 'filters',
                     key: '▲',
+                    icon: 'filter_alt',
+                    label: 'Filters',
+                    sub: F.summary() || `All ${nouns}`,
+                    run: () => enterBar(1)
+                });
+                if (F.on() || query) {
+                    list.push({
+                        id: 'clear',
+                        key: 'ESC',
+                        icon: 'filter_alt_off',
+                        label: 'Clear filters',
+                        sub: [F.summary(), query ? `“${query}”` : ''].filter(Boolean).join(' · '),
+                        run: clearAll
+                    });
+                }
+                list.push({
+                    id: 'sort',
+                    key: '▲▲',
                     icon: 'sort',
                     label: 'Sort',
-                    sub: sortMode === 'added' ? 'Recently added' : 'A–Z',
-                    run: () => setZone('sort')
+                    sub: (sorts.find((s) => s.key === sortMode) || {}).label || '',
+                    run: () => enterBar(0)
                 });
             }
-            list.push({ id: 'filter', key: '/', icon: 'search', label: isTv ? 'Filter shows' : 'Filter movies', sub: query || '', run: focusSearch });
+            list.push({ id: 'filter', key: '/', icon: 'search', label: isTv ? 'Search shows' : 'Search movies', sub: query || '', run: focusSearch });
             return list;
         }, { id: 'library', title: isTv ? 'TV Shows' : 'Movies' }) : () => {};
 
@@ -712,7 +893,8 @@
             }
             if (BACK_KEYS.includes(k)) {
                 stop(ev);
-                if (query) clearFilter();
+                if (zone === 'bar') setZone('list'); // out of the chips, back on the title you left
+                else if (query || F.on()) clearAll();
                 else goBack('#/home');
                 return;
             }
@@ -720,11 +902,26 @@
             if (!handled.includes(k)) return;
             stop(ev);
             if (status === 'error' && k === 'Enter') return retry();
-            if (!view.length || (ev.repeat && k === 'Enter')) return;
+            if (status !== 'ready' || (ev.repeat && (k === 'Enter' || k === ' '))) return;
+            if (zone === 'bar') {
+                if (k === 'ArrowLeft') moveChip(-1);
+                else if (k === 'ArrowRight') moveChip(1);
+                else if (k === 'Home') focusChip(barRow, 0);
+                else if (k === 'End') focusChip(barRow, Math.max(0, rowEls(barRow).length - 1));
+                else if (k === 'ArrowUp') { if (!crossRow(-1)) focusSearch(); } // nothing above the top row but the search box
+                else if (k === 'ArrowDown') { if (!crossRow(1)) setZone('list'); }
+                else if (k === 'Enter' || k === ' ') runChip();
+                return;
+            }
+            // nothing matched the chips: the only way out is back up into them
+            if (!view.length) {
+                if (k === 'ArrowUp' && rows.length) enterBar(1);
+                return;
+            }
             if (zone === 'list') {
                 if (k === 'ArrowDown') step(1);
                 else if (k === 'ArrowUp') {
-                    if (view.indexOf(sel) === 0) setZone('sort');
+                    if (view.indexOf(sel) === 0) enterBar(1);
                     else step(-1);
                 } else if (k === 'PageDown') step(8);
                 else if (k === 'PageUp') step(-8);
@@ -743,12 +940,6 @@
                     setZone('list');
                     step(k === 'ArrowDown' ? 1 : -1);
                 } else if (k === 'Enter') run(actions[act]);
-            } else if (zone === 'sort') {
-                if (k === 'ArrowLeft') setSort('az');
-                else if (k === 'ArrowRight') setSort('added');
-                else if (k === 'Enter' || k === ' ') setSort(sortMode === 'az' ? 'added' : 'az');
-                else if (k === 'ArrowDown') setZone('list');
-                else if (k === 'ArrowUp') focusSearch();
             }
         });
 
@@ -765,6 +956,7 @@
             if (i !== sel) select(i, { scroll: false });
         });
         rowsView.addEventListener('click', (ev) => {
+            if (ev.target.closest('.hl-clear-btn')) { clearAll(); return; }
             const r = ev.target.closest('.hl-row');
             const i = rows.findIndex((x) => x.el === r);
             if (i < 0) return;
@@ -784,9 +976,22 @@
             const b = ev.target.closest('.hl-btn');
             if (b) run(actions[Number(b.dataset.i)]);
         });
-        $('.hl-sort').addEventListener('click', (ev) => {
-            const o = ev.target.closest('.hl-sort-opt');
-            if (o) setSort(o.dataset.sort);
+        // the chip rows with a pointer: the highlight follows it, a click presses
+        bar.addEventListener('mousemove', (ev) => {
+            if (!moved(ev)) return;
+            const b = ev.target.closest('.hl-fchip, .hl-fsort');
+            if (!b) return;
+            const n = Number(b.closest('.hl-frow').dataset.row);
+            const i = rowEls(n).indexOf(b);
+            if (i < 0 || (zone === 'bar' && n === barRow && i === barFocus)) return;
+            barRow = n;
+            barFocus = i;
+            if (zone !== 'bar') setZone('bar');
+            else focusChip(n, i);
+        });
+        bar.addEventListener('click', (ev) => {
+            const b = ev.target.closest('.hl-fchip, .hl-fsort');
+            if (b) pressChip(b.dataset.key);
         });
         $('.hl-legend').addEventListener('click', (ev) => {
             const item = ev.target.closest('[data-action]');
@@ -794,10 +999,13 @@
             const a = item.dataset.action;
             if (a === 'ok') {
                 if (status === 'error') retry();
-                else if (zone === 'sort') setSort(sortMode === 'az' ? 'added' : 'az');
+                else if (zone === 'bar') runChip();
                 else run(zone === 'actions' ? actions[act] : actions[0]);
             } else if (a === 'filter') focusSearch();
-            else if (a === 'back') goBack('#/home');
+            else if (a === 'back') {
+                if (query || F.on()) clearAll();
+                else goBack('#/home');
+            }
         });
 
         // ----- data -----
@@ -811,14 +1019,22 @@
             setState(`<div class="hl-spinner"></div><b>Loading ${nouns}…</b>`);
             shell.renderInfo({ title: '', chips: [], desc: '' });
             $('.hl-count').textContent = '';
+            $('.hl-active').textContent = '';
             actions = [];
             drawActions();
             updateLegend();
             try {
-                const { items, name } = await M.load.library(server, route.parentId, isTv);
+                // the titles and, beside them, which of them are 4K (one small
+                // extra query, so the chip knows whether it's worth offering)
+                const [{ items, name }, uhd] = await Promise.all([
+                    M.load.library(server, route.parentId, isTv),
+                    M.load.uhd(server, route.parentId, isTv)
+                ]);
                 if (!alive) return;
                 if (name) $('.hl-brand-sub').textContent = name;
                 status = 'ready';
+                F = M.makeFilters(items, uhd);
+                F.restore(M.filters.get(route.key)); // where you left this screen, this sitting
                 rows = items.map((it) => ({ it, el: makeRow(it) }));
                 if (!rows.length) {
                     setState(`<b>No ${nouns} here yet</b><span>Anything added to this library in Jellyfin shows up here.</span>`);

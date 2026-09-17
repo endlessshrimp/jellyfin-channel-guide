@@ -8,11 +8,17 @@
  * Nothing here draws. Every load asks Jellyfin afresh (watched and resume
  * state change while you watch), so a screen that opens again is current.
  *
+ * It also holds what the two layouts must agree on: how a library can be
+ * ordered (sortsFor/sortCompare/sortStore) and how it can be narrowed down —
+ * genre, decade, Unwatched, Favourites and 4K, all combining (makeFilters),
+ * with the chips each screen was left on kept for the sitting (filters).
+ *
  * window.HomerLibraryModel = { util, load, play, facts, getServer, api,
- *                              typeCache, remember, memory, fresh, ... }
+ *                              typeCache, remember, memory, fresh,
+ *                              makeFilters, filters, sortsFor, ... }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     const SUPPORTED = new Set(['Movie', 'Series', 'Season', 'Episode']);
     const TICKS_PER_MIN = 600000000;
@@ -144,6 +150,172 @@
     // (used once)
     const fresh = new Map();
 
+    // ---------- Putting a library in order ----------
+    // Both layouts offer the same list, in the same order, and remember the
+    // choice per library (a sort is a preference; a filter isn't — see below).
+
+    const SORTS = [
+        { key: 'added', label: 'Recently added', short: 'Added' },
+        { key: 'az', label: 'A–Z', short: 'A–Z' },
+        { key: 'year', label: 'Year', short: 'Year' },
+        { key: 'rating', label: 'Rating', short: 'Rating' },
+        { key: 'aired', label: 'Recently aired', short: 'Aired', tv: true }
+    ];
+    const sortsFor = (isTv) => SORTS.filter((s) => isTv || !s.tv);
+    const sortKeyOf = (it) => lc(it.SortName || it.Name);
+    const byName = (a, b) => sortKeyOf(a).localeCompare(sortKeyOf(b), undefined, { numeric: true });
+    const newestBy = (value) => (a, b) => (value(b) - value(a)) || byName(a, b);
+    const sortCompare = (mode) => {
+        if (mode === 'added') return (a, b) => String(b.DateCreated || '').localeCompare(String(a.DateCreated || '')) || byName(a, b);
+        if (mode === 'year') return newestBy((x) => yearOf(x) || -1);
+        if (mode === 'rating') return newestBy((x) => x.CommunityRating || -1);
+        if (mode === 'aired') return newestBy((x) => Date.parse(x.PremiereDate || '') || -1);
+        return byName;
+    };
+    const sortStore = {
+        key: (collection) => 'homer-library-sort-' + collection,
+        get(collection, isTv) {
+            let mode = '';
+            try { mode = localStorage.getItem(sortStore.key(collection)) || ''; } catch { /* default */ }
+            return sortsFor(isTv).some((s) => s.key === mode) ? mode : 'az';
+        },
+        set(collection, mode) {
+            try { localStorage.setItem(sortStore.key(collection), mode); } catch { /* a nicety only */ }
+        }
+    };
+
+    // ---------- Narrowing a library down (genre, decade, state) ----------
+    // Movies and TV Shows both offer the same chips: one genre, one decade, and
+    // Unwatched / Favourites / 4K, all combining. Everything here works on the
+    // titles the screen already has, so a chip costs one pass over ~150 items
+    // rather than another round trip.
+
+    const MAX_GENRES = 10; // the genres this library leans on, not all forty
+    const yearOf = (it) => it.ProductionYear
+        || (it.PremiereDate ? new Date(it.PremiereDate).getUTCFullYear() : 0);
+    const decadeOf = (it) => {
+        const y = yearOf(it);
+        return y ? Math.floor(y / 10) * 10 : 0;
+    };
+    const unwatched = (it) => (it.Type === 'Series'
+        ? ((it.UserData && it.UserData.UnplayedItemCount) || 0) > 0
+        : !played(it));
+    const favourite = (it) => !!(it.UserData && it.UserData.IsFavorite);
+
+    const NONE = { genre: '', decade: 0, unwatched: false, favourite: false, uhd: false };
+
+    // The chips a particular library can offer, and what each one would leave
+    // on screen. `uhd` is the set of 4K item ids (empty when the server had
+    // nothing to say, in which case the 4K chip doesn't appear at all).
+    const makeFilters = (items, uhd) => {
+        const state = { ...NONE };
+
+        const tally = new Map();
+        for (const it of items) for (const g of it.Genres || []) tally.set(g, (tally.get(g) || 0) + 1);
+        // most-used first: the row reads as "what this library is made of"
+        const genres = [...tally.entries()]
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .slice(0, MAX_GENRES)
+            .map(([g]) => g);
+        const decades = [...new Set(items.map(decadeOf).filter(Boolean))].sort((a, b) => a - b);
+        // A chip that could never find anything in this library isn't offered
+        // at all — a 4K chip over a library with nothing in 2160p, or Favourites
+        // over one nobody has hearted, is just something else to arrow past.
+        // (Decided once, from the whole library, so chips don't flicker in and
+        // out as you narrow; a chip that's merely empty *right now* is dimmed.)
+        const anyUhd = items.some((it) => uhd.has(it.Id));
+        const anyFav = items.some(favourite);
+        const anyUnwatched = items.some(unwatched);
+
+        const matches = (it, s = state) => {
+            if (s.genre && !(it.Genres || []).includes(s.genre)) return false;
+            if (s.decade && decadeOf(it) !== s.decade) return false;
+            if (s.unwatched && !unwatched(it)) return false;
+            if (s.favourite && !favourite(it)) return false;
+            if (s.uhd && !uhd.has(it.Id)) return false;
+            return true;
+        };
+
+        // Every chip, in the order the rows show them. `pool` is what the search
+        // box has left, so a count says what pressing this chip would really
+        // give you — with everything else that's on still on.
+        const chips = (pool) => {
+            const count = (patch) => pool.reduce((n, it) => n + (matches(it, { ...state, ...patch }) ? 1 : 0), 0);
+            const list = [];
+            if (anyUnwatched) list.push({ group: 'unwatched', key: 'unwatched', label: 'Unwatched', patch: { unwatched: true }, off: { unwatched: false } });
+            if (anyFav) list.push({ group: 'favourite', key: 'favourite', label: 'Favourites', patch: { favourite: true }, off: { favourite: false } });
+            if (anyUhd) list.push({ group: 'uhd', key: 'uhd', label: '4K', patch: { uhd: true }, off: { uhd: false } });
+            // Two rows, and the split is about width as much as meaning: the
+            // decades are short enough to sit beside the sort and the state
+            // chips, which leaves the genres a row of their own that fits
+            // without running off the end of the stage.
+            for (const d of decades) {
+                list.push({ group: 'decade', key: 'd' + d, label: `${d}s`, patch: { decade: d }, off: { decade: 0 } });
+            }
+            for (const g of genres) {
+                list.push({ group: 'genre', key: 'g' + g, label: g, row: 1, patch: { genre: g }, off: { genre: '' } });
+            }
+            for (const c of list) {
+                c.on = Object.entries(c.patch).every(([k, v]) => state[k] === v);
+                // always "how many titles this chip stands for": a preview of
+                // pressing it while it's off, and what you're looking at while
+                // it's on — so the lit chip's number and the list agree
+                c.count = count(c.patch);
+                if (c.row == null) c.row = 0;
+            }
+            return list;
+        };
+
+        const on = () => Object.keys(NONE).some((k) => state[k] !== NONE[k]);
+        // what's on, in words, for the count line and the empty screen
+        const summary = () => [
+            state.genre,
+            state.decade ? `${state.decade}s` : '',
+            state.unwatched ? 'Unwatched' : '',
+            state.favourite ? 'Favourites' : '',
+            state.uhd ? '4K' : ''
+        ].filter(Boolean).join(' · ');
+
+        return {
+            state,
+            genres,
+            decades,
+            anyUhd,
+            anyFav,
+            anyUnwatched,
+            matches,
+            chips,
+            on,
+            summary,
+            // pressing a chip: off again when it's the one that's on
+            press(chip) { Object.assign(state, chip.on ? chip.off : chip.patch); },
+            clear() { Object.assign(state, NONE); },
+            restore(saved) { if (saved) Object.assign(state, NONE, saved); }
+        };
+    };
+
+    // What each library screen was narrowed to, for as long as you're using
+    // HOMER: leave Movies, come back, and the chips are still where you left
+    // them. Never saved — a filter is for this sitting, so a box that has been
+    // sitting on the home screen since yesterday shows the whole library again.
+    const FILTER_TTL = 2 * 3600000;
+    const filterMemory = new Map(); // route key -> { at, state }
+    const filters = {
+        get(key) {
+            const e = filterMemory.get(key);
+            if (!e) return null;
+            if (Date.now() - e.at > FILTER_TTL) {
+                filterMemory.delete(key);
+                return null;
+            }
+            return e.state;
+        },
+        set(key, state) {
+            if (Object.keys(NONE).every((k) => state[k] === NONE[k])) filterMemory.delete(key);
+            else filterMemory.set(key, { at: Date.now(), state: { ...state } });
+        }
+    };
+
     // ---------- The player (shared/player.js) ----------
     // While a video plays docked in a preview window, HOMER screens sit on top of
     // Jellyfin's player page and move between each other without touching the
@@ -220,6 +392,19 @@
             remember(items);
             return { items, name: (lib && lib.Name) || '' };
         },
+        // Which of a library's titles are 4K. Jellyfin answers Is4K itself, so
+        // this is one small extra query for ids beside the main one — not a
+        // second pass over every title's media. A server that won't answer it
+        // (or a library with nothing in 2160p) gives an empty set, and the
+        // screens simply don't offer the chip.
+        async uhd(server, parentId, isTv) {
+            try {
+                const res = await api(`/Items?userId=${server.UserId}&ParentId=${parentId}&IncludeItemTypes=${isTv ? 'Series' : 'Movie'}&Recursive=true&Is4K=true&EnableImages=false&EnableUserData=false&EnableTotalRecordCount=false`);
+                return new Set(((res && res.Items) || []).map((x) => x.Id));
+            } catch {
+                return new Set();
+            }
+        },
         // a show's next episode to watch (in progress, or the first unwatched)
         async nextUp(server, seriesId, withOverview = false) {
             const res = await api(`/Shows/NextUp?userId=${server.UserId}&seriesId=${seriesId}&enableResumable=true&Limit=1${withOverview ? '&Fields=Overview' : ''}`);
@@ -281,12 +466,19 @@
         api,
         util: {
             el, esc, lc, clamp, fmtTime, fmtDate, fmtMins, runtime, posOf, played, pctOf, minsLeft, endsAt,
-            epCode, yearsOf, plural, isNew, imgUrl, posterUrl, backdropUrl, stillUrl, langName
+            epCode, yearsOf, plural, isNew, imgUrl, posterUrl, backdropUrl, stillUrl, langName,
+            yearOf, decadeOf, unwatched, favourite
         },
         typeCache,
         remember,
         memory,
         fresh,
+        makeFilters,
+        filters,
+        SORTS,
+        sortsFor,
+        sortCompare,
+        sortStore,
         P,
         docked,
         currentRoute,

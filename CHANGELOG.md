@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.4.16
+
+- **The phone's top bar is two buttons, not one.** The HOMER mark still opens
+  the menu sheet; the **screen's name** beside it now goes back to the top of
+  the screen you're on. Before this there was no way out of an album, a book
+  or a camera on a phone except a keyboard's Esc — the name looked like part
+  of the Home button and did nothing of its own.
+  - It's a contract rather than a special case per screen:
+    `HomerLayout.setScreenHome(fn, { atTop })`, registered while a screen is
+    mounted, last registration wins, `fn()` returning false meaning "already
+    at my top". Books, Cameras and Rooms register (the shelf, the wall, and
+    backing out of a colour picker, a remote or a camera).
+  - Screens that don't register still work, from three defaults that need no
+    cooperation: the same route with its query stripped (`#/music?album=…` →
+    `#/music`, and the same for `#/books?id=`, `#/rooms?remote=`); the grid a
+    details page belongs to (`#/details?id=…` → the Movies or TV Shows grid,
+    which is what the name already reads); and failing those a rebuild of the
+    screen's module, which opens it at its top. Music uses the last of these
+    until it registers one of its own.
+  - The name is only drawn as a control — a ‹ beside it, the text lit, a 44px
+    target clear of the mark's — while there's somewhere above to go. At the
+    top of a flat screen (Home, Weather, Now Playing) it's a plain label and a
+    tap does nothing; Home is on the tab bar and at the top of the menu, so
+    the name never has to double as a way there.
+  - Opening a sub-view changes no route and adds nothing to `<body>`, so none
+    of the chrome's usual triggers fire: that one boolean is re-checked twice
+    a second while the bars are up and the tab is in front, and the click
+    handler asks for itself rather than trusting a `disabled` attribute that
+    would go stale between checks.
+  - The TV layout is unchanged: its brand is labelled Home (`title="Home (H)"`)
+    and every TV screen already draws a clickable **ESC Back** in its key
+    legend — Books' even names where it goes ("Shelf") — so the ambiguity this
+    fixes doesn't exist there.
+
 ## v0.4.15
 
 - **The screen's name in the phone top bar is now its own button.** Tapping
@@ -73,46 +107,59 @@
     both rooms, the way Now Playing already folds them.
   - New: `music/playon.js`, `music/playon.css`. `HomerHA` gains `playMedia()`
     and `players()`, and `mediaCommand()` now takes service data.
-## Unreleased
-
-- **The phone's top bar is two buttons, not one.** The HOMER mark still opens
-  the menu sheet; the **screen's name** beside it now goes back to the top of
-  the screen you're on. Before this there was no way out of an album, a book
-  or a camera on a phone except a keyboard's Esc — the name looked like part
-  of the Home button and did nothing of its own.
-  - It's a contract rather than a special case per screen:
-    `HomerLayout.setScreenHome(fn, { atTop })`, registered while a screen is
-    mounted, last registration wins, `fn()` returning false meaning "already
-    at my top". Books, Cameras and Rooms register (the shelf, the wall, and
-    backing out of a colour picker, a remote or a camera).
-  - Screens that don't register still work, from three defaults that need no
-    cooperation: the same route with its query stripped (`#/music?album=…` →
-    `#/music`, and the same for `#/books?id=`, `#/rooms?remote=`); the grid a
-    details page belongs to (`#/details?id=…` → the Movies or TV Shows grid,
-    which is what the name already reads); and failing those a rebuild of the
-    screen's module, which opens it at its top. Music uses the last of these
-    until it registers one of its own.
-  - The name is only drawn as a control — a ‹ beside it, the text lit, a 44px
-    target clear of the mark's — while there's somewhere above to go. At the
-    top of a flat screen (Home, Weather, Now Playing) it's a plain label and a
-    tap does nothing; Home is on the tab bar and at the top of the menu, so
-    the name never has to double as a way there.
-  - Opening a sub-view changes no route and adds nothing to `<body>`, so none
-    of the chrome's usual triggers fire: that one boolean is re-checked twice
-    a second while the bars are up and the tab is in front, and the click
-    handler asks for itself rather than trusting a `disabled` attribute that
-    would go stale between checks.
-  - The TV layout is unchanged: its brand is labelled Home (`title="Home (H)"`)
-    and every TV screen already draws a clickable **ESC Back** in its key
-    legend — Books' even names where it goes ("Shelf") — so the ambiguity this
-    fixes doesn't exist there.
-
 ## v0.4.13
 
 - **Music on a phone:** the album wall is two even columns again. An `fr`
   track floors at its content's minimum width, so one wide cover stretched
   the first column and squashed the second to a sliver; the same guard went
   into the other phone grids that split in two.
+## Unreleased
+
+- **Movies and TV Shows can be narrowed down.** Two rows of chips sit above the
+  list, in the guide's chip language rather than a second pattern to learn: the
+  order on top, then what the list is narrowed to.
+  - **Genre** and **decade**, both read off the library itself — the ten genres
+    it actually leans on, most-used first, and the decades its years really
+    fall in, rather than a list of forty and a range nothing is in.
+  - **Unwatched** (a movie you haven't finished, a show with episodes left),
+    **Favourites**, and **4K**. The 4K set comes from Jellyfin's own `Is4K`
+    filter in one small extra query beside the main one — ids only, no second
+    pass over every title's media — so a library with nothing in 2160p simply
+    doesn't get the chip. Nor does one nobody has hearted.
+  - **Everything combines**, and the search box (**/**) narrows what's left.
+    Every chip carries the number of titles it would leave, counted against
+    everything else that's on, so a dead end is visible before you press it: a
+    chip that would leave nothing goes dim and dashed.
+  - **Sorting** is now Recently added, A–Z, Year and Rating, plus **Recently
+    aired** on TV Shows (by premiere date). The sort moved out of the list
+    header into the chip row and is still remembered per library.
+  - **The arrows reach all of it**, exactly as they reach the guide's
+    categories: **▲** off the top title goes up into the genre/decade row,
+    **▲** again into the order row, **◀ ▶** run along a row, **OK** presses
+    (a lit chip turns off), and **▼** drops back onto the title you left.
+  - **One press clears it.** **ESC** takes every chip and the search box off
+    together, an amber **Clear** chip appears while anything is on, and the
+    Actions strip (**M**, or holding OK on the Siri Remote) carries Filters,
+    Sort and Clear filters for a remote with no letters.
+  - **Nothing matched** now says which filters did it, over the whole stage
+    (the preview window has nothing to preview, so it stands aside), with the
+    same one press out.
+  - **What's on is readable from the sofa**: the lit chips are filled and
+    ringed, an active chip that has scrolled off the end is pulled back into
+    view, and the list header reads `COMEDY · 1980S` beside `11 of 178`.
+  - **Remembered for the sitting, not for good.** Leave Movies and come back
+    and the chips are where you left them; come back tomorrow (or after two
+    hours) and the whole library is there again. A filter isn't a setting.
+  - **On a phone**, the same filters are a row you flick, with the count beside
+    the sorts and an amber **Clear** pinned outside the row so it's still
+    reachable when the row has been flicked to its end. The row is built once
+    and then only updated, so tapping a chip near the end doesn't throw the row
+    back to its start.
+  - Both layouts take the chips, the counts and the sort order from one place,
+    `HomerLibraryModel.makeFilters` / `sortsFor` / `sortCompare`, so they can't
+    drift apart. Filtering is one pass over the titles the screen already has —
+    178 movies and 18 shows here — not another round trip.
+
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.
