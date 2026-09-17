@@ -2,11 +2,11 @@
  * HOMER loading: what HOMER puts up while one of its own pages opens.
  *
  * Jellyfin Web routes before HOMER does, and it knows none of HOMER's own
- * pages (#/weather, #/rooms, #/cameras, #/sports, #/news, #/books, #/music,
- * #/playing). So it answers every one of them with its own "Page not found",
- * and titles the tab that, for as long as HOMER's files take to arrive: a
- * second or two warm, longer on a cold load, and every single launch in the
- * Apple TV app, where the web view starts empty.
+ * pages (#/weather, #/rooms, #/cameras, #/planes, #/sports, #/news, #/books,
+ * #/music, #/playing). So it answers every one of them with its own "Page not
+ * found", and titles the tab that, for as long as HOMER's files take to
+ * arrive: a second or two warm, longer on a cold load, and every single
+ * launch in the Apple TV app, where the web view starts empty.
  *
  * This covers that gap with HOMER's own loading state — the mark, the
  * screen's name and a quiet pulse on HOMER's ground — from the moment HOMER
@@ -45,6 +45,7 @@
         [/^#\/weather(\?|$)/, 'Weather'],
         [/^#\/rooms(\?|$)/, 'Rooms'],
         [/^#\/cameras(\?|$)/, 'Cameras'],
+        [/^#\/planes(\?|$)/, 'Planes'],
         [/^#\/sports(\?|$)/, 'Sports'],
         [/^#\/news(\?|$)/, 'News'],
         [/^#\/books(\?|$)/, 'Books'],

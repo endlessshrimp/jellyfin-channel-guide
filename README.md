@@ -9,7 +9,8 @@ Jellyfin page matches. On a phone, HOMER has a phone layout (see
 
 Home replaces Jellyfin's home page: a main menu (Live TV Guide, Now Playing,
 Movies, TV Shows, Books, Music, Recordings, Weather, Sports, News, Settings,
-and Rooms and Cameras once Home Assistant is connected), an On Now panel, and
+Planes, and Rooms and Cameras once Home Assistant is connected), an On Now
+panel, and
 rows of Continue Watching, Up Next, On Now and Recently Added. The search box
 sits above the menu (▲ or `/`).
 
@@ -547,6 +548,99 @@ placeholders, in the same wall. So does a second doorbell. Only the *order*
 and the held squares come from `PLANNED`; nothing is filtered out by it. To
 reserve a fifth square, or change a name, add a line to that list.
 
+## Planes
+
+What's flying over the house right now, on a map, at TV size (`#/planes`,
+Home's menu after Cameras). Jellyfin has nothing at that address.
+
+![The Planes screen](docs/screenshots/planes.jpg)
+
+- **The map** is centred on the house, with range rings at round distances and
+  a compass, and every aircraft drawn as a silhouette turned to its actual
+  track and coloured by altitude — the key sits in the top left corner.
+- **The list beside it** is every aircraft in range, **nearest first**: its
+  callsign, what it is (type and registration), how high, how fast, which way,
+  how far from the house and in what direction, and **where it's going** when
+  that's known (`DFW → LHR`).
+- **Aircraft on the ground come last.** DFW is 40-odd miles away, so at the
+  wider ranges a plain distance sort buries everything actually overhead under
+  a hundred airliners sitting still at their gates. They're still listed, in
+  distance order, just not at the top — and they're drawn dimmed on the map.
+- **Range**: 10, 25, 50, 100 or 150 nm, on `[` and `]` (or `-` and `+`).
+  What you pick is remembered on that device.
+
+### Following one
+
+**OK** on the highlighted aircraft follows it: the map recentres on it and
+**keeps it centred as it moves**, its track draws behind it, and a card above
+the list fills in with everything the feed knows — the aircraft and its
+operator, the route in words, altitude, speed, heading, climb rate, distance
+and bearing from the house, and its squawk. **OK** again, or **Esc**, lets it
+go.
+
+![Following a flight](docs/screenshots/planes-followed.jpg)
+
+Keys: arrows move between aircraft, **OK** follows one, `[` `]` change the
+range, **R** asks again, **Esc** steps back (following → not following → the
+previous screen), **H** goes Home. The Apple TV's remote reaches all of it
+through the Actions strip (hold **OK**): *Follow it*, *Wider*, *Closer in*,
+*Refresh*.
+
+### Where the data comes from, and being polite to it
+
+Two donated, keyless ADS-B feeds: **adsb.fi** (`opendata.adsb.fi`) and
+**adsb.lol**. Neither sends CORS headers, so a browser can't call them itself
+— HOMER's helper on the NAS does it (`/homer-feeds/planes`, `homerfeeds.py`).
+adsb.fi is asked first because its answers carry the aircraft description and
+the registered operator; adsb.lol is the reserve. A destination isn't in an
+ADS-B message at all, so callsigns are looked up once in **adsbdb.com** (free,
+keyless) by a background worker doing a couple a second, and kept for a day.
+
+These are feeds somebody else pays for, so:
+
+- **one request every 7 seconds while the screen is open, and none when it
+  isn't** — nothing here has a timer until a Planes screen asks for one;
+- **nothing while the page is hidden**, and the poll picks up again when it
+  isn't;
+- **one answer per place, shared** — the helper caches by rounded position, so
+  a second TV in the same house costs the feeds nothing;
+- **the last good answer when the feed is down**, marked as old, rather than
+  asking again and again, and a failed request backs off to a minute.
+
+### The map's tiles
+
+**OpenStreetMap's own tiles**, fetched through the same NAS helper
+(`/homer-feeds/planes/tile/<z>/<x>/<y>.png`) rather than straight from the
+browser. That's what makes it allowed under the
+[OSMF tile usage policy](https://operations.osmfoundation.org/policies/tiles/):
+the helper sends a User-Agent that names HOMER (a browser can't be made to),
+keeps every tile on the NAS for a month so a tile is fetched once and never
+again (the policy asks for at least seven days), asks only for tiles somebody
+is actually looking at — never a pre-seeded area or a range of zooms — caps
+zoom at 13 so it can't become a way to scrape a city, and the attribution is
+drawn in the corner of the map. It's one house looking at one neighbourhood,
+so the whole set is a few dozen tiles. It also solves the other half of the
+problem: the helper answers over https on `media.nel.sn` through the same
+Caddy route as the news feeds, so the map works from outside the house.
+
+The tiles are a light map, so they're inverted, turned back to the right hue
+and dimmed into HOMER's navy rather than dropped on top of it. If a tile never
+arrives, the map is still a working radar scope: the ground, the rings, the
+compass and the aircraft are all drawn locally, not fetched.
+
+### When there's nothing to show
+
+![Nothing overhead](docs/screenshots/planes-quiet.jpg)
+
+- **Nothing overhead**: the map says so over the rings and the list says
+  *Quiet sky*, with the range it's looking at and the key that widens it.
+- **The feed is down**: *Can't reach the plane feed*, with what went wrong and
+  **OK** to try again. A list that's already up stays up, marked *feed quiet*,
+  rather than being thrown away.
+- **No location**: *HOMER doesn't know where the house is*, with **OK** to
+  Settings. Where the house is comes from Home Assistant's own config
+  (`HomerHA.location()`), then HOMER's weather location.
+
 ## Sports and News
 
 Two hub screens, each built the same way: a TV window that plays a channel
@@ -1063,6 +1157,15 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
   ![Cameras on a phone](docs/screenshots/cameras-phone.png)
 
+- **Planes** on a phone is the map on top and the list under it, one card an
+  aircraft, nearest first, with the range chips (10-150 nm) between them. A tap
+  on a card opens it out — speed, heading, climb, operator, aircraft — and a
+  tap on the open one follows it, so the map recentres on it and keeps it
+  there. **‹ Planes** in the top bar lets it go. In landscape the map takes the
+  left half instead of the top.
+
+  ![Planes on a phone](docs/screenshots/planes-phone.png)
+
 - **Movies and TV Shows** on a phone are a poster grid under the search field,
   the sort chips with the count, and the same filter chips as the TV — genre,
   decade, Unwatched, Favourites and 4K, each with its count — as a row you
@@ -1073,7 +1176,8 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 - Every HOMER screen has a phone layout of its own now — the guide, Home,
   Movies and TV Shows with their details pages, Search, Recordings, Settings,
-  Weather, Rooms and Cameras. See `docs/phone.md` for how one is built.
+  Weather, Rooms, Cameras and Planes. See `docs/phone.md` for how one is
+  built.
 - **Music** on a phone: chips for Recently Added / Artists / Albums / Songs /
   **Favorites** / Playlists / Genres, the art two across, and a sheet for an
   album (its tracks) or an artist (their albums) with Play / Shuffle /

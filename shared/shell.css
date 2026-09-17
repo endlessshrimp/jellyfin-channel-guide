@@ -4,9 +4,10 @@
  * palette, the top bar (brand and clock), the key legend, the toast, chips,
  * buttons and the loading/empty state.
  *
- * Screens: Movies/TV Shows/details (hl-), Search (hs-), Recordings
- * (hr-), Settings (hx-), Weather (hf-), Now Playing (hn-), Rooms (ho-), Cameras (hc-) and the hubs, Sports and News (hb-,
- * shared/hub.js). Each screen's own
+ * Screens: Movies/TV Shows/details (hl-), Search (hs-), Recordings (hr-),
+ * Settings (hx-), Weather (hf-), Now Playing (hn-), Rooms (ho-), Cameras
+ * (hc-), Planes (hv-) and the hubs, Sports and News (hb-, shared/hub.js).
+ * Each screen's own
  * stylesheet loads after this one and adds only what it does differently.
  * The guide and Home keep their own copies for now. A screen's phone layout
  * doesn't use any of this: see shared/phone.css.
@@ -26,6 +27,7 @@
 #hn-root,
 #ho-root,
 #hc-root,
+#hv-root,
 .hb-root {
     --bg0: var(--homer-bg0, #02050a);
     --bg1: var(--homer-bg1, #07142a);
@@ -66,6 +68,7 @@
 #hn-stage,
 #ho-stage,
 #hc-stage,
+#hv-stage,
 .hb-stage {
     position: absolute;
     left: 50%;
@@ -89,6 +92,7 @@
 #hn-stage::after,
 #ho-stage::after,
 #hc-stage::after,
+#hv-stage::after,
 .hb-stage::after {
     content: "";
     position: absolute;
@@ -109,6 +113,7 @@
 .hn-topbar,
 .ho-topbar,
 .hc-topbar,
+.hv-topbar,
 .hb-topbar {
     position: absolute;
     left: 72px;
@@ -129,6 +134,7 @@
 .hn-brand,
 .ho-brand,
 .hc-brand,
+.hv-brand,
 .hb-brand {
     display: flex;
     align-items: center;
@@ -146,6 +152,7 @@
 .hn-brand-mark,
 .ho-brand-mark,
 .hc-brand-mark,
+.hv-brand-mark,
 .hb-brand-mark {
     width: 44px;
     height: 44px;
@@ -164,6 +171,7 @@
 .hn-brand-mark::before,
 .ho-brand-mark::before,
 .hc-brand-mark::before,
+.hv-brand-mark::before,
 .hb-brand-mark::before {
     content: "";
     width: 18px;
@@ -180,6 +188,7 @@
 .hn-brand-sub,
 .ho-brand-sub,
 .hc-brand-sub,
+.hv-brand-sub,
 .hb-brand-sub {
     color: var(--dim);
     font-weight: 600;
@@ -199,6 +208,7 @@
 .hn-brand.homer-home,
 .ho-brand.homer-home,
 .hc-brand.homer-home,
+.hv-brand.homer-home,
 .hb-brand.homer-home {
     cursor: pointer;
     margin: -8px -16px;
@@ -215,6 +225,7 @@
 .hn-brand.homer-home:hover,
 .ho-brand.homer-home:hover,
 .hc-brand.homer-home:hover,
+.hv-brand.homer-home:hover,
 .hb-brand.homer-home:hover { background: rgba(255, 255, 255, 0.08); }
 
 .hl-brand-mark .material-icons,
@@ -225,6 +236,7 @@
 .hn-brand-mark .material-icons,
 .ho-brand-mark .material-icons,
 .hc-brand-mark .material-icons,
+.hv-brand-mark .material-icons,
 .hb-brand-mark .material-icons {
     display: none;
     font-size: 28px;
@@ -239,6 +251,7 @@
 .hn-brand.homer-home:hover .hn-brand-mark::before,
 .ho-brand.homer-home:hover .ho-brand-mark::before,
 .hc-brand.homer-home:hover .hc-brand-mark::before,
+.hv-brand.homer-home:hover .hv-brand-mark::before,
 .hb-brand.homer-home:hover .hb-brand-mark::before { display: none; }
 
 .hl-brand.homer-home:hover .hl-brand-mark .material-icons,
@@ -249,6 +262,7 @@
 .hn-brand.homer-home:hover .hn-brand-mark .material-icons,
 .ho-brand.homer-home:hover .ho-brand-mark .material-icons,
 .hc-brand.homer-home:hover .hc-brand-mark .material-icons,
+.hv-brand.homer-home:hover .hv-brand-mark .material-icons,
 .hb-brand.homer-home:hover .hb-brand-mark .material-icons { display: block; }
 
 .hl-clock,
@@ -259,6 +273,7 @@
 .hn-clock,
 .ho-clock,
 .hc-clock,
+.hv-clock,
 .hb-clock {
     text-align: right;
     line-height: 1;
@@ -272,6 +287,7 @@
 .hn-clock-time,
 .ho-clock-time,
 .hc-clock-time,
+.hv-clock-time,
 .hb-clock-time {
     font-size: 40px;
     font-weight: 700;
@@ -287,6 +303,7 @@
 .hn-clock-date,
 .ho-clock-date,
 .hc-clock-date,
+.hv-clock-date,
 .hb-clock-date {
     margin-top: 6px;
     font-size: 17px;
@@ -374,6 +391,7 @@
 .hn-state,
 .ho-state,
 .hc-state,
+.hv-state,
 .hb-state {
     position: absolute;
     display: none;
@@ -393,6 +411,7 @@
 .hn-state.show,
 .ho-state.show,
 .hc-state.show,
+.hv-state.show,
 .hb-state.show { display: flex; }
 
 .hl-state b,
@@ -403,6 +422,7 @@
 .hn-state b,
 .ho-state b,
 .hc-state b,
+.hv-state b,
 .hb-state b {
     font-size: 28px;
     font-weight: 700;
@@ -417,6 +437,7 @@
 .hn-state span,
 .ho-state span,
 .hc-state span,
+.hv-state span,
 .hb-state span {
     font-family: var(--cond);
     font-size: 20px;
@@ -434,6 +455,7 @@
 .hn-legend,
 .ho-legend,
 .hc-legend,
+.hv-legend,
 .hb-legend {
     position: absolute;
     left: 72px;
@@ -457,6 +479,7 @@
 .hn-key,
 .ho-key,
 .hc-key,
+.hv-key,
 .hb-key {
     display: inline-grid;
     place-items: center;
@@ -480,6 +503,7 @@
 .hn-legend .spacer,
 .ho-legend .spacer,
 .hc-legend .spacer,
+.hv-legend .spacer,
 .hb-legend .spacer { flex: 1; }
 
 .hl-legend [data-action],
@@ -490,6 +514,7 @@
 .hn-legend [data-action],
 .ho-legend [data-action],
 .hc-legend [data-action],
+.hv-legend [data-action],
 .hb-legend [data-action] {
     cursor: pointer;
     transition: color 120ms ease;
@@ -503,6 +528,7 @@
 .hn-legend [data-action]:hover,
 .ho-legend [data-action]:hover,
 .hc-legend [data-action]:hover,
+.hv-legend [data-action]:hover,
 .hb-legend [data-action]:hover { color: var(--text); }
 
 /* ---------- Toast ---------- */
@@ -513,6 +539,7 @@
 .hx-toast,
 .ho-toast,
 .hc-toast,
+.hv-toast,
 .hb-toast {
     position: absolute;
     left: 50%;
@@ -544,6 +571,7 @@
 .hx-toast-text,
 .ho-toast-text,
 .hc-toast-text,
+.hv-toast-text,
 .hb-toast-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -555,6 +583,7 @@
 .hx-toast.show,
 .ho-toast.show,
 .hc-toast.show,
+.hv-toast.show,
 .hb-toast.show {
     opacity: 1;
     transform: translate(-50%, 0);
@@ -566,6 +595,7 @@
 .hx-toast.err,
 .ho-toast.err,
 .hc-toast.err,
+.hv-toast.err,
 .hb-toast.err { box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.55), 0 16px 40px rgba(0, 0, 0, 0.55); }
 
 /* ---------- The Apple TV app ---------- */

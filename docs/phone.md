@@ -5,8 +5,8 @@ server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. Every screen is reachable from the tab bar or from the
 menu sheet the HOMER mark opens (below). Every HOMER screen has a phone layout of its own: the
 guide, Home, Movies and TV Shows with their details pages, Search,
-Recordings, Settings, Weather, Rooms, Cameras, Music and Now Playing. A screen
-without one would draw its TV layout, shrunk to fit.
+Recordings, Settings, Weather, Rooms, Cameras, Planes, Music and Now Playing.
+A screen without one would draw its TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
 
@@ -531,3 +531,32 @@ whose sizes are outer sizes says so itself (Now Playing does, once, for
   see `.al-phone` — it reads the layout, not the viewport. Feed it a real NWS
   alert with `HomerAlerts._fetch(...)` (see the README's Alerts section) and
   `HomerAlerts._live()` to put it back.
+
+## A worked example: Planes
+
+`planes/planes.js` is the shortest version of the whole contract, because both
+of its layouts read one model and draw one map:
+
+- `planes/planes-model.js` holds the data, the polling and the "where is the
+  house" question. It has no DOM in it at all, and `create()` hands back the
+  *same* instance every time, so the TV layout and the phone layout share one
+  poll of the ADS-B feed rather than each running their own.
+- `planes/planes-map.js` is the map: tiles, range rings, the house, the
+  aircraft, the followed one's track. It takes a host element and a `draw()`
+  call, so the two layouts differ only in the box they put it in — the TV puts
+  it beside the list, the phone puts it above.
+- `planes/planes.js` decides which to draw (`HomerLayout.usePhone('planes')`),
+  hands the phone layout its helpers through `PHONE_CTX`, and carries the
+  focused and followed aircraft across when the layout flips mid-session
+  (`state()` on the way out, `ctx.was` on the way in).
+- `planes/planes-phone.js` registers itself with
+  `HomerLayout.register('planes', { phone: true })` at the bottom of the file,
+  which is what tells `usePhone` the layout exists.
+- Its `setScreenHome` says the top of the screen is "nothing followed, no card
+  open", so the ‹ beside **Planes** in the top bar lets a followed aircraft go
+  instead of leaving the screen — and disappears when there's nothing to let
+  go of.
+
+Its phone CSS is scoped to `.vp-phone` so `planes.css` and `planes-phone.css`
+can both be loaded at once; the map's own `.pm-` rules live in `planes.css`
+and are shared, with a handful of smaller type sizes under `.vp-phone`.

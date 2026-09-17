@@ -174,6 +174,8 @@
             { id: 'rooms', icon: 'lightbulb', label: 'Rooms', act: () => go('#/rooms'), when: haUp },
             // the cameras' wall, with the doorbell's rings and clips
             { id: 'cameras', icon: 'videocam', label: 'Cameras', act: () => go('#/cameras'), when: haUp },
+            // what's flying over the house, on a map (planes/planes.js)
+            { id: 'planes', icon: 'flight', label: 'Planes', act: () => go('#/planes') },
             // (Search isn't in the menu: its box is right above it, ▲ from the
             // first item or / gets there)
             { id: 'settings', icon: 'settings', label: 'Settings', act: () => go('#/mypreferencesmenu') }
@@ -340,7 +342,7 @@
         if (/^#!?\/movies(\.html)?\?/.test(h)) return 'movies';
         if (/^#!?\/tv(\.html)?\?/.test(h)) return 'shows';
         if (/^#!?\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return 'settings';
-        const own = h.match(/^#!?\/(weather|rooms|cameras|sports|news|books|music|playing)(\?|$)/);
+        const own = h.match(/^#!?\/(weather|rooms|cameras|planes|sports|news|books|music|playing)(\?|$)/);
         if (own) return own[1];
         if (h === '' || h === '#/' || /^#!?\/(home(\.html)?)?(\?.*)?$/.test(h)) return 'home';
         return '';
