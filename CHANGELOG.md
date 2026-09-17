@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+- **The phone's top bar is two buttons, not one.** The HOMER mark still opens
+  the menu sheet; the **screen's name** beside it now goes back to the top of
+  the screen you're on. Before this there was no way out of an album, a book
+  or a camera on a phone except a keyboard's Esc — the name looked like part
+  of the Home button and did nothing of its own.
+  - It's a contract rather than a special case per screen:
+    `HomerLayout.setScreenHome(fn, { atTop })`, registered while a screen is
+    mounted, last registration wins, `fn()` returning false meaning "already
+    at my top". Books, Cameras and Rooms register (the shelf, the wall, and
+    backing out of a colour picker, a remote or a camera).
+  - Screens that don't register still work, from three defaults that need no
+    cooperation: the same route with its query stripped (`#/music?album=…` →
+    `#/music`, and the same for `#/books?id=`, `#/rooms?remote=`); the grid a
+    details page belongs to (`#/details?id=…` → the Movies or TV Shows grid,
+    which is what the name already reads); and failing those a rebuild of the
+    screen's module, which opens it at its top. Music uses the last of these
+    until it registers one of its own.
+  - The name is only drawn as a control — a ‹ beside it, the text lit, a 44px
+    target clear of the mark's — while there's somewhere above to go. At the
+    top of a flat screen (Home, Weather, Now Playing) it's a plain label and a
+    tap does nothing; Home is on the tab bar and at the top of the menu, so
+    the name never has to double as a way there.
+  - Opening a sub-view changes no route and adds nothing to `<body>`, so none
+    of the chrome's usual triggers fire: that one boolean is re-checked twice
+    a second while the bars are up and the tab is in front, and the click
+    handler asks for itself rather than trusting a `disabled` attribute that
+    would go stale between checks.
+  - The TV layout is unchanged: its brand is labelled Home (`title="Home (H)"`)
+    and every TV screen already draws a clickable **ESC Back** in its key
+    legend — Books' even names where it goes ("Shelf") — so the ambiguity this
+    fixes doesn't exist there.
+
 ## v0.4.13
 
 - **Music on a phone:** the album wall is two even columns again. An `fr`

@@ -59,6 +59,53 @@ rail, with **Home** added first, the one you're on ticked.
 - A swipe down closes it, but only from the top of the list, so a scrolled
   list scrolls instead of dismissing.
 
+## The top bar's other button: `HomerLayout.setScreenHome()`
+
+The mark opens the menu; the **screen's name** beside it goes back to the top
+of the screen you're on. Before that, a phone had no way out of an album, a
+book or a camera except a keyboard's Esc — the name looked like part of the
+Home button and did nothing of its own.
+
+It's a contract, not a special case per screen. A screen registers what its
+top is while it's mounted:
+
+```js
+const offHome = window.HomerLayout && window.HomerLayout.setScreenHome
+    ? window.HomerLayout.setScreenHome(() => {
+        if (!cam) return false;   // already at the top: not mine to handle
+        closeCamera();
+        return true;              // handled
+    }, { atTop: () => !cam })     // optional: what draws (or hides) the ‹
+    : () => {};
+// …and offHome() in teardown()
+```
+
+The last screen to register wins, the way `HomerActions` picks its provider.
+Returning `false` falls through to the defaults, which need no cooperation:
+
+1. **The same route without its query.** `#/music?album=…`, `#/books?id=…`
+   and `#/rooms?remote=…` are ways *in* to HOMER's own screens, so dropping
+   the query is that screen's top. Jellyfin's own routes carry what they need
+   in the query (`#/movies?topParentId=…`), so they're left alone.
+2. **The grid a details page belongs to.** `#/details?id=…` has no top of its
+   own; `whereAmI()` already knows whether it's a film or a show, so the name
+   reads MOVIES or SHOWS and goes to that grid.
+3. **A rebuild of the screen's module** (`close()` then `open()`), which opens
+   it at its top. It costs a reload of that screen and it can't tell whether
+   you're already there, so a registration is always better — this is only so
+   a screen works before it has one.
+
+Two things worth copying:
+
+- **The ‹ is on a timer, not an event.** Opening a sub-view inside a screen
+  changes no route and adds nothing to `<body>`, so none of the chrome's
+  usual triggers fire. `syncHere()` re-checks that one boolean twice a second
+  while the bars are up and the tab is in front, and only touches the DOM when
+  the answer changes.
+- **The click is never `disabled`.** An attribute would go stale between those
+  checks and swallow a legitimate tap; the handler asks `canScreenHome()`
+  itself and returns if there's nowhere to go.
+
 ## A screen without a phone layout
 
 Nothing to do. Its root is squeezed between the bars (`shared/phone.css`), and

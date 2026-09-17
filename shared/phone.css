@@ -4,9 +4,11 @@
  * finger (44px targets at least) and kept clear of the status bar, the notch
  * and the home indicator with the safe-area insets.
  *
- * The HOMER mark in the top bar opens the menu sheet (shared/menu.js, styled
- * in shared/menu.css): the tab bar only has five screens, so that's how the
- * rest are reached.
+ * The top bar has two buttons in it. The HOMER mark opens the menu sheet
+ * (shared/menu.js, styled in shared/menu.css): the tab bar only has five
+ * screens, so that's how the rest are reached. The screen's name beside it
+ * goes back to the top of the screen you're on (Music's browse page from an
+ * album), and is only drawn as a control when there's somewhere above to go.
  *
  * html.homer-phone: the phone layout. html.homer-chrome: the bars are up.
  * Screens with a phone layout place themselves between the bars with
@@ -99,6 +101,46 @@ html.homer-chrome #homer-phone-tabs {
     border-radius: 3px;
 }
 
+/* The screen's name is its own button: it goes back to the top of that
+   screen (Music's browse page from an album). It sits past the mark's tap
+   area with the hairline between them, and only looks like a control — the ‹
+   and the lit text — while there's somewhere above to go. */
+#homer-phone-top .hp-here {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 1 auto;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0 0 0 2px;
+    padding: 0 10px 0 8px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#homer-phone-top .hp-here.can { cursor: pointer; }
+#homer-phone-top .hp-here.can:active { background: rgba(255, 255, 255, 0.12); }
+
+#homer-phone-top .hp-here-back {
+    flex: none;
+    width: 0;
+    overflow: hidden;
+    font-size: 20px !important;
+    color: var(--homer-accent-2);
+    transition: width 140ms ease, opacity 140ms ease;
+    opacity: 0;
+}
+
+#homer-phone-top .hp-here.can .hp-here-back {
+    width: 20px;
+    opacity: 1;
+}
+
 #homer-phone-top .hp-sub {
     color: var(--homer-dim);
     font-weight: 600;
@@ -108,9 +150,19 @@ html.homer-chrome #homer-phone-tabs {
     border-left: 1.5px solid var(--homer-line-strong);
     text-transform: uppercase;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* the mark opens the menu sheet (shared/menu.js), so it says it can */
+/* the ‹ takes the hairline's place when the name is a button */
+#homer-phone-top .hp-here.can .hp-sub {
+    color: var(--homer-text);
+    padding-left: 4px;
+    border-left: 0;
+}
+
+/* the mark and the wordmark open the menu sheet (shared/menu.js), so they
+   say they can; the screen's name beside them is a separate button */
 #homer-phone-top .hp-brand-caret {
     flex: none;
     margin-left: -4px;

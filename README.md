@@ -617,13 +617,20 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   **tab bar** (Home, Guide, Movies, Shows, Recordings) on every HOMER screen.
   The weather opens the Weather screen. The phone shows the time, so HOMER
   doesn't.
-- **A tap on the HOMER mark opens the menu**: a sheet with every screen there
-  is, in the same order as the TV's menu, Home first and the one you're on
-  ticked. The tab bar only has five, so this is how Now Playing, Books, Music,
+- **The top bar has two buttons.** A tap on the **HOMER mark** opens the menu:
+  a sheet with every screen there is, in the same order as the TV's menu, Home
+  first and the one you're on ticked. The tab bar only has five, so this is how Now Playing, Books, Music,
   Weather, Sports, News, Rooms, Cameras and Settings are reached. Tap a row to
   go there; tap outside, swipe the sheet down, or press **Back** to put it
   away. (Back closes the sheet rather than leaving the screen.) Home is the
   first row, and the tab bar still has Home too.
+- **A tap on the screen's name goes back to the top of that screen** — Music's
+  browse page from an album or a track, Cameras' wall from one camera, the
+  Movies or TV Shows grid from a show's page, Books' shelf from a book. The
+  name is only drawn as a control (a ‹ beside it, the text lit) while there's
+  somewhere above to go; at the top of a screen it's a plain label and a tap
+  does nothing. Home is on the tab bar and at the top of the menu, so the name
+  never has to double as a way there.
 
   ![The phone menu over Home](docs/screenshots/phone-menu-home.jpg)
   ![The phone menu over Now Playing](docs/screenshots/phone-menu-playing.jpg)
