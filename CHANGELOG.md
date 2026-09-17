@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.26
 
 - **No more ‹ beside the screen's name** in the phone top bar. Sitting next to
   the wordmark's own caret it read as clutter. The name still goes to the top
