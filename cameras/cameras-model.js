@@ -20,6 +20,7 @@
  *                   words, or '' — a camera that's offline keeps its
  *                   recordings to itself, and the strip says so.
  *   clipUrl(ev)     a URL a <video> can load for that event's clip.
+ *   stillUrl(ev)    a URL an <img> can load for the picture saved of it.
  *
  * Where the events come from
  * --------------------------
@@ -34,9 +35,27 @@
  * media id (…|20260915190039|20260915190311).
  *
  * Home Assistant hands out no thumbnail for these clips (every one comes back
- * with thumbnail: null) and keeps no stills of its own, so a tile's picture is
- * the clip's own first frame, drawn by a paused <video>. A media source that
- * does carry a thumbnail (the made-up house's does) is used as-is.
+ * with thumbnail: null), so a tile's picture is either a still Home Assistant
+ * saved (below) or, failing that, the clip's own first frame, drawn by a
+ * paused <video>. A media source that does carry a thumbnail (the made-up
+ * house's does) is used as-is.
+ *
+ * The pictures of the door
+ * ------------------------
+ * A Reolink keeps its clips to itself, so a ring used to leave nothing behind
+ * that HOMER could show. Two automations in Home Assistant — both called
+ * "Doorbell stills: …" — now take a picture the moment the bell is pressed or
+ * a person is seen, and drop it in Home Assistant's own media folder:
+ *   /media/doorbell/<YYYY-MM-DD>/<ring|person>-<YYYYMMDD-HHMMSS>.jpg
+ * which is media-source://media_source/local/doorbell, a folder per day. The
+ * file name carries what happened and when, so HOMER needs nothing else: it
+ * walks the newest folders, lays each still over the event at the same moment,
+ * and shows it as that event's thumbnail — a real picture of who was at the
+ * door instead of a clip's first frame.
+ *
+ * A still with no event of its own becomes one. That isn't a corner case: the
+ * ring pulse is shorter than Home Assistant's recorder reliably catches, so
+ * the picture is sometimes the only record that anyone rang.
  *
  * Where a camera has no clips — it isn't a Reolink, or the recording is off —
  * the events fall back to Home Assistant's history of the ring and detection
@@ -258,6 +277,7 @@
                 all: kinds.all,
                 clip: c.can_play !== false ? c.media_content_id : '',
                 thumb: c.thumbnail || '',
+                still: '',
                 source: 'camera'
             };
         }).filter(Boolean);
@@ -351,6 +371,7 @@
                             all: [p.label],
                             clip: '',
                             thumb: '',
+                            still: '',
                             source: 'history'
                         });
                     }
@@ -358,6 +379,45 @@
                 }
             }
             return out;
+        };
+
+        // ----- the events: the stills Home Assistant saved -----
+
+        // Home Assistant's own media folder, a folder per day, written by the
+        // two "Doorbell stills" automations. Only the doorbell has one; every
+        // other camera skips this entirely.
+        const STILLS = 'media-source://media_source/local/doorbell';
+        const STILL_NAME = /^(ring|person)-(\d{8})-(\d{6})\.jpe?g$/i;
+        const STILL_KIND = {
+            ring: { label: 'Ring', icon: 'doorbell', ring: true },
+            person: { label: 'Person', icon: 'person', ring: false }
+        };
+
+        const isDoorbell = (camId) => {
+            const h = HA();
+            const bells = h ? (h.house().doorbells || []) : [];
+            return bells.some((b) => b.camera === camId);
+        };
+
+        const stillsFor = async (camId, days = 4) => {
+            const h = HA();
+            if (!h || !isDoorbell(camId)) return [];
+            const root = await h.browseMedia(STILLS).catch(() => null);
+            // no folder at all is the ordinary case before the first ring, and
+            // the whole strip still works without it
+            const folders = ((root && root.children) || [])
+                .filter((c) => c.can_expand)
+                .sort((a, b) => String(b.title).localeCompare(String(a.title))); // newest day first
+            const out = [];
+            for (const day of folders.slice(0, days)) {
+                const node = await h.browseMedia(day.media_content_id).catch(() => null);
+                for (const f of (node && node.children) || []) {
+                    const m = STILL_NAME.exec(f.title || '');
+                    const at = m ? fromStamp(m[2] + m[3]) : null;
+                    if (at) out.push({ at, still: f.media_content_id, ...STILL_KIND[m[1].toLowerCase()] });
+                }
+            }
+            return out.sort((a, b) => b.at - a.at);
         };
 
         // ----- the two, merged -----
@@ -375,6 +435,36 @@
             return out.sort((a, b) => b.at - a.at);
         };
 
+        // The stills laid over the events. A still goes to the nearest event of
+        // the same kind that hasn't got one yet — a clip's trigger words are in
+        // `all`, so a ring still finds the ring and a person still finds the
+        // person. Rings are placed first so they get first claim on a clip that
+        // was both. A still that matches nothing becomes an event of its own.
+        const STILL_NEAR = 90000; // the same window merge() uses
+        const withStills = (list, stills) => {
+            const out = list.slice();
+            for (const s of [...stills.filter((x) => x.ring), ...stills.filter((x) => !x.ring)]) {
+                const near = out
+                    .filter((e) => !e.still && e.all.includes(s.label) && Math.abs(e.at - s.at) < STILL_NEAR)
+                    .sort((a, b) => Math.abs(a.at - s.at) - Math.abs(b.at - s.at))[0];
+                if (near) near.still = s.still;
+                else out.push({
+                    id: s.still,
+                    at: s.at,
+                    seconds: 0,
+                    label: s.label,
+                    icon: s.icon,
+                    ring: s.ring,
+                    all: [s.label],
+                    clip: '',
+                    thumb: '',
+                    still: s.still,
+                    source: 'still'
+                });
+            }
+            return out.sort((a, b) => b.at - a.at);
+        };
+
         const events = async (camId, { hours = 48, want = 24, fresh = false } = {}) => {
             if (!camId) return [];
             const had = eventCache.get(camId);
@@ -385,7 +475,8 @@
                 return [];
             });
             const hist = await fromHistory(camId, hours).catch(() => []);
-            const list = merge(clips, hist).slice(0, want);
+            const stills = await stillsFor(camId).catch(() => []);
+            const list = withStills(merge(clips, hist), stills).slice(0, want);
             eventCache.set(camId, { at: Date.now(), list });
             return list;
         };
@@ -406,6 +497,16 @@
             return (r && r.url) || '';
         };
 
+        // The same, for the picture Home Assistant saved of this event. Also
+        // resolved at the last moment: a media source URL is signed and the
+        // signature runs out in half a minute, so holding one is pointless.
+        const stillUrl = async (ev) => {
+            const h = HA();
+            if (!h || !ev || !ev.still) return '';
+            const r = await h.resolveMedia(ev.still).catch(() => null);
+            return (r && r.url) || '';
+        };
+
         return {
             wall,
             controls,
@@ -414,6 +515,7 @@
             trouble,
             forget,
             clipUrl,
+            stillUrl,
             // for the screens' "what can this camera do" checks
             hasClips: (camId) => (eventCache.get(camId) || { list: [] }).list.some((e) => e.clip),
             reset() { mediaTree = null; eventCache.clear(); troubles.clear(); }

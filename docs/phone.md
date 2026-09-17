@@ -327,11 +327,21 @@ copying:
   other cameras. A tap on any camera swaps the column for that camera's page
   (live view, controls, its own events) with a 44px **‹ Cameras** button; Esc
   and the phone's Back do the same. Nothing is nested further.
-- **A strip of clips as thumbnails.** Each event's picture is its clip's first
-  frame, in a muted `<video preload="metadata">` that loads two at a time, so
-  a strip of a dozen doesn't pull a dozen files off a battery camera at once.
-  A frame that never arrives leaves the event's icon showing, which is also
-  what a history-only event ("No clip") gets.
+- **A strip of saved stills and clips as thumbnails.** An event's picture is
+  the still Home Assistant saved of it if there is one, else its clip's first
+  frame in a muted `<video preload="metadata">`. Either way two load at a
+  time, so a strip of a dozen doesn't pull a dozen files off a battery camera
+  at once; stills are queued first, because they come off the Pi's disk and
+  ask the camera for nothing. A picture that never arrives leaves the event's
+  icon showing, which is also what a history-only event ("No clip") gets.
+  - A "No clip" event that *does* have a still isn't dimmed (`.cp-ev.pic`):
+    there's a real picture of it, so it isn't a lesser row.
+  - The stills are written by two Home Assistant automations into
+    `/media/doorbell/<date>/<ring|person>-<stamp>.jpg` and read back through
+    `media-source://media_source/local/doorbell` — see the header of
+    `cameras/cameras-model.js`. Their URLs are signed and expire in about
+    half a minute, so `M.stillUrl(ev)` resolves one per paint rather than
+    holding it, exactly as `M.clipUrl(ev)` already does.
 - **The camera's controls are 60px buttons**, two across (four in landscape),
   and each says what it will do rather than what it is (**Siren · Sound it**,
   **LED · Auto**). Nothing here needs a press-again confirm: none of them

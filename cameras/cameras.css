@@ -556,6 +556,10 @@
 .hc-ev-shot img { opacity: 1; }
 .hc-ev-shot video.on { opacity: 1; }
 
+/* a saved still arrives with its source, so it fades in like a clip's frame */
+.hc-ev-shot img.still { opacity: 0; }
+.hc-ev-shot img.still.on { opacity: 1; }
+
 /* the icon shows through until (or instead of) a picture */
 .hc-ev-icon {
     position: absolute;
@@ -607,6 +611,8 @@
 }
 
 .hc-ev.noclip .hc-ev-shot { opacity: 0.72; }
+/* …unless there's a real picture of it — that's not a lesser event */
+.hc-ev.noclip.pic .hc-ev-shot { opacity: 1; }
 
 .hc-events.loading .hc-events-track { opacity: 0.5; }
 

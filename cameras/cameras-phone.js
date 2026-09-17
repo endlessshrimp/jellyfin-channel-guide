@@ -95,10 +95,14 @@
 
         // ----- the events strip, drawn the same on the wall and on a camera -----
 
+        // best picture first: the still Home Assistant saved of the moment,
+        // else the clip's own first frame (see cameras.js)
         const evHtml = (e, k) => `
-            <div class="cp-ev${e.ring ? ' ring' : ''}${e.clip ? '' : ' noclip'}" data-e="${k}" role="button">
+            <div class="cp-ev${e.ring ? ' ring' : ''}${e.clip ? '' : ' noclip'}${e.still ? ' pic' : ''}" data-e="${k}" role="button">
                 <div class="cp-ev-shot">
-                    ${e.thumb ? `<img src="${esc(e.thumb)}" alt="" draggable="false">` : '<video muted playsinline preload="metadata"></video>'}
+                    ${e.thumb ? `<img src="${esc(e.thumb)}" alt="" draggable="false">`
+                        : e.still ? '<img class="still" alt="" draggable="false">'
+                        : '<video muted playsinline preload="metadata"></video>'}
                     <div class="cp-ev-icon">${icon(e.icon)}</div>
                     ${e.seconds ? `<span class="cp-ev-len">${esc(runLength(e.seconds))}</span>` : ''}
                 </div>
@@ -112,24 +116,26 @@
 
         const pumpThumbs = () => {
             while (thumbBusy < 2 && thumbQueue.length) {
-                const v = thumbQueue.shift();
-                const box = v.closest('.cp-ev');
+                const n = thumbQueue.shift();
+                const box = n.closest('.cp-ev');
                 const e = evs[Number(box && box.dataset.e)];
-                if (!e || !e.clip) { v.dataset.done = '1'; continue; }
-                v.dataset.done = '1';
+                const isStill = n.tagName === 'IMG';
+                if (!e || (isStill ? !e.still : !e.clip)) { n.dataset.done = '1'; continue; }
+                n.dataset.done = '1';
                 thumbBusy++;
                 const done = () => { thumbBusy--; pumpThumbs(); };
-                M.clipUrl(e).then((url) => {
-                    if (!alive || !url || !v.isConnected) { done(); return; }
-                    v.addEventListener('loadeddata', () => { v.classList.add('on'); done(); }, { once: true });
-                    v.addEventListener('error', done, { once: true });
+                (isStill ? M.stillUrl(e) : M.clipUrl(e)).then((url) => {
+                    if (!alive || !url || !n.isConnected) { done(); return; }
+                    n.addEventListener(isStill ? 'load' : 'loadeddata', () => { n.classList.add('on'); done(); }, { once: true });
+                    n.addEventListener('error', done, { once: true });
                     setTimeout(done, 12000);
-                    v.src = url + '#t=0.8';
+                    n.src = isStill ? url : url + '#t=0.8';
                 }).catch(done);
             }
         };
+        // stills before clips: they come off the Pi's disk, not the camera
         const loadThumbs = () => {
-            thumbQueue = $$('.cp-ev video').filter((v) => !v.dataset.done);
+            thumbQueue = [...$$('.cp-ev img.still'), ...$$('.cp-ev video')].filter((n) => !n.dataset.done);
             pumpThumbs();
         };
 

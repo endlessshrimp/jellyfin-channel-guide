@@ -314,7 +314,9 @@ wall and the doorbell's rings where you can see them.
 - **Recent** is the doorbell's rings and its detections, newest first:
   **Ring · 4:12 PM**, **Person · 3:58 PM**, with the clip's length on its
   thumbnail. Rings are in amber. **OK** plays that clip in the big view;
-  **Esc** goes back to live.
+  **Esc** goes back to live. A ring or a person that Home Assistant saved a
+  still of shows that picture — a real look at who was at the door, there in
+  well under a second, and there even when the clip isn't.
 
 ### Where the rings and the clips come from
 
@@ -329,12 +331,13 @@ telling thing in it (a ring first, then a person, a package, an animal, a
 vehicle, plain motion). It asks for the low-resolution copies: the same events,
 a quarter of the bytes.
 
-Home Assistant hands out **no thumbnail** for those clips and keeps no stills
-of its own — `thumbnail` is `null` on every one, and `media-source://media_source`
-(the `/media` folder) is empty. So a tile's picture is the clip's own first
-frame, drawn by a paused, muted `<video>`, two at a time so a battery camera
-isn't asked for a dozen files at once. A media source that *does* carry a
-thumbnail is used as it is.
+Home Assistant hands out **no thumbnail** for those clips — `thumbnail` is
+`null` on every one. So a tile's picture is either a still Home Assistant
+saved of that moment (below) or, failing that, the clip's own first frame,
+drawn by a paused, muted `<video>`. Two of either load at a time so a battery
+camera isn't asked for a dozen files at once, and stills go first: they come
+off the server's disk and ask the camera for nothing. A media source that
+*does* carry a thumbnail is used as it is.
 
 Where a camera has no clips — it isn't a Reolink, or its recording is off —
 the events fall back to Home Assistant's history of the ring and detection
@@ -344,13 +347,59 @@ wins. Worth knowing: Home Assistant's recorder often has *no* trace of a ring
 (the visitor sensor's pulse is shorter than the recorder's resolution), so the
 camera's own clips are the reliable record of a ring, not the history.
 
-If you want a still of every ring regardless — something to look at when the
-camera is asleep or its SD card has rolled over — the smallest fix is a
-Home Assistant automation that calls `camera.snapshot` on
-`camera.front_door_snapshots_fluent` when `binary_sensor.front_door_visitor`
-turns on, writing to `/media/doorbell/`. That puts the stills in
-`media-source://media_source`, and nothing here has to change to find them.
-HOMER doesn't install it for you.
+### A picture of every ring
+
+So a ring is worth a picture of its own, taken the instant the bell is
+pressed rather than dug out of a clip that may never arrive. Two automations
+in Home Assistant do it — both named **Doorbell stills: …**, so they sort
+together in Settings → Automations, and either can be deleted without
+touching anything else:
+
+| Automation | Fires on | Writes |
+| --- | --- | --- |
+| Doorbell stills: save a picture of every ring | `binary_sensor.front_door_visitor` → `on` | `/media/doorbell/<date>/ring-<stamp>.jpg` |
+| Doorbell stills: save a picture when a person is seen | `binary_sensor.front_door_person` → `on` | `/media/doorbell/<date>/person-<stamp>.jpg` |
+
+Both call `camera.snapshot` on **`camera.front_door_snapshots_fluent`**, not
+on `camera.front_door_fluent`. The two return the same 640×480 frame in about
+the same time, but the snapshots entity supports no stream at all
+(`supported_features: 0`): Home Assistant fetches a JPEG straight from the
+camera's snapshot endpoint instead of opening the sub-stream and decoding a
+frame out of it. Fewer moving parts at the one moment the doorbell is busiest,
+and it leaves the stream free for whatever is actually watching.
+
+They trigger on the **state change**, never on a poll — the visitor sensor's
+pulse is shorter than Home Assistant's recorder reliably catches, which is the
+whole reason a ring could go unrecorded. The person one saves at most one
+picture every two minutes, so an afternoon of the same delivery van pacing the
+porch doesn't fill the disk.
+
+HOMER reads them back through `media-source://media_source/local/doorbell`, a
+folder per day, and lays each still over the event at the same moment: a ring
+still finds the ring, a person still finds the person, and the clip (where
+there is one) stays exactly as playable as before. **A still that matches no
+event becomes one** — given how often the recorder misses the pulse, the
+picture is sometimes the only record that anyone rang at all.
+
+![A ring and a person with their saved stills in Recent](docs/screenshots/cameras-doorbell-stills.jpg)
+
+**Housekeeping is manual, and that is worth knowing.** Nothing deletes these.
+A still is about 20 KB, so the ring automation alone is trivial (a busy day of
+20 rings is 400 KB, a year under 150 MB), but the person automation is the one
+to watch: at its 2-minute floor a pathological day is 720 pictures, ~14 MB.
+Home Assistant ships no service that deletes a file, so an automation cannot
+prune on its own. The two ways out, in order of preference:
+
+1. **A `shell_command`** in `configuration.yaml` —
+   `doorbell_prune: find /media/doorbell -type d -mtime +30 -exec rm -rf {} +`
+   — called by a daily time-triggered automation. Needs file access
+   (Terminal & SSH, or the File editor add-on) and a Core restart to pick the
+   new key up.
+2. **The media browser**: Settings → Media, or HOMER's own browse, can delete
+   a day's folder by hand. Fine for a once-a-quarter tidy.
+
+Until one of those is in place, treat `/media/doorbell` as growing without
+limit.
 
 ### A camera that's offline
 

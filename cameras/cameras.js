@@ -505,14 +505,17 @@
             $$('.hc-ctl').forEach((c, k) => c.classList.toggle('sel', zone === 'view' && part === 'controls' && k === ci));
         };
 
-        // An event's picture. Home Assistant hands out no thumbnail for a
-        // Reolink clip, so the clip is its own thumbnail: a muted <video>
-        // holding its first frame. Only the strip's own events load one, and
-        // a clip that never loads leaves the tile's icon showing.
+        // An event's picture, best first: the still Home Assistant saved of
+        // the moment it happened, else the clip's own first frame in a muted
+        // <video>, since Home Assistant hands out no thumbnail for a Reolink
+        // clip. Both are filled in by loadThumbs(); either failing leaves the
+        // tile's icon showing.
         const eventHtml = (e, k) => `
-            <div class="hc-ev${e.ring ? ' ring' : ''}${e.clip ? '' : ' noclip'}" data-e="${k}" role="button">
+            <div class="hc-ev${e.ring ? ' ring' : ''}${e.clip ? '' : ' noclip'}${e.still ? ' pic' : ''}" data-e="${k}" role="button">
                 <div class="hc-ev-shot">
-                    ${e.thumb ? `<img src="${esc(e.thumb)}" alt="" draggable="false">` : '<video muted playsinline preload="metadata"></video>'}
+                    ${e.thumb ? `<img src="${esc(e.thumb)}" alt="" draggable="false">`
+                        : e.still ? '<img class="still" alt="" draggable="false">'
+                        : '<video muted playsinline preload="metadata"></video>'}
                     <div class="hc-ev-icon">${icon(e.icon)}</div>
                     ${e.seconds ? `<span class="hc-ev-len">${esc(runLength(e.seconds))}</span>` : ''}
                 </div>
@@ -532,35 +535,41 @@
             track.innerHTML = evs.map(eventHtml).join('');
             // times from Home Assistant's history still stand when the camera
             // itself is away, so say which of the two this strip is showing
-            note.textContent = evs.some((e) => e.clip) ? '' : (why || 'times only — this camera keeps no clips');
+            note.textContent = evs.some((e) => e.clip)
+                ? ''
+                : (why || (evs.some((e) => e.still)
+                    ? 'pictures only — no clips saved'
+                    : 'times only — this camera keeps no clips'));
             $$('.hc-ev').forEach((n, k) => n.classList.toggle('sel', zone === 'view' && part === 'events' && k === ei));
             loadThumbs();
             revealEvent();
         };
 
-        // the clip's own first frame, a few at a time so a battery camera
-        // isn't asked for twelve files at once
+        // The saved stills and the clips' first frames, a few at a time so a
+        // battery camera isn't asked for twelve files at once. Stills come
+        // first: they're 20 KB off the Pi's disk, and the camera is never
+        // asked for anything.
         let thumbQueue = [];
         let thumbBusy = 0;
         const loadThumbs = () => {
-            thumbQueue = $$('.hc-ev video').filter((v) => !v.dataset.done);
+            thumbQueue = [...$$('.hc-ev img.still'), ...$$('.hc-ev video')].filter((n) => !n.dataset.done);
             pumpThumbs();
         };
         const pumpThumbs = () => {
             while (thumbBusy < 2 && thumbQueue.length) {
-                const v = thumbQueue.shift();
-                const k = Number(v.closest('.hc-ev').dataset.e);
-                const e = evs[k];
-                if (!e || !e.clip) { v.dataset.done = '1'; continue; }
-                v.dataset.done = '1';
+                const n = thumbQueue.shift();
+                const e = evs[Number(n.closest('.hc-ev').dataset.e)];
+                const isStill = n.tagName === 'IMG';
+                if (!e || (isStill ? !e.still : !e.clip)) { n.dataset.done = '1'; continue; }
+                n.dataset.done = '1';
                 thumbBusy++;
                 const done = () => { thumbBusy--; pumpThumbs(); };
-                M.clipUrl(e).then((url) => {
-                    if (!alive || !url || !v.isConnected) { done(); return; }
-                    v.addEventListener('loadeddata', () => { v.classList.add('on'); done(); }, { once: true });
-                    v.addEventListener('error', done, { once: true });
+                (isStill ? M.stillUrl(e) : M.clipUrl(e)).then((url) => {
+                    if (!alive || !url || !n.isConnected) { done(); return; }
+                    n.addEventListener(isStill ? 'load' : 'loadeddata', () => { n.classList.add('on'); done(); }, { once: true });
+                    n.addEventListener('error', done, { once: true });
                     setTimeout(done, 12000); // a slow camera doesn't hold up the rest
-                    v.src = url + '#t=0.8';
+                    n.src = isStill ? url : url + '#t=0.8';
                 }).catch(done);
             }
         };

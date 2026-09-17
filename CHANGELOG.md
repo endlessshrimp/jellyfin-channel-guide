@@ -115,6 +115,43 @@
   into the other phone grids that split in two.
 ## Unreleased
 
+- **Cameras' Recent strip shows a real picture of the ring.** Home Assistant
+  now saves a still the instant the doorbell is pressed, and HOMER shows it as
+  that event's thumbnail instead of a clip's first frame or a plain row.
+  - **Two Home Assistant automations**, *Doorbell stills: save a picture of
+    every ring* and *…when a person is seen*, call `camera.snapshot` into
+    `/media/doorbell/<date>/<ring|person>-<YYYYMMDD-HHMMSS>.jpg`. They live in
+    Home Assistant, not here — HOMER only reads what they leave behind — and
+    the README says how to find and remove them.
+  - They snapshot **`camera.front_door_snapshots_fluent`**, the still-image
+    entity, not the streaming one: same 640×480 in the same ~400 ms, but Home
+    Assistant fetches a JPEG from the camera's snapshot endpoint rather than
+    opening the sub-stream to decode a frame, and the live stream is left
+    alone at the one moment the doorbell is busiest.
+  - They fire on the **state change**, never a poll. The visitor sensor's
+    pulse is shorter than the recorder reliably catches, which is exactly how
+    a ring used to end up with no record at all.
+  - `cameras/cameras-model.js` reads them back from
+    `media-source://media_source/local/doorbell` (a folder per day, newest
+    four walked) and lays each still over the event at the same moment —
+    within 90 s and matching on kind, rings placed first so they get first
+    claim on a clip that was both. **A still that matches nothing becomes its
+    own event**, which is not a corner case: the picture is often the only
+    trace of a ring the recorder missed. Clips stay exactly as playable.
+  - `M.stillUrl(ev)` resolves per paint rather than being held, because a
+    media-source URL is signed and expires in about half a minute — the same
+    reason `M.clipUrl(ev)` already worked that way. A "No clip" event that has
+    a still is no longer dimmed: there's a real picture of it.
+  - Worth knowing, measured on the real doorbell: both stills were on screen
+    in under a second while **none** of the 22 clip first-frames had decoded a
+    minute later — the camera serves playback one request at a time. The still
+    isn't just a nicer thumbnail; it's frequently the only one that arrives.
+  - **Nothing prunes these.** ~20 KB each, so the rings are negligible and the
+    person automation is throttled to one picture per two minutes, but
+    `/media/doorbell` grows without limit: Home Assistant ships no service
+    that deletes a file, so an automation can't do it. The README has the
+    `shell_command` to add when there's file access.
+
 - **Movies and TV Shows can be narrowed down.** Two rows of chips sit above the
   list, in the guide's chip language rather than a second pattern to learn: the
   order on top, then what the list is narrowed to.
