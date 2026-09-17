@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.20
 
 - **Who's home moved out of Home's top bar and into Rooms.** On a TV it lived
   beside the clock, which a remote can't reach: there is no way to put the
