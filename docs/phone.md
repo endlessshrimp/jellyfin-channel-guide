@@ -381,7 +381,7 @@ worth copying for anything that plays:
   leaving `#/music` entirely) doesn't stop the music. `music/music-strip.js`
   draws the now-playing strip on every *other* screen; on a phone it sits above
   the tab bar (`.homer-chrome #mu-strip { bottom: calc(var(--homer-phone-tabs)
-  + 8px) }`) and the screen's own `.mup-mini` takes over inside Music.
+  + 8px) }`) and the screen's own `.mup-inline-player` takes over inside Music.
 - **`pagehide` is not the page going away.** Jellyfin Web fires `pagehide` on
   its own in-app navigations, so a player that stops on `pagehide` (Books does,
   deliberately) stops every time you change screen. Music reports its position
@@ -403,6 +403,43 @@ worth copying for anything that plays:
   glyph rather than rebuilding the list, because on a phone a thumb is usually
   still resting on one. Only the Favorites list itself is redrawn, since that
   is the one list a star actually changes.
+- **The player is the first thing in the list, not a bar floating over it.**
+  `.mup-inline-player` is the first child of `.mup-scroll`, ahead of the chips
+  and the wall, so at rest it's a full-size card that scrolls like any other
+  item — no reserved bottom padding, no z-index fight with the tab bar. It's
+  also `position: sticky; top: 0`, so once you've scrolled past its natural
+  spot it pins there instead of disappearing.
+
+  ![The player at rest, top of the list](screenshots/music-player-phone-full.png)
+
+  A scroll listener on `.mup-scroll` toggles `.mup-player-compact` on `#mu-root`
+  past a threshold (with a gap between the collapse and expand thresholds, so
+  it can't flicker right at the edge); the CSS transitions padding, art size
+  and font size down to a single row. The one thing that mattered: the sticky
+  element's own box **never changes height because of scrolling** — only
+  `.mup-player-compact`'s CSS does that, in place. If the JS had swapped in
+  different markup instead of just toggling a class, the box's height would
+  have jumped between frames and the wall beneath it would visibly lurch;
+  toggling a class the sticky box already occupies just makes more of the wall
+  become visible underneath it, which reads as the player getting out of the
+  way rather than the list moving.
+
+  ![Collapsed to a single row while scrolling](screenshots/music-player-phone-compact.png)
+
+  `prefers-reduced-motion: reduce` drops every transition on the component, so
+  the collapse snaps instead of animating — still correct, just not smooth.
+- **The device button doesn't wait for HOMER's own audio to tick.**
+  `paintPlaying()` (the big Now Playing sheet) and `syncPlayer()` (the inline
+  player) both throttle their own `HomerPlayOn.current()` check to once a
+  second, since `current()` walks every Home Assistant room — fine, because
+  they're driven by the player's own `timeupdate`, which fires constantly
+  while something plays *here*. But the whole point of the button is the case
+  where nothing is: cast the album to a WiiM with the tab otherwise idle, and
+  nothing was ticking to trigger that check. Both screens also listen to
+  `HomerHA.onChange` directly and call the same paint function unthrottled
+  from it, so a speaker starting, stopping, or being stopped from its own
+  remote updates the button within the next Home Assistant event, whether or
+  not HOMER's own audio is doing anything at all.
 - **One picker, two sizes.** "Play on…" (`music/playon.js`) is the same list on
   both layouts, with no layout-specific code in it: the screen passes `tv:
   true/false` and a host element, and `music/playon.css` switches between stage

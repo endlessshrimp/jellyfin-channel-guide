@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- **Play on… gets a visible button, on both players.** It used to exist
+  only in the Actions strip (hold OK) and inside an album's sheet on a
+  phone — findable, if you already knew it was there. The TV's Now Playing
+  screen and the phone's player both get a device/cast icon now, opening
+  the same picker (`music/playon.js`) for whatever is actually playing — an
+  album, a single track, or a radio station. `HomerPlayOn.current()` is new:
+  it says whether HOMER itself sent the last thing somewhere and that
+  speaker is still busy, so the button shows a device is already playing
+  instead of a plain idle cast icon, and self-corrects (Home Assistant's own
+  events, not just HOMER's) when that speaker is stopped from its own
+  remote.
+- **The phone player moves to the top of the album list.** Not a floating
+  bar and not a screen you go find — `music/music-phone.js` draws it as the
+  first thing in `.mup-scroll`, full-size at rest. `position: sticky` pins
+  it to the top once you scroll past it, and past a threshold it shrinks to
+  a single row (`music-phone.css`'s `.mup-player-compact`) without shoving
+  the album wall around — its box keeps its slot in the flow; only what's
+  drawn inside it gets smaller. Respects `prefers-reduced-motion`. Replaces
+  the old fixed `.mup-mini` bar entirely.
+
 ## v0.4.23
 
 - **The menu goes from 14 items to 12.** Live TV absorbs the old Live TV

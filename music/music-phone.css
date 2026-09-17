@@ -41,8 +41,6 @@
     padding: 12px calc(12px + var(--homer-phone-right, 0px)) 28px calc(12px + var(--homer-phone-left, 0px));
 }
 
-.mup-has-mini .mup-scroll { padding-bottom: 96px; }
-
 /* ---------- The chips ---------- */
 
 .mup-chips {
@@ -253,6 +251,8 @@
     font-size: 22px;
 }
 
+.mup-cast-top.set { color: var(--needle, #ffb020); }
+
 .mup-sheet-scroll,
 .mup-np {
     flex: 1;
@@ -261,8 +261,6 @@
     -webkit-overflow-scrolling: touch;
     padding: 16px calc(14px + var(--homer-phone-right, 0px)) 28px calc(14px + var(--homer-phone-left, 0px));
 }
-
-.mup-has-mini .mup-sheet-scroll { padding-bottom: 96px; }
 
 /* a page's head */
 .mup-page-head { display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -405,34 +403,118 @@
 .mup-lyr.past { color: rgba(244, 247, 251, 0.22); }
 .mup-lyr.on { color: #fff; }
 
-/* ---------- The mini player ---------- */
+/* ---------- The inline player ---------- */
+/*
+ * music/music-phone.js builds this once as the first child of .mup-scroll —
+ * not a fixed bar floating over the list, and not a screen you go find. At
+ * rest it's a full-size row that scrolls with the wall beneath it, like any
+ * other item. `position: sticky` then pins it to the top the moment it would
+ * scroll out of view, and from there .mup-player-compact (toggled by a
+ * scroll-position threshold in JS, with a little hysteresis so it can't
+ * flicker) shrinks its own contents in place — the row's slot in the flow
+ * never changes size out from under it, so collapsing it never shoves the
+ * list; only what's drawn inside it gets smaller.
+ */
 
-.mup-mini {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
-    min-height: 62px;
+.mup-inline-player {
     display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 8px;
-    border-radius: 14px;
-    background: rgba(12, 26, 48, 0.96);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 14px;
+    border-radius: 16px;
+    background: rgba(12, 26, 48, 0.97);
     box-shadow: 0 0 0 1px rgba(var(--wash), 0.5), 0 12px 30px rgba(0, 0, 0, 0.55);
     overflow: hidden;
-    z-index: 3;
 }
 
-.mup-has-mini .mup-mini { display: flex; }
+#mu-root.mup-has-player .mup-inline-player { display: block; }
 
-.mup-mini-art { width: 46px; height: 46px; flex: none; border-radius: 8px; overflow: hidden; background: #0a1628; }
-.mup-mini-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mup-mini-t b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mup-mini-t i { font-style: normal; font-size: 13px; color: var(--dim, #8ea3bd); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mup-mini-b { width: 44px; height: 44px; flex: none; display: grid; place-items: center; font-size: 28px; }
-.mup-mini-b .material-icons { font-size: inherit; }
-.mup-mini-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--needle, #ffb020); }
+.mup-ip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    transition: padding 220ms ease, gap 220ms ease;
+}
+
+.mup-ip-open, .mup-ip-status {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+
+.mup-ip-art {
+    width: 52px;
+    height: 52px;
+    flex: none;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0a1628;
+    display: grid;
+    place-items: center;
+    font-size: 24px;
+    transition: width 220ms ease, height 220ms ease;
+}
+
+.mup-ip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mup-ip-t { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: font-size 220ms ease; }
+
+.mup-ip-a {
+    font-style: normal;
+    font-size: 13px;
+    color: var(--dim, #8ea3bd);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-height: 18px;
+    transition: opacity 180ms ease, max-height 220ms ease;
+}
+
+.mup-ip-a .material-icons { font-size: 14px; }
+
+.mup-ip-b {
+    width: 42px;
+    height: 42px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-size: 25px;
+    border-radius: 50%;
+    transition: width 220ms ease, height 220ms ease, font-size 220ms ease, color 160ms ease, background 160ms ease;
+}
+
+.mup-ip-b .material-icons { font-size: inherit; }
+.mup-ip-cast.set { color: var(--needle, #ffb020); background: rgba(255, 176, 32, 0.16); }
+.mup-ip-play { font-size: 30px; }
+
+.mup-ip-bar { display: block; height: 3px; background: var(--needle, #ffb020); transition: width 200ms linear; }
+
+/* Nothing is playing here, but HOMER remembers sending something to a
+   speaker and it's still going — status only, no controls to fight over. */
+.mup-inline-player.cast-only .mup-ip-row { padding: 12px 14px; }
+.mup-inline-player.cast-only .mup-ip-art { background: rgba(var(--wash), 0.28); }
+
+/* ---------- Compact: a single row once you've scrolled past it ---------- */
+
+#mu-root.mup-player-compact .mup-ip-row { padding: 5px 10px; gap: 6px; }
+#mu-root.mup-player-compact .mup-ip-art { width: 32px; height: 32px; border-radius: 7px; font-size: 16px; }
+#mu-root.mup-player-compact .mup-ip-t { font-size: 13px; }
+#mu-root.mup-player-compact .mup-ip-a { opacity: 0; max-height: 0; pointer-events: none; }
+#mu-root.mup-player-compact .mup-ip-next { display: none; }
+#mu-root.mup-player-compact .mup-ip-b { width: 34px; height: 34px; font-size: 20px; }
+#mu-root.mup-player-compact .mup-ip-play { font-size: 22px; }
+#mu-root.mup-player-compact .mup-inline-player { margin-bottom: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .mup-ip-row, .mup-ip-art, .mup-ip-t, .mup-ip-a, .mup-ip-b, .mup-ip-bar { transition: none; }
+}
 
 /* ---------- States ---------- */
 

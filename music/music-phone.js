@@ -13,20 +13,25 @@
  *   A page     (tap a cover) a sheet: the art, Play / Shuffle / Play on… /
  *              Instant Mix,
  *              and the tracks — or, for an artist or a genre, their albums
- *   Playing    (tap the bar) the big cover, the controls, and the lyrics,
- *              the line you're on lit
+ *   Playing    (tap the player) the big cover, the controls, a device button
+ *              of its own, and the lyrics, the line you're on lit
  *
  * A star sits on every track row, on an album's header and on Now playing. It
  * is Jellyfin's favourite, not HOMER's, and the **Favorites** chip is the
  * tracks that have one.
  *
- * A mini player sits above the tab bar whenever something is loaded. Leaving
- * Music does not stop it: music/music-strip.js takes over on other screens.
+ * The player (.mup-inline-player) is the first thing in .mup-scroll whenever
+ * something is loaded — not a screen you go find. It's a full-size card at
+ * rest and a single sticky row once you scroll past it (music-phone.css). Its
+ * own cast icon opens music/playon.js for whatever's playing; when nothing is
+ * loaded here but HOMER remembers sending something to a speaker that's still
+ * going, the player says so instead of looking idle. Leaving Music does not
+ * stop the music: music/music-strip.js takes over on other screens.
  *
  * window.HomerMusicPhone = { create, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
     const M = () => window.HomerMusicModel;
     const RM = () => window.HomerRadioModel || null;
 
@@ -88,11 +93,11 @@
         root.innerHTML = `
             <div class="mup-wash"></div>
             <div class="mup-scroll">
+                <div class="mup-inline-player"></div>
                 <div class="mup-chips"></div>
                 <div class="mup-grid"></div>
                 <div class="mup-state"></div>
             </div>
-            <button type="button" class="mup-mini"></button>
             <div class="mup-sheet mup-page"></div>
             <div class="mup-sheet mup-playing"></div>`;
         document.body.appendChild(root);
@@ -112,6 +117,7 @@
             sheets.pop();
             open = sheets[sheets.length - 1] || null;
             syncSheets();
+            syncPlayer();
         };
         const syncSheets = () => {
             root.classList.toggle('mup-open-page', open === 'page');
@@ -486,7 +492,7 @@
             if (!s.track) { box.innerHTML = '<div class="mup-note">Nothing is playing.</div>'; return; }
             setWash(s.track);
             box.innerHTML = `
-                <div class="mup-bar"><button type="button" class="mup-back">${icon('expand_more')}</button><span>${esc(s.source ? s.source.name : 'Now playing')}</span></div>
+                <div class="mup-bar"><button type="button" class="mup-back">${icon('expand_more')}</button><span>${esc(s.source ? s.source.name : 'Now playing')}</span><button type="button" class="mup-back mup-cast-top" data-a="cast" aria-label="Play on…">${icon('cast')}</button></div>
                 <div class="mup-np">
                     <div class="mup-np-art">${artImg(s.track, 700, 'mu-img')}</div>
                     <h1 class="mup-np-t"></h1>
@@ -505,6 +511,8 @@
                     <div class="mup-lyrics"></div>
                 </div>`;
             box.querySelector('.mup-back').onclick = closeSheet;
+            box.querySelector('.mup-cast-top').onclick = playOnHere;
+            syncCastTop();
             const P = player();
             const acts = {
                 fav: () => { const t = P.state().track; if (t) M().setFavorite(t, !M().isFavorite(t)).catch(() => {}); },
@@ -599,6 +607,7 @@
                 }
             });
         };
+        let lastCastPaintAt = 0;
         const paintPlaying = () => {
             const box = $('.mup-playing');
             if (!box || !box.querySelector('.mup-np')) return;
@@ -629,36 +638,138 @@
             rep.innerHTML = icon(s.repeat === 'one' ? 'repeat_one' : 'repeat');
             rep.classList.toggle('set', s.repeat !== 'off');
             q('.mup-np-next').textContent = s.next ? `Next · ${s.next.name}` : '';
+            // devices() walks every Home Assistant room, so this checks in
+            // once a second, not four times, while the seek bar ticks. Home
+            // Assistant's own events (below) call syncCastTop() directly and
+            // aren't subject to this.
+            if (Date.now() - lastCastPaintAt > 1000) {
+                lastCastPaintAt = Date.now();
+                syncCastTop();
+            }
             paintLyrics(false);
         };
 
-        // ----- the mini player -----
-        const syncMini = () => {
+        // ----- the inline player: the first thing in the list -----
+        //
+        // Not a floating bar and not a screen you go find — it's the top row
+        // of .mup-scroll, so it scrolls with everything else until it hits
+        // the top of the screen, then (music-phone.css) sticks there and
+        // music-phone.css shrinks it to a single row as more of the list
+        // slides underneath. This only builds what's inside it and flips the
+        // "past the fold" class at a scroll threshold with a little
+        // hysteresis so it can't flicker right at the edge.
+        const COMPACT_AT = 46;
+        const EXPAND_AT = 16;
+        let compact = false;
+        const activeCast = () => {
+            const p = PO();
+            return p && p.current ? p.current() : null;
+        };
+        // The big Now Playing sheet's own cast button (top bar): it can't
+        // rely on paintPlaying()'s own tick — that only runs when HOMER's
+        // local audio moves, and casting away is exactly the case where it
+        // might not be. Home Assistant's own events (below) call this
+        // straight through, unthrottled; paintPlaying() throttles it itself.
+        const syncCastTop = () => {
+            const box = $('.mup-playing');
+            const castTop = box && box.querySelector('.mup-cast-top');
+            if (!castTop) return;
+            const on = !!activeCast();
+            castTop.classList.toggle('set', on);
+            castTop.innerHTML = icon(on ? 'cast_connected' : 'cast');
+        };
+        // The device button, for whatever HOMER itself is playing right now
+        // — the same picker the album sheet and the Radio sheet use. A
+        // station goes through Radio's own speakers (Music Assistant); a
+        // track goes through the album picker in its single-track shape,
+        // since resending "the album" from partway through it would restart
+        // it, not follow where you are.
+        const playOnHere = () => {
             const s = player().state();
-            const mini = $('.mup-mini');
-            const show = !!s.track && open !== 'playing';
-            root.classList.toggle('mup-has-mini', show);
-            if (!show) return;
-            const dur = s.duration || s.track.duration || 0;
-            mini.innerHTML = `
-                <span class="mup-mini-art">${artImg(s.track, 120, 'mu-img')}</span>
-                <span class="mup-mini-t"><b>${esc(s.track.name)}</b><i>${esc(s.track.artist || '')}</i></span>
-                <span class="mup-mini-b" data-k="play">${icon(s.playing ? 'pause' : 'play_arrow')}</span>
-                <span class="mup-mini-b" data-k="next">${icon('skip_next')}</span>
-                <i class="mup-mini-bar" style="width:${(dur ? (s.position / dur) * 100 : 0).toFixed(1)}%"></i>`;
-        };
-        $('.mup-mini').onclick = (ev) => {
-            const b = ev.target.closest('[data-k]');
-            if (b) {
-                ev.stopPropagation();
-                if (b.dataset.k === 'play') player().toggle(); else player().next();
-                syncMini();
-                return;
+            const t = s.track;
+            const p = PO();
+            if (!p || !t) return;
+            if (t.live && RM()) {
+                const st = RM().station(t.stationId);
+                if (st) { playOnStation(st); return; }
             }
-            push('playing');
-            drawPlaying();
-            syncSheets();
+            p.open(document.body, {
+                tv: false,
+                item: t,
+                tracks: [t],
+                onHere: () => {}, // it's already playing here
+                onNowPlaying: () => { push('playing'); drawPlaying(); syncSheets(); },
+            });
         };
+        let ipFor = ''; // what the row's markup was last built for
+        const syncPlayer = () => {
+            const box = $('.mup-inline-player');
+            const s = player().state();
+            const cur = !s.track ? activeCast() : null;
+            const show = (!!s.track || !!cur) && open !== 'playing';
+            root.classList.toggle('mup-has-player', show);
+            if (!show) { ipFor = ''; return; }
+            box.classList.toggle('cast-only', !s.track);
+            if (s.track) {
+                const dur = s.duration || s.track.duration || 0;
+                const key = 'p:' + s.track.id + '|' + s.playing;
+                if (ipFor !== key) {
+                    ipFor = key;
+                    box.innerHTML = `
+                        <div class="mup-ip-row">
+                            <button type="button" class="mup-ip-open" data-a="open">
+                                <span class="mup-ip-art">${artImg(s.track, 160, 'mu-img')}</span>
+                                <span class="mup-ip-body">
+                                    <b class="mup-ip-t">${esc(s.track.name)}</b>
+                                    <i class="mup-ip-a">${esc(s.track.artist || '')}</i>
+                                </span>
+                            </button>
+                            <button type="button" class="mup-ip-b mup-ip-cast" data-a="cast" aria-label="Play on…">${icon('cast')}</button>
+                            <button type="button" class="mup-ip-b mup-ip-play" data-a="play" aria-label="Play / pause">${icon(s.playing ? 'pause' : 'play_arrow')}</button>
+                            <button type="button" class="mup-ip-b mup-ip-next" data-a="next" aria-label="Next">${icon('skip_next')}</button>
+                        </div>
+                        <i class="mup-ip-bar"></i>`;
+                }
+                box.querySelector('.mup-ip-bar').style.width = (dur ? (s.position / dur) * 100 : 0).toFixed(1) + '%';
+                const castBtn = box.querySelector('.mup-ip-cast');
+                if (castBtn) {
+                    const on = !!activeCast();
+                    castBtn.classList.toggle('set', on);
+                    castBtn.innerHTML = icon(on ? 'cast_connected' : 'cast');
+                }
+            } else if (cur) {
+                const key = 'c:' + cur.device.id + '|' + (cur.info.name || '');
+                if (ipFor !== key) {
+                    ipFor = key;
+                    box.innerHTML = `
+                        <div class="mup-ip-row">
+                            <span class="mup-ip-open mup-ip-status">
+                                <span class="mup-ip-art">${cur.info.art ? `<img class="mu-img" src="${esc(cur.info.art)}" alt="" draggable="false">` : icon('cast_connected')}</span>
+                                <span class="mup-ip-body">
+                                    <b class="mup-ip-t">${esc(cur.info.name || 'Playing')}</b>
+                                    <i class="mup-ip-a">${icon('cast_connected')}On ${esc(cur.device.label || cur.device.name)}</i>
+                                </span>
+                            </span>
+                        </div>`;
+                }
+            }
+        };
+        $('.mup-inline-player').onclick = (ev) => {
+            const a = ev.target.closest('[data-a]');
+            if (!a) return;
+            ev.stopPropagation();
+            const k = a.dataset.a;
+            if (k === 'play') { player().toggle(); syncPlayer(); }
+            else if (k === 'next') { player().next(); syncPlayer(); }
+            else if (k === 'cast') playOnHere();
+            else if (k === 'open') { push('playing'); drawPlaying(); syncSheets(); }
+        };
+        const onScroll = () => {
+            const y = $('.mup-scroll').scrollTop;
+            if (!compact && y > COMPACT_AT) { compact = true; root.classList.add('mup-player-compact'); }
+            else if (compact && y < EXPAND_AT) { compact = false; root.classList.remove('mup-player-compact'); }
+        };
+        $('.mup-scroll').addEventListener('scroll', onScroll, { passive: true });
 
         // ----- states -----
         const setState = (kind) => {
@@ -690,7 +801,7 @@
             drawGrid();
             if (open === 'page') { if (stationItem) drawStation(); else drawPage(); }
             else if (open === 'playing') drawPlaying();
-            syncMini();
+            syncPlayer();
         };
         const reload = () => {
             if (!M().albums().length) setState('loading');
@@ -703,7 +814,7 @@
                 if (open === 'playing') paintPlaying();
                 if (Date.now() - lastPaint > 900 || !player().state().playing) {
                     lastPaint = Date.now();
-                    syncMini();
+                    syncPlayer();
                 }
                 return;
             }
@@ -727,6 +838,13 @@
             if (open === 'page' && stationItem) drawStation();
         }) : () => {};
         if (RM()) RM().load().catch(() => {});
+        // A speaker starting, stopping, or being taken by someone else's
+        // remote changes the inline player's own state — the cast-only row,
+        // and the device button's highlight — independent of anything HOMER
+        // itself is doing.
+        const offHA = window.HomerHA && window.HomerHA.onChange
+            ? window.HomerHA.onChange(() => { syncPlayer(); if (open === 'playing') syncCastTop(); })
+            : () => {};
 
         const onKey = (ev) => {
             if (!['Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(ev.key)) return;
@@ -763,6 +881,8 @@
                 offScreenHome();
                 off();
                 offRadio();
+                offHA();
+                $('.mup-scroll').removeEventListener('scroll', onScroll);
                 clearInterval(liveTimer);
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();
