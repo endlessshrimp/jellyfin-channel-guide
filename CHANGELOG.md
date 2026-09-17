@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.31
 
 - **Signing in to Home Assistant works again.** The sign-in came back from
   Home Assistant, HOMER tried to tidy the address bar, and threw
