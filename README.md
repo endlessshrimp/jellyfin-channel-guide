@@ -226,6 +226,47 @@ in `tmdb.token` beside it (it's preferred when both are there). Deleting the
 file turns the rows off again. These rows are the TV layout's; the phone
 layout's Movies and TV Shows don't show them yet.
 
+### Play on… (a movie or episode on another screen)
+
+![Play on, on a movie's page](docs/screenshots/castvideo-tv-movie-page.jpg)
+
+**Play on…** sits beside Play and Resume/Restart on a movie's page and an
+episode's or a show's, and sends it to another screen in the house instead of
+playing it here. It's only offered when there's actually somewhere to send
+it to — Home Assistant connected, or Jellyfin's own `/Sessions` — and both of
+those usually settle *after* the page has already drawn once, so the button is
+kept in step rather than decided at draw time: it can appear a moment after
+the page does, and disappear again if a session drops.
+
+![The picker, both kinds of row](docs/screenshots/castvideo-tv-picker.jpg)
+
+Unlike an album, a movie can't go out as an M3U — there's no such thing as "a
+few seconds of video, enqueued" — so the picker chooses honestly between two
+real, unequal routes per device, and says which one on the row:
+
+| Route | How | What you get |
+| --- | --- | --- |
+| **Jellyfin** | Every other live Jellyfin client, from `GET /Sessions` — a phone, a TV app, another browser. `POST /Sessions/{id}/Playing` hands it the item the same way the guide already remote-controls a session. | The real thing: resume points, subtitles, direct play, proper scrubbing, and it reports straight back into `/Sessions` — HOMER's Now Playing already understands it. |
+| **Home Assistant** | A Chromecast, an Apple TV, or a DLNA/UPnP renderer, handed a Jellyfin transcoding address (`/Videos/{id}/master.m3u8`, forced to H.264/AAC) through `media_player.play_media`. | Reaches a screen with no Jellyfin app running, but the picture quality is decided up front, there's no resume and no subtitle menu, and nothing reports back. |
+
+Only a device actually running a Jellyfin client gets the first row; only a
+Home Assistant platform HOMER has verified actually fetches a media URL gets
+the second (`cast`, `apple_tv`, `dlna_dmr`, `upnp` — **not** `samsungtv`,
+`webostv` or `androidtv`, whose `play_media` launches an app by id rather than
+playing a file, and not a device that only reaches Home Assistant through
+Music Assistant's own player wrapper, which is built and tested for audio).
+A device reachable both ways only shows once, as the Jellyfin row — matched by
+a loose overlap of words between the Home Assistant entity's name and the
+session's device name, not a real fingerprint, so an unmatched pair can in
+principle appear twice.
+
+**The Home Assistant route's URL carries Jellyfin's real access token in the
+open** (`?api_key=…`), because unlike the album picker's NAS helper there's no
+opaque address to hide it behind — it lands in Home Assistant's logbook, its
+recorder, and any debug log that repeats the service call. A NAS helper that
+mints a short-lived address the way `/music/playlist` does would close this;
+none exists for video yet.
+
 ## Weather
 
 Home's **Weather** item opens a forecast board laid out like a TV weather

@@ -497,6 +497,63 @@ worth copying for anything that plays:
   (clear and give the keys back) and ▲▼ (blur and move); the existing
   `isTyping(ev.target) && !root.contains(ev.target)` guard doesn't help,
   because this input *is* inside the root.
+
+## Movies and TV Shows: a second "Play on…" (`library/castvideo.js`)
+
+A movie's page and an episode's/show's page get their own device picker —
+same shape as music's, different plumbing underneath, because a movie can't
+travel as an M3U. Built after music/playon.js and deliberately not a
+copy-paste fork of it: the picker chrome (`library/castvideo.css`, `cv-`
+prefixed) mirrors `music/playon.css`'s structure exactly, but the device list
+is genuinely different — Jellyfin's own `/Sessions` first, Home Assistant
+`media_player.play_media` second — so the two pickers share no JS module.
+
+- **Append into the stage, not the screen's root, on TV — and this bites
+  quietly.** `createShell()` returns both `root` (`#hl-root`, a plain
+  full-viewport container) and `stage` (`#hl-stage`, the 1920×1080 box that
+  actually carries the `scale()` transform). The first pass here appended the
+  picker into `root`, copying the shape of `c.open(root, …)` without checking
+  which element music.js actually hands `HomerPlayOn.open()` — it's `stage`,
+  not `root`. Nothing errors when you get this wrong: the picker still opens,
+  still lists devices, still sends. It just renders at real screen pixels
+  inside a box whose sizes are all written in *stage* pixels (900px wide,
+  84px rows), so on anything but a 1920px-wide window it's comically
+  oversized and runs off both edges — invisible in a quick glance at devtools
+  computed styles (`opacity`, `position` and `z-index` all check out fine),
+  only obvious once you actually look at it rendered. Confirm with
+  `sheet.closest('#hl-stage')`, not just "did it open."
+- **A room-stripped name is fine for one of a kind, wrong for two.**
+  `HomerHA.name(id, roomName)` strips the room off the front ("Bedroom Apple
+  TV" in Bedroom becomes "Apple TV") — right for Rooms, where the room is
+  already the heading. Jason has two Apple TVs, in two different bedrooms;
+  taking `h.name()` at face value for a picker row put "Apple TV" in the list
+  twice with nothing to tell them apart. Fixed by rebuilding a
+  room-qualified label (`"Bedroom · Apple TV"`) the same way
+  `music/playon.js`'s own `devices()` already does for a grouped speaker set
+  — a second device family hitting the same naming function surfaced a case
+  the first one never needed to.
+- **Two independent "not ready yet"s, not one.** Home Assistant settling late
+  is the pattern `music.js` already has (`HomerHA.onChange`); Jellyfin's own
+  `/Sessions` settling late is a second one with no existing hook to reuse —
+  nothing in HOMER already polls the full session list for "who else is
+  live." `library/castvideo.js` adds its own slow poll (`POLL_MS`, only
+  while at least one screen has subscribed via `onChange`) and folds both
+  sources into one `onChange(fn)`, so a screen only has to ask once and
+  re-ask on every fire — the same shape as `music-phone.js`'s
+  `syncPageActs()`, just fed by two clocks instead of one.
+- **The two routes are never both offered for the same device on purpose.**
+  `sameDevice()` — a loose word-overlap between a Home Assistant entity's
+  room-qualified name and a live session's `DeviceName`/`Client` — drops the
+  Home Assistant row whenever a Jellyfin one already covers that device.
+  It's a real limitation, written down rather than hidden: with no shared id
+  between the two systems, an unmatched pair can in principle show up twice.
+  Verified against Jason's real `/Sessions` and Home Assistant, not
+  simulated: at test time his two Apple TVs had no Jellyfin client running,
+  so both routes were exercised for real — one Jellyfin row (a phone's live
+  session, correctly showing what it was mid-playing) and two Home Assistant
+  rows (the Apple TVs, correctly disambiguated after the fix above) — never
+  both for the same device, because none matched.
+
 ## Now Playing: one model, two layouts, no menu on the phone
 
 `playing/playing-phone.js` is the shortest version of the pattern, because

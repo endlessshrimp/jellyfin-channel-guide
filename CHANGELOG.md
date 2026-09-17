@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+- **Play on… for a movie or episode, not just an album.** A new picker
+  (`library/castvideo.js`, `library/castvideo.css`) puts a **Play on…**
+  button beside Play/Resume/Restart on a movie's page (`library.js`'s
+  `createMovie`) and an episode's/show's (`createShow`), on both TV and
+  phone (`library-phone.js`'s `movieView` and `showView`). Built alongside
+  `music/playon.js` rather than forked from it: the two share no JS (a
+  movie can't travel as an M3U), but the picker chrome is deliberately the
+  same shape, `cv-` prefixed in its own stylesheet.
+
+  The picker chooses honestly between two real routes per device, and says
+  which on the row: **Jellyfin's own remote control** (`GET /Sessions` for
+  every *other* live client, `POST /Sessions/{id}/Playing?playCommand=PlayNow`)
+  — resume, subtitles, direct play, and it reports back into `/Sessions` so
+  Now Playing already understands it — or, when nothing's running Jellyfin
+  there, **Home Assistant's `media_player.play_media`**, handed a Jellyfin
+  transcoding address (`/Videos/{id}/master.m3u8`, forced H.264/AAC) —
+  reaches a Chromecast or an Apple TV, but the picture quality is decided up
+  front and nothing reports back. Only `cast`, `apple_tv`, `dlna_dmr` and
+  `upnp` get the Home Assistant route (`samsungtv`/`webostv`/`androidtv`'s
+  `play_media` launches apps, not files, and a Music-Assistant-wrapped
+  entity is verified for audio, not video — both left out rather than
+  guessed at); a device reachable both ways shows once, as the Jellyfin row.
+
+  Both routes settle after the page has usually already drawn once (Home
+  Assistant's own connect, a poll of `/Sessions`), so the button is kept in
+  step with `HomerCastVideo.onChange(fn)` rather than decided once — the
+  same shape `music.js` already uses for `HomerHA.onChange`.
+
+  Known, not fixed: the Home Assistant route's URL carries the real
+  Jellyfin access token in the open (`?api_key=…`) — there's no NAS helper
+  for video to mint an opaque address behind, the way `music/playon.js`'s
+  does for an album.
+
 ## v0.4.27
 
 - **Sports: a game's channel is now the guide's answer, not a guess.**

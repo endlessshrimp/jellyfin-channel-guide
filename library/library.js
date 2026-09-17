@@ -25,7 +25,7 @@
  * window.HomerLibrary = { open(route), close, destroy, version }
  */
 (() => {
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
 
     // Loading twice (hot reload, or the loader plus a manual copy) replaces the
     // previous instance.
@@ -1610,7 +1610,7 @@
 
     const createShow = (server, route, item) => {
         const shell = createShell({ kind: 'show', brand: 'TV SHOWS' });
-        const { root, $, toast } = shell;
+        const { root, stage, $, toast } = shell;
         $('.hl-body').innerHTML = `
             <div class="hl-info">${TEXT_HTML}${PREVIEW_HTML}</div>
             <div class="hl-panel">
@@ -1667,10 +1667,11 @@
         // ----- info -----
         const actionsFor = (ep) => {
             if (!ep) return [];
-            if (posOf(ep) > 0) {
-                return [{ id: 'resume', icon: 'play_arrow', label: 'Resume' }, { id: 'restart', icon: 'replay', label: 'Restart' }];
-            }
-            return [{ id: 'play', icon: 'play_arrow', label: 'Play' }];
+            const list = posOf(ep) > 0
+                ? [{ id: 'resume', icon: 'play_arrow', label: 'Resume' }, { id: 'restart', icon: 'replay', label: 'Restart' }]
+                : [{ id: 'play', icon: 'play_arrow', label: 'Play' }];
+            if (canPlayOn()) list.push({ id: 'playon', icon: 'cast', label: 'Play on…', item: ep });
+            return list;
         };
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
@@ -1695,6 +1696,15 @@
             items.push('spacer', { key: 'ESC', label: 'Back', action: 'back' });
             shell.setLegend(items);
         };
+
+        // Home Assistant and /Sessions both usually settle after this screen
+        // has already drawn once: redraw the actions when either changes,
+        // rather than deciding whether Play on… belongs here just once.
+        const offCV = CV() ? CV().onChange(() => {
+            actions = actionsFor(current());
+            drawActions();
+            updateLegend();
+        }) : () => {};
 
         const showInfo = (ep) => {
             if (!ep) {
@@ -1861,8 +1871,20 @@
         };
 
         // ----- actions -----
+        const openPlayOn = (ep) => {
+            const c = CV();
+            if (!c || !ep) return;
+            c.open(stage, {
+                tv: true,
+                item: ep,
+                startTicks: posOf(ep),
+                toast,
+                onNowPlaying: () => nav('#/playing'),
+            });
+        };
         const run = (a) => {
             if (a && a.arr) { likes.press(a); return; } // one of More like this
+            if (a && a.id === 'playon') { openPlayOn(a.item || current()); return; }
             const ep = current();
             if (!a || !ep) return;
             const start = a.id === 'resume' ? posOf(ep) : 0;
@@ -2057,6 +2079,7 @@
             teardown() {
                 alive = false;
                 likes.dispose();
+                offCV();
                 shell.teardown();
             }
         };
@@ -2064,9 +2087,17 @@
 
     // ---------- Details: Movie ----------
 
+    // "Play on…" (library/castvideo.js): a movie or episode on another
+    // screen, the same picker on both. Home Assistant and Jellyfin's own
+    // /Sessions both settle after a screen has usually already drawn once,
+    // so canPlayOn() is asked again on CV().onChange rather than decided
+    // once — the same shape music.js uses for HomerHA.onChange.
+    const CV = () => window.HomerCastVideo || null;
+    const canPlayOn = () => { const c = CV(); return !!c && c.ready(); };
+
     const createMovie = (server, route, item) => {
         const shell = createShell({ kind: 'movie', brand: 'MOVIES' });
-        const { root, $, toast } = shell;
+        const { root, stage, $, toast } = shell;
         $('.hl-body').innerHTML = `
             <div class="hl-info">${TEXT_HTML}${PREVIEW_HTML}</div>
             <div class="hl-panel hl-panel-split">
@@ -2163,15 +2194,33 @@
             actions = posOf(it) > 0
                 ? [{ id: 'resume', icon: 'play_arrow', label: 'Resume' }, { id: 'restart', icon: 'replay', label: 'Restart' }]
                 : [{ id: 'play', icon: 'play_arrow', label: 'Play' }];
+            if (canPlayOn()) actions.push({ id: 'playon', icon: 'cast', label: 'Play on…' });
             drawActions();
             const rows = M.facts(it);
             $('.hl-facts').innerHTML = rows.map(([k, v]) => `<div class="hl-fact"><div class="hl-fact-k">${esc(k)}</div><div class="hl-fact-v">${esc(v)}</div></div>`).join('');
             setState(rows.length ? '' : '<b>No cast or media details for this movie</b>');
         };
 
+        // Home Assistant and /Sessions both usually settle after this screen
+        // has already drawn once: redraw when either changes, rather than
+        // deciding whether Play on… belongs here just once.
+        const offCV = CV() ? CV().onChange(() => { if (status === 'ready') render(); }) : () => {};
+
+        const openPlayOn = () => {
+            const c = CV();
+            if (!c) return;
+            c.open(stage, {
+                tv: true,
+                item: it,
+                startTicks: posOf(it),
+                toast,
+                onNowPlaying: () => nav('#/playing'),
+            });
+        };
         const run = (a) => {
             if (!a || status !== 'ready') return;
             if (a.arr) { likes.press(a); return; } // one of More like this: Sonarr or Radarr
+            if (a.id === 'playon') { openPlayOn(); return; }
             const start = a.id === 'resume' ? posOf(it) : 0;
             toast(`${a.id === 'resume' ? 'Resuming' : a.id === 'restart' ? 'Restarting' : 'Playing'} ${it.Name}`);
             play(it.Id, start).catch((err) => {
@@ -2279,6 +2328,7 @@
             teardown() {
                 alive = false;
                 likes.dispose();
+                offCV();
                 shell.teardown();
             }
         };
