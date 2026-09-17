@@ -31,6 +31,7 @@
  *
  * window.HomerHA = { status, problem, isSetUp, address, setAddress,
  *                    addressProblem, signIn, disconnect, onChange, house,
+ *                    location, people, peopleIn,
  *                    entity, lightOn, toggle, setBrightness, setTemperature,
  *                    setMode, scene, snapshotUrl, playCamera, browseMedia,
  *                    resolveMedia, history, rings, onRing,
@@ -60,6 +61,9 @@
     // and what else a room can have: outlets, players, fans, automations and
     // helpers, and the settings (selects, numbers) of a device already shown
     const MORE = ['switch', 'media_player', 'fan', 'automation', 'input_boolean', 'script', 'button', 'select', 'number'];
+    // who's home: person entities are Home Assistant's deduplicated view of a
+    // person across their phones, so they win; device trackers are the fallback
+    const PRESENCE = ['person', 'device_tracker'];
     // the few sensors a room's "at a glance" line shows, by device class
     const GLANCE_SENSOR = { temperature: 'temps', humidity: 'hums', pm25: 'air', aqi: 'air', carbon_dioxide: 'air' };
     const GLANCE_BINARY = {
@@ -513,6 +517,7 @@
 
     let haVersion = '';
     let houseName = '';
+    let homeLoc = null; // { lat, lon } from Home Assistant's own config, for the weather alerts
     let tempUnit = '°F';
     let userName = '';
     let areas = []; // [{ area_id, name, icon, floor_id, temperature_entity_id }]
@@ -549,6 +554,7 @@
         ringCache.clear();
         houseName = '';
         userName = '';
+        homeLoc = null;
     };
 
     const domainOf = (id) => id.split('.')[0];
@@ -581,6 +587,9 @@
         ]);
         houseName = (config && config.location_name) || 'Home';
         tempUnit = (config && config.unit_system && config.unit_system.temperature) || '°F';
+        homeLoc = config && typeof config.latitude === 'number' && typeof config.longitude === 'number'
+            ? { lat: config.latitude, lon: config.longitude }
+            : null;
         userName = (user && user.name) || '';
         areas = areaList || [];
         floors = floorList || [];
@@ -616,7 +625,7 @@
             const d = domainOf(id);
             const dc = (s.attributes && s.attributes.device_class) || '';
             const glance = (d === 'sensor' && GLANCE_SENSOR[dc]) || (d === 'binary_sensor' && GLANCE_BINARY[dc]);
-            if (((DOMAINS.includes(d) || MORE.includes(d) || glance) && !hidden.has(id)) || wallSwitches.has(id) || isDoorbellSensor(s)) wanted.add(id);
+            if (((DOMAINS.includes(d) || MORE.includes(d) || PRESENCE.includes(d) || glance) && !hidden.has(id)) || wallSwitches.has(id) || isDoorbellSensor(s)) wanted.add(id);
         }
         // A camera's own controls and its battery, which Home Assistant files
         // as config or diagnostic entities (so they stay out of the rooms:
@@ -996,6 +1005,60 @@
         if (areaName && n.toLowerCase().startsWith(areaName.toLowerCase() + ' ') && n.length > areaName.length + 2) n = n.slice(areaName.length + 1);
         return n.charAt(0).toUpperCase() + n.slice(1);
     };
+
+    // ---------- Who's home ----------
+    //
+    // Home Assistant keeps two views of where someone is. A person entity is
+    // the deduplicated one: one entity per person, following whichever of
+    // their phones or trackers last had something to say, with their picture
+    // on it. A device_tracker is one device. So people() answers with the
+    // person entities when the house has any, and falls back to the trackers
+    // for a house that never set people up. Read only: nothing here calls a
+    // service, and nothing here changes anything in Home Assistant.
+    //
+    // state is Home Assistant's own: 'home', 'not_home', or the name of a
+    // zone the person is in ("Work", "School").
+    const initialsOf = (name) => String(name || '').trim().split(/[\s._-]+/).filter(Boolean)
+        .slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+    const whereText = (state) => (state === 'home' ? 'Home'
+        : state === 'not_home' ? 'Away'
+            : !state || state === 'unknown' || state === 'unavailable' ? 'Unknown' : state);
+    const oneperson = (id) => {
+        const s = states[id];
+        if (!s) return null;
+        const a = s.attributes || {};
+        let name = a.friendly_name || id.split('.')[1].replace(/_/g, ' ');
+        name = name.charAt(0).toUpperCase() + name.slice(1);
+        // person.source names the tracker that decided; that tracker is the
+        // one Home Assistant may have put in an area
+        const src = a.source && states[a.source] ? a.source : id;
+        return {
+            id,
+            name,
+            initials: initialsOf(name),
+            // the proxy URL; loadPicture(id) is the one that checks it draws
+            picture: pictureUrl(id),
+            state: s.state,
+            home: s.state === 'home',
+            away: s.state === 'not_home',
+            where: whereText(s.state),
+            since: Date.parse(s.last_changed) || 0,
+            source: src,
+            area: placeOf.get(src) || placeOf.get(id) || null
+        };
+    };
+    const people = () => {
+        const live = (id) => !hidden.has(id) && !gone(id) && states[id];
+        const persons = Object.keys(states).filter((id) => domainOf(id) === 'person' && live(id));
+        const list = persons.length
+            ? persons
+            : Object.keys(states).filter((id) => domainOf(id) === 'device_tracker' && live(id));
+        // home first, then by name, so "who's in" reads left to right
+        return list.map(oneperson).filter(Boolean)
+            .sort((a, b) => Number(b.home) - Number(a.home) || a.name.localeCompare(b.name));
+    };
+    // the people Home Assistant places in a room, for that room's own line
+    const peopleIn = (areaId) => (areaId ? people().filter((p) => p.home && p.area === areaId) : []);
 
     // an entity's state, with anything just asked for already showing
     const entity = (id) => {
@@ -1600,6 +1663,8 @@
         placeOf.set('climate.hallway_thermostat', 'hallway');
         put('sensor.living_room_temperature', '72.5', { friendly_name: 'Living Room Temperature', unit_of_measurement: '°F', device_class: 'temperature' });
         mockMore(put);
+        mockPeople(put);
+        homeLoc = { lat: 32.589, lon: -96.3089 }; // Kaufman, TX: the same place HOMER's weather falls back to
         mockRingTimes = [new Date(Date.now() - 42 * 60000), new Date(Date.now() - 5.2 * 3600000), new Date(Date.now() - 20 * 3600000)];
         findDoorbells();
         clearInterval(mockTimer);
@@ -1773,6 +1838,44 @@
         put('switch.refrigerator_cubed_ice', 'unavailable', { friendly_name: 'Cubed ice', restored: true });
         at('switch.refrigerator_cubed_ice', 'kitchen');
     };
+    // Who's home, and the few house conditions the alert crawl watches
+    // (shared/alerts.js), in the made-up house. The front door has been open
+    // half an hour, which is long enough for the crawl's rule to raise it;
+    // nothing else is tripped, so nothing alarming shows up uninvited.
+    const MOCK_PEOPLE = [
+        ['Jason', 'home', 'office'], ['Sarah', 'not_home', null], ['Ellie', 'School', null]
+    ];
+    const mockPeople = (put) => {
+        for (const [name, state, area] of MOCK_PEOPLE) {
+            const tracker = 'device_tracker.' + slug(name) + '_phone';
+            put(tracker, state, { friendly_name: name + '\u2019s Phone', source_type: 'gps' });
+            const id = 'person.' + slug(name);
+            put(id, state, { friendly_name: name, source: tracker, device_trackers: [tracker], user_id: null });
+            if (area) placeOf.set(tracker, area);
+        }
+        // a door that has been open a while, a garage that is shut, and a leak
+        // sensor that is dry
+        const ago = (mins) => new Date(Date.now() - mins * 60000).toISOString();
+        states['binary_sensor.front_door_door'].last_changed = ago(31);
+        states['binary_sensor.front_door_door'].last_updated = ago(31);
+        put('binary_sensor.garage_door', 'off', { friendly_name: 'Garage Door', device_class: 'garage_door' });
+        placeOf.set('binary_sensor.garage_door', 'garage');
+        put('binary_sensor.kitchen_leak', 'off', { friendly_name: 'Kitchen Leak', device_class: 'moisture' });
+        placeOf.set('binary_sensor.kitchen_leak', 'kitchen');
+        put('binary_sensor.hallway_smoke', 'off', { friendly_name: 'Hallway Smoke', device_class: 'smoke' });
+        placeOf.set('binary_sensor.hallway_smoke', 'hallway');
+    };
+    // for testing the crawl in the made-up house: flip one of those on or off
+    const mockTrip = (id, on = true) => {
+        const s = states[id];
+        if (!s) return false;
+        s.state = on ? 'on' : 'off';
+        s.last_changed = s.last_updated = new Date(Date.now() - (on && /door/.test(id) ? 31 * 60000 : 0)).toISOString();
+        built = null;
+        emit();
+        return true;
+    };
+
     const mockCall = async (domain, service, data, id) => {
         if (domain === 'remote') return mockRemote(service, data, id);
         await new Promise((r) => setTimeout(r, 250));
@@ -2040,6 +2143,10 @@
         reconnect() { retry = 0; open(); },
         onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         house: houseWithCount,
+        // where the house is, from Home Assistant's own config (the weather alerts use it)
+        location: () => (homeLoc ? { lat: homeLoc.lat, lon: homeLoc.lon } : null),
+        people,
+        peopleIn,
         entity,
         name: nameOf,
         lightOn,
@@ -2093,6 +2200,7 @@
         lastRing,
         onRing(fn) { ringers.add(fn); return () => ringers.delete(fn); },
         _mockRing: mockRing,
+        _mockTrip: mockTrip, // DEV ONLY (mock house): flip a door, leak or smoke sensor
         destroy() {
             destroyed = true;
             close();

@@ -891,6 +891,11 @@
 .ho-glance .homer-glance.alert { border-color: rgba(255, 90, 90, 0.6); background: rgba(255, 59, 59, 0.14); color: #ffb3b3; }
 .ho-glance .homer-glance.alert .material-icons { color: #ff7a7a; }
 
+/* somebody in the room, or motion now: green, the one thing here that's a
+   person rather than a reading */
+.ho-glance .homer-glance.live { border-color: rgba(51, 209, 122, 0.45); color: #c9f3dd; }
+.ho-glance .homer-glance.live .material-icons { color: var(--homer-sports, #33d17a); }
+
 /* ---------- The lights: wall switches, then the bulbs ---------- */
 
 .ho-subsec {

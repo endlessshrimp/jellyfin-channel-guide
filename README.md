@@ -18,6 +18,13 @@ sits above the menu (▲ or `/`).
   **Full screen**, **Guide** and **Stop**.
 - **H**, or the HOMER logo at the top left of any HOMER screen, comes back to
   Home from anywhere.
+- **Who's home** sits in the top bar beside the clock, once Home Assistant is
+  connected: one small row, a person each, their picture where Home Assistant
+  has one and their initials where it doesn't. Whoever's in reads lit,
+  whoever's out reads flat and grey. It's read only — HOMER asks Home
+  Assistant where people are and changes nothing.
+
+![Who's home, in Home's top bar](docs/screenshots/home-people.jpg)
 
 ### The main menu, in one of two treatments
 
@@ -163,6 +170,93 @@ Now, the time of day: day, dawn, dusk or night). The forecast refreshes every
 10 minutes while the screen is up, the radar every 5. Data from Open-Meteo and
 the National Weather Service.
 
+## Alerts
+
+One strip, over whatever is on screen — Home, the guide, a hub, a phone, or a
+video playing full screen. Two things put messages on it, and only ever one
+message is up at a time.
+
+**Severe weather** comes from the National Weather Service
+(`api.weather.gov`, free, no key, answers a browser directly). Where the house
+is comes from Home Assistant's own config; with Home Assistant not connected,
+HOMER's weather location (Settings → Weather location) answers instead. It's
+polled every five minutes, and every minute while a warning is up.
+
+**The house** comes from Home Assistant, from the same sensors a room's
+[At a glance](#rooms-home-assistant) line reads — one list of what matters,
+not two:
+
+| What | When it says so |
+| --- | --- |
+| Smoke, carbon monoxide or gas | The moment the detector trips |
+| Water | The moment a leak sensor trips |
+| The garage left open | Open 5 minutes |
+| A door or window left open | Open 10 minutes |
+| The doorbell | It rang; gone again 3 minutes later |
+
+Open is normal; open *for a while* is the thing worth saying, which is why the
+doors wait. Motion and occupancy never raise one — a crawl that says somebody
+walked through the hall is a crawl nobody reads.
+
+### How loud it is
+
+A tornado warning is not a frost advisory, so there are three levels, and for
+the weather the NWS's own `severity` and `urgency` fields decide which — not
+the event's name, which changes.
+
+| Level | What it is | How it behaves |
+| --- | --- | --- |
+| **Extreme** | `severity` Extreme, happening now or expected: a tornado warning, a hurricane warning. Smoke, CO or gas at home. | Red, the edge pulses, stays up until you dismiss it or it clears |
+| **Warning** | `severity` Severe, happening now or expected: a flash flood warning, a severe thunderstorm warning. Water at home. | Red, stays up |
+| **Notice** | Everything else: watches (Severe, but `urgency` Future), advisories, statements. A door left open, the doorbell. | Quiet, and takes itself back down after 24 seconds — 10 over full-screen video, where an advisory has no business sitting |
+
+That one pair of fields is the whole difference between a **Flood Watch**
+(Severe / Future → notice) and a **Flash Flood Warning** (Severe / Immediate
+→ warning). Test and exercise messages, and cancellations, never show.
+
+![A tornado warning over Home](docs/screenshots/alerts-warning.jpg)
+
+![An air quality alert](docs/screenshots/alerts-notice.jpg)
+
+![The front door left open](docs/screenshots/alerts-house.jpg)
+
+### Living with it
+
+- **One strip, one message.** Loudest level first, newest within a level.
+- **Esc**, or the ✕, dismisses the one showing and the next takes its place.
+  HOMER remembers what you've dismissed until that alert itself clears, so the
+  same door doesn't announce itself on every screen you open — and the same
+  door tomorrow does.
+- **It never takes focus and never moves the screen underneath.** It's fixed,
+  over everything; nothing on it is in the tab order, and Esc only belongs to
+  the strip while a message is showing — the next Esc is the screen's own Back.
+- **Over full-screen video** it's a lower third, lifted clear of Jellyfin's
+  transport controls, never a dialog.
+- It hides itself while the **Actions strip**, the **quick controls** panel or
+  the phone's **menu sheet** is open: those are asking for an answer.
+- A remote with no Esc reaches it through the Actions strip: **Dismiss alert**,
+  and **Weather** for a weather alert.
+
+![Dismiss alert, in the Actions strip](docs/screenshots/alerts-actions.jpg)
+
+### Trying it when the sky is clear
+
+HOMER ships no made-up alert. There is usually nothing active near the house,
+so feed it a real one the NWS has already issued — `api.weather.gov` keeps the
+recent ones and answers a browser directly, so this is the whole of it, from
+the console:
+
+```js
+HomerAlerts._fetch('https://api.weather.gov/alerts?event=Tornado Warning&message_type=alert&limit=1')
+HomerAlerts._fetch('https://api.weather.gov/alerts?event=Flood Watch&message_type=alert&limit=1')
+HomerAlerts._live()   // back to the house's own alerts
+```
+
+The payload is the NWS's own, word for word. `message_type=alert` matters: the
+newest entry for an event is often its cancellation, which HOMER (correctly)
+drops. Its times are in the past, so `_feed` re-dates it to now — otherwise it
+reads as expired and never shows; that, and nothing else, is changed.
+
 ## Rooms (Home Assistant)
 
 With [Home Assistant](https://www.home-assistant.io/) connected (Settings →
@@ -174,8 +268,11 @@ HOMER's code or the injector config except, if you like, its address.
   Home Assistant's areas, with what's on and the temperature, plus
   **Cameras** for every camera and **Climate** for the thermostat. A room
   shows, top to bottom:
-  - **At a glance** (read only): its temperature and humidity, a door or
-    window left open, motion now, the air (PM2.5, AQI, CO₂), smoke or a leak.
+  - **At a glance** (read only): who Home Assistant places in the room, its
+    temperature and humidity, a door or window left open, motion now, the air
+    (PM2.5, AQI, CO₂), smoke or a leak. (The same buckets the
+    [alert crawl](#alerts) reads.) Most houses have put none of their people
+    in an area, and then the room simply doesn't mention anybody.
   - Its **scenes** (◀▶ picks, OK turns one on).
   - Its **lights**: wall switches first, then the bulbs (the room's own group,
     **All lights**, first). ◀▶ dims in 10% steps, OK switches. A bulb that
@@ -738,6 +835,7 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 | **Weather**, **Books** | Try again when something failed; Books adds Play/Pause (**P**) |
 | **Music** | Play/Pause (**P**), Next track, Shuffle (**S**), Repeat (**R**), Instant Mix (**I**), Now playing |
 | **Anywhere, with music loaded** | Play/Pause music, Next track, and **Music** to go back to it |
+| **Anywhere, with an alert showing** | Dismiss alert (**Esc**), and **Weather** for a weather alert |
 | **A recording playing full screen** | Skip 30s (**S**) |
 
 A **swipe up** on the Siri Remote's clickpad runs the screen's one main action
@@ -886,13 +984,13 @@ plugin to load it into Jellyfin Web.
    **Add Script**, name it "HOMER", and paste this into the code box:
 
    ```js
-   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.17/homer.js';document.head.appendChild(s);})();
+   (function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/endlessshrimp/jellyfin-channel-guide@v0.4.18/homer.js';document.head.appendChild(s);})();
    ```
 
 3. Save, then reload Jellyfin in your browser. The Guide button appears in the
    header next to Search.
 
-The URL is pinned to a release tag (`@v0.4.17`), so an update never changes
+The URL is pinned to a release tag (`@v0.4.18`), so an update never changes
 anything until you edit the tag yourself. jsDelivr and browsers both cache
 aggressively, so after changing the tag, hard-refresh (Ctrl/Cmd+Shift+R).
 

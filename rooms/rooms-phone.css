@@ -805,6 +805,8 @@
 .ho-phone .op-glance .homer-glance.warn .material-icons { color: var(--lit); }
 .ho-phone .op-glance .homer-glance.alert { border-color: rgba(255, 90, 90, 0.6); background: rgba(255, 59, 59, 0.14); color: #ffb3b3; }
 .ho-phone .op-glance .homer-glance.alert .material-icons { color: #ff7a7a; }
+.ho-phone .op-glance .homer-glance.live { border-color: rgba(51, 209, 122, 0.45); color: #c9f3dd; }
+.ho-phone .op-glance .homer-glance.live .material-icons { color: var(--homer-sports, #33d17a); }
 
 /* ---------- The lights: wall switches, then the bulbs ---------- */
 
