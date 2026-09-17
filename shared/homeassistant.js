@@ -7,9 +7,12 @@
  * sends this tab to Home Assistant's sign-in page (/auth/authorize, with this
  * page's origin as the client_id), and Home Assistant sends it back to
  * #/rooms?homer-ha=signin&code=… . The code is traded for tokens at
- * /auth/token, and the refresh token is kept in this device's localStorage,
- * per origin. No password or token is ever in HOMER's code or the injector
- * config. Disconnect revokes the refresh token and forgets it.
+ * /auth/token. The refresh token's real home is this Jellyfin user's own
+ * DisplayPreferences on the server (see the "Jellyfin" section below) —
+ * this device's localStorage is a fast, no-network cache of the same
+ * thing, and the fallback whenever Jellyfin can't be reached. No password
+ * or token is ever in HOMER's code or the injector config. Disconnect
+ * revokes the refresh token and forgets it, on the server and here.
  *
  * What the browser allows (checked against Home Assistant 2025.12):
  *   /auth/token, /auth/revoke  answer any origin (CORS), so the sign-in works
@@ -104,6 +107,117 @@
     };
     const mocking = () => {
         try { return localStorage.getItem(MOCK_KEY) === '1'; } catch { return false; }
+    };
+
+    // ---------- Jellyfin (the credential's real home) ----------
+    //
+    // localStorage above is a per-origin, per-device cache. The sign-in
+    // itself (AUTH_KEY's { url, clientId, access, refresh, expires }) also
+    // lives in this Jellyfin user's own DisplayPreferences — a small
+    // string bag Jellyfin already gives every client, keyed by user id +
+    // client name + an id (Jellyfin's DisplayPreferencesController, POST
+    // /DisplayPreferences/{id}?userId=&client=, CustomPrefs). That's the
+    // fit, not user Configuration (settings/settings.js's Audio language
+    // etc.): Configuration is a fixed C# DTO with named fields only — an
+    // unknown property written to it is silently dropped on the way back
+    // out, never round-trips. DisplayPreferences' CustomPrefs is a real
+    // Dictionary<string,string>, meant for exactly this.
+    //
+    // Privacy: checked behaviourally against the live Jellyfin 10.11.8
+    // server, authenticated as a second, non-admin account (this repo's
+    // "tester"). GET /DisplayPreferences/{id}?userId=&client= ignores the
+    // userId query parameter entirely on this version — it's scoped by
+    // the caller's own access token, so a non-admin asking with someone
+    // else's userId just gets their own DisplayPreferences back, not an
+    // error and not the other user's data. (This is looser than reading
+    // Jellyfin's own source suggested — its current GitHub code throws on
+    // a userId mismatch — so that check is apparently newer than 10.11.8;
+    // don't trust source-reading over an actual request against the
+    // server you're deploying to.) Net effect either way: HOMER never
+    // passes a userId other than the signed-in user's own, so this is
+    // exactly as private as that Jellyfin account, no wider.
+    //
+    // Confirmed with a real write, not just an empty check: wrote a
+    // sentinel into this exact bucket as one account, read it back as
+    // that account (visible), then as the other, non-admin account (not
+    // visible; the response has none of it) — repeated with the real
+    // haAuth key once this code had actually written one. Don't be fooled
+    // by the response's "Id" field: it's the same value for every user
+    // and both userId query strings, because it names the preferences
+    // *kind* (this bucket's client+id), not a row. It looking shared is
+    // not evidence the storage is shared — the CustomPrefs contents are
+    // what's per-user, and that's what was checked.
+    //
+    // Known gap: if this device disconnects while another device is
+    // offline with an old sign-in cached, that other device's next load
+    // will see nothing on the server (null, not a mismatch) and push its
+    // stale copy back up, undoing the disconnect. Not handled — HOMER has
+    // no way to tell "cleared on purpose" from "never set", and building
+    // that (a tombstone) is more than this needed.
+    const JF_CLIENT = 'homer';
+    const JF_PREF_ID = 'ha';
+    const jfServer = () => {
+        try {
+            const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+            const server = (creds.Servers || [])[0];
+            return server && server.AccessToken && server.UserId ? server : null;
+        } catch {
+            return null;
+        }
+    };
+    const jfAuthHeader = (server) => {
+        const ac = window.ApiClient;
+        const parts = [];
+        try {
+            if (ac && ac.appName && ac.deviceId) {
+                parts.push(`Client="${ac.appName()}"`, `Device="${ac.deviceName()}"`,
+                    `DeviceId="${ac.deviceId()}"`, `Version="${ac.appVersion()}"`);
+            }
+        } catch { /* token only; the server fills in the rest */ }
+        parts.push(`Token="${server.AccessToken}"`);
+        return 'MediaBrowser ' + parts.join(', ');
+    };
+    const jfRequest = async (method, path, body) => {
+        const server = jfServer();
+        if (!server) throw new Error('not signed in to Jellyfin');
+        const headers = { Authorization: jfAuthHeader(server) };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+        if (!res.ok) {
+            const err = new Error(`${method} ${path.split('?')[0]} → ${res.status}`);
+            err.status = res.status;
+            throw err;
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    };
+    const jfPrefsUrl = (uid) => `/DisplayPreferences/${JF_PREF_ID}?userId=${encodeURIComponent(uid)}&client=${JF_CLIENT}`;
+
+    // Home Assistant's sign-in, from this Jellyfin user's own
+    // DisplayPreferences: undefined (not signed in to Jellyfin — the
+    // caller keeps whatever localStorage already has), null (signed in,
+    // nothing stored yet), or the { url, clientId, access, refresh,
+    // expires } object.
+    const jfLoadAuth = async () => {
+        const server = jfServer();
+        if (!server) return undefined;
+        const dto = await jfRequest('GET', jfPrefsUrl(server.UserId));
+        const raw = dto && dto.CustomPrefs && dto.CustomPrefs.haAuth;
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+    };
+    // Always read-merge-write the whole DisplayPreferences DTO (like
+    // settings.js's saveUserField does for Configuration): this bucket is
+    // HOMER's own (client "homer", id "ha"), but a blind partial write
+    // would still be the wrong habit to build.
+    const jfSaveAuth = async (value) => {
+        const server = jfServer();
+        if (!server) return;
+        const dto = await jfRequest('GET', jfPrefsUrl(server.UserId));
+        dto.CustomPrefs = dto.CustomPrefs || {};
+        if (value) dto.CustomPrefs.haAuth = JSON.stringify(value);
+        else delete dto.CustomPrefs.haAuth;
+        await jfRequest('POST', jfPrefsUrl(server.UserId), dto);
     };
 
     // ---------- The address ----------
@@ -281,6 +395,7 @@
                 expires: Date.now() + (j.expires_in || 1800) * 1000
             };
             write(AUTH_KEY, auth);
+            jfSaveAuth(auth).catch((err) => warn('couldn\'t save the Home Assistant sign-in to Jellyfin', err.message));
             log('signed in to', pending.url);
             retry = 0;
             open();
@@ -310,6 +425,9 @@
                 auth.access = j.access_token;
                 auth.expires = Date.now() + (j.expires_in || 1800) * 1000;
                 write(AUTH_KEY, auth);
+                // best effort, quiet: another device just refreshes its own
+                // copy if this misses (the refresh token itself doesn't change)
+                jfSaveAuth(auth).catch(() => {});
                 return auth.access;
             }, (err) => {
                 // a refused refresh token (revoked, or deleted in Home
@@ -331,9 +449,45 @@
         close();
         clearHouse();
         setStatus('off');
+        // Jellyfin's copy too, so a device this account signs into later
+        // (or this same device, if Safari kept nothing) doesn't come back
+        // connected on its own. Best effort: Disconnect still has to work
+        // with Jellyfin unreachable.
+        await jfSaveAuth(null).catch((err) => warn('couldn\'t clear the Home Assistant sign-in on Jellyfin', err.message));
         if (a && a.refresh) {
             // tell Home Assistant to forget it too (it shows under the profile's refresh tokens)
             await tokenRequest(a.url, '/auth/revoke', { token: a.refresh }).catch((err) => warn('revoke failed', err.message));
+        }
+    };
+
+    // Reconcile this device's sign-in with Jellyfin's copy: adopt Jellyfin's
+    // when it has one and this device's differs (or is missing — Safari's
+    // storage eviction, a fresh browser, the other origin); otherwise, if
+    // this device has a sign-in Jellyfin has never seen, push it up (the
+    // migration case, for a sign-in from before this existed). Never blocks
+    // startup: called after the normal synchronous open() below, and any
+    // failure (Jellyfin unreachable) just leaves localStorage in charge, as
+    // before.
+    const syncAuthWithJellyfin = async () => {
+        let serverAuth;
+        try {
+            serverAuth = await jfLoadAuth();
+        } catch (err) {
+            warn('couldn\'t reach Jellyfin for the Home Assistant sign-in; using this device\'s own copy', err.message);
+            return;
+        }
+        if (serverAuth === undefined) return; // not signed in to Jellyfin
+        if (serverAuth) {
+            if (!auth || auth.refresh !== serverAuth.refresh || auth.url !== serverAuth.url) {
+                auth = serverAuth;
+                write(AUTH_KEY, auth);
+                retry = 0;
+                open();
+            }
+            return;
+        }
+        if (auth) {
+            jfSaveAuth(auth).catch((err) => warn('couldn\'t save the Home Assistant sign-in to Jellyfin', err.message));
         }
     };
 
@@ -2140,6 +2294,9 @@
 
     finishSignIn();
     if (isSetUp() && !/homer-ha=signin/.test(location.hash)) open();
+    // after the synchronous, localStorage-only startup above (so a working
+    // sign-in never waits on a network round trip to Jellyfin)
+    syncAuthWithJellyfin().catch((err) => warn('Home Assistant/Jellyfin sync failed', err.message));
 
     window.HomerHA = {
         version: VERSION,

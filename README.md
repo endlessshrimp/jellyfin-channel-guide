@@ -480,10 +480,30 @@ HOMER's code or the injector config except, if you like, its address.
 2. **Connect**: this goes to Home Assistant's own sign-in page, and back to
    Settings, which then says **Connected to** your home. Home Assistant signs
    in HOMER with this page's address as its name (it's listed under your
-   Home Assistant profile's refresh tokens). Each device, and each HOMER
-   address, connects once; the sign-in is kept in that browser.
+   Home Assistant profile's refresh tokens).
 3. **Disconnect** (press it twice) signs the device out and tells Home
    Assistant to forget it.
+
+**Where the sign-in lives.** The refresh token isn't just this browser's —
+it's kept server-side, in *your Jellyfin account's own* preferences (Jellyfin's
+`DisplayPreferences`, a small per-user string bag every client gets; HOMER
+uses its own bucket there, never anything shared or server-wide). Every device
+signed into HOMER as you picks it up automatically, including a different
+HOMER address (Tailscale vs. your LAN URL are different browser origins,
+which otherwise can't see each other's storage) and a phone whose browser
+dropped its local copy after a week unused. This device's `localStorage` is
+still read first and kept as a fast, no-network cache; it's also the fallback
+if Jellyfin can't be reached, so a Jellyfin outage doesn't take Home Assistant
+down with it. A sign-in from before this existed is adopted into your account
+on next load, not thrown away. Disconnect clears both.
+
+This is a real, deliberate trade: the credential that can open your locks and
+watch your cameras now lives in Jellyfin, scoped to your Jellyfin user only —
+never server-wide, never readable by another account (checked against a
+second, non-admin Jellyfin account on a live 10.11 server: it gets its own,
+empty bucket back, never yours). If you'd rather not make that trade, don't
+connect Home Assistant on a Jellyfin server where you don't trust every
+account with your house.
 
 **Home Assistant needs no configuration change** when HOMER and Home Assistant
 are both plain `http://` on your network. HOMER talks to Home Assistant over

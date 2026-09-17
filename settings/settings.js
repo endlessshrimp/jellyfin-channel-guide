@@ -16,7 +16,9 @@
  *                       starts on Large)
  *   Weather location    where the clock's weather comes from (HomerWeather, localStorage)
  *   Home Assistant      Connect (Home Assistant's own sign-in), the address, and
- *                       Disconnect, which asks for a second OK (HomerHA, localStorage)
+ *                       Disconnect, which asks for a second OK (HomerHA; the
+ *                       sign-in itself lives in this Jellyfin user's own
+ *                       DisplayPreferences, cached in localStorage)
  *   Sign out            Jellyfin Web's own logout, after a second OK
  *
  * Remote/keyboard: ▲▼ move, ◀▶ between the list and the choices, OK selects,
@@ -344,7 +346,7 @@
         id: 'ha', icon: 'lightbulb', label: 'Home Assistant', scope: 'device',
         desc: () => {
             const h = ha();
-            const base = 'Your lights, thermostat and cameras, in Rooms and over whatever\'s playing (press L). You sign in on Home Assistant\'s own page; this device keeps its sign-in.';
+            const base = 'Your lights, thermostat and cameras, in Rooms and over whatever\'s playing (press L). You sign in on Home Assistant\'s own page; signing into HOMER as this Jellyfin account keeps you signed in, on any device.';
             const problem = h && (h.status() === 'blocked' ? h.problem() : !h.isSetUp() && h.address() ? h.addressProblem() : '');
             return problem ? `${base} ${problem}` : base;
         },
