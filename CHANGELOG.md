@@ -16,10 +16,11 @@
   every *other* live client, `POST /Sessions/{id}/Playing?playCommand=PlayNow`)
   — resume, subtitles, direct play, and it reports back into `/Sessions` so
   Now Playing already understands it — or, when nothing's running Jellyfin
-  there, **Home Assistant's `media_player.play_media`**, handed a Jellyfin
-  transcoding address (`/Videos/{id}/master.m3u8`, forced H.264/AAC) —
-  reaches a Chromecast or an Apple TV, but the picture quality is decided up
-  front and nothing reports back. Only `cast`, `apple_tv`, `dlna_dmr` and
+  there, **Home Assistant's `media_player.play_media`**, handed an opaque
+  address minted by the NAS helper that redirects to a Jellyfin transcoding
+  address (forced H.264/AAC) — reaches a Chromecast or an Apple TV, but the
+  picture quality is decided up front and nothing reports back. Only
+  `cast`, `apple_tv`, `dlna_dmr` and
   `upnp` get the Home Assistant route (`samsungtv`/`webostv`/`androidtv`'s
   `play_media` launches apps, not files, and a Music-Assistant-wrapped
   entity is verified for audio, not video — both left out rather than
@@ -30,10 +31,11 @@
   step with `HomerCastVideo.onChange(fn)` rather than decided once — the
   same shape `music.js` already uses for `HomerHA.onChange`.
 
-  Known, not fixed: the Home Assistant route's URL carries the real
-  Jellyfin access token in the open (`?api_key=…`) — there's no NAS helper
-  for video to mint an opaque address behind, the way `music/playon.js`'s
-  does for an album.
+  The Home Assistant route's URL carries no Jellyfin token: like
+  `music/playon.js`'s minted M3U addresses, it mints a short-lived, opaque
+  address on the NAS helper first (`POST /video/cast` — the same
+  `homerfeeds.py`, one item instead of eleven) and hands Home Assistant only
+  `/video/c/<key>`, a 302 to the real stream. The token stays on the NAS.
 
 ## v0.4.27
 

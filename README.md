@@ -247,7 +247,7 @@ real, unequal routes per device, and says which one on the row:
 | Route | How | What you get |
 | --- | --- | --- |
 | **Jellyfin** | Every other live Jellyfin client, from `GET /Sessions` — a phone, a TV app, another browser. `POST /Sessions/{id}/Playing` hands it the item the same way the guide already remote-controls a session. | The real thing: resume points, subtitles, direct play, proper scrubbing, and it reports straight back into `/Sessions` — HOMER's Now Playing already understands it. |
-| **Home Assistant** | A Chromecast, an Apple TV, or a DLNA/UPnP renderer, handed a Jellyfin transcoding address (`/Videos/{id}/master.m3u8`, forced to H.264/AAC) through `media_player.play_media`. | Reaches a screen with no Jellyfin app running, but the picture quality is decided up front, there's no resume and no subtitle menu, and nothing reports back. |
+| **Home Assistant** | A Chromecast, an Apple TV, or a DLNA/UPnP renderer, handed an opaque address minted by the NAS helper (`POST /video/cast`) that redirects to a Jellyfin transcoding address (forced to H.264/AAC) through `media_player.play_media`. | Reaches a screen with no Jellyfin app running, but the picture quality is decided up front, there's no resume and no subtitle menu, and nothing reports back. |
 
 Only a device actually running a Jellyfin client gets the first row; only a
 Home Assistant platform HOMER has verified actually fetches a media URL gets
@@ -260,12 +260,12 @@ a loose overlap of words between the Home Assistant entity's name and the
 session's device name, not a real fingerprint, so an unmatched pair can in
 principle appear twice.
 
-**The Home Assistant route's URL carries Jellyfin's real access token in the
-open** (`?api_key=…`), because unlike the album picker's NAS helper there's no
-opaque address to hide it behind — it lands in Home Assistant's logbook, its
-recorder, and any debug log that repeats the service call. A NAS helper that
-mints a short-lived address the way `/music/playlist` does would close this;
-none exists for video yet.
+**The Home Assistant route's URL carries no Jellyfin token.** Like the album
+picker, it mints a short-lived, opaque address on the NAS helper first
+(`POST /video/cast`, one item instead of eleven) — the token stays on the NAS
+and only the `/video/c/<key>` redirect it hands back ever carries the real
+one, straight to the device doing the playing, never through Home Assistant's
+logbook, recorder, or a debug log that repeats the service call.
 
 ## Weather
 

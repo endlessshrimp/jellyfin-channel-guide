@@ -18,12 +18,14 @@
  *             scrubbing, and it reports straight back into /Sessions, so
  *             HOMER's Now Playing already understands it. Only offered to a
  *             device that is actually running a Jellyfin client right now.
- *   ha        Home Assistant's media_player.play_media, handed a Jellyfin
- *             transcoding URL (HLS, forced to H.264/AAC so the fewest
- *             devices choke on it — decided up front, not adaptively).
- *             Reaches a Chromecast or an Apple TV with no Jellyfin app
- *             running, but there's no resume, no subtitle menu, and
- *             nothing reports back — Now Playing won't know about it.
+ *   ha        Home Assistant's media_player.play_media, handed an opaque
+ *             address minted by HOMER's NAS helper (homerfeeds, POST
+ *             /video/cast) that redirects to a Jellyfin transcoding URL
+ *             (HLS, forced to H.264/AAC so the fewest devices choke on it —
+ *             decided up front, not adaptively). Reaches a Chromecast or an
+ *             Apple TV with no Jellyfin app running, but there's no resume,
+ *             no subtitle menu, and nothing reports back — Now Playing
+ *             won't know about it.
  *
  * Only a short allow-list of Home Assistant platforms gets route 2 at all
  * (HA_VIDEO_OK below): media_player.play_media on samsungtv is documented
@@ -37,13 +39,15 @@
  * not a real device fingerprint, so an unmatched pair can in principle show
  * up twice (see README).
  *
- * Unlike music/playon.js's minted M3U addresses, the HLS URL this module
- * hands Home Assistant carries the real Jellyfin access token in plain
- * sight (?api_key=…), because there's no NAS helper for video to hide it
- * behind. That token then sits in Home Assistant's logbook, its recorder,
- * and every debug log that repeats the service call, exactly the exposure
- * music/playon.js's helper was built to avoid. Known, not fixed — see
- * README and CHANGELOG.
+ * Like music/playon.js's minted M3U addresses, the address this module
+ * hands Home Assistant carries no Jellyfin access token: the POST to
+ * /video/cast carries the real token, the NAS helper holds it in memory
+ * and hands back /video/c/<key>, a short-lived, single-item redirect. Only
+ * that 302 — from the helper straight to the device doing the playing —
+ * ever carries the real token, so it never lands in Home Assistant's
+ * logbook, its recorder, or a debug log that repeats the service call. See
+ * music/playon.js's own header for the fuller reasoning, and homerfeeds.py
+ * for the helper itself.
  *
  * Both routes settle late — Home Assistant after its own connect, Jellyfin
  * sessions after a poll — so nothing here decides the button's fate once at
@@ -55,7 +59,7 @@
  *                            isOpen, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window.HomerCastVideo && typeof window.HomerCastVideo.destroy === 'function') {
         window.HomerCastVideo.destroy();
@@ -67,6 +71,12 @@
     const HA = () => window.HomerHA || null;
     const LM = () => window.HomerLibraryModel || null;
     const warn = (...a) => console.warn('[HOMER Cast Video]', ...a);
+
+    // The NAS helper: through the https name's /homer-feeds, or port 8095 on
+    // the LAN (the same rule music/playon.js and shared/arr.js use).
+    const helper = () => (location.protocol === 'https:'
+        ? location.origin + '/homer-feeds'
+        : 'http://' + location.hostname + ':8095');
 
     const store = {
         get(k, fb) { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } },
@@ -257,30 +267,33 @@
             + (startTicks > 0 ? `&startPositionTicks=${startTicks}` : ''));
     };
 
-    // A transcoding HLS address, forced to a container and codecs almost
-    // everything plays, decided now rather than negotiated per device the
-    // way Jellyfin's own player does it. The access token rides in the
-    // query string — see the file header: unlike music/playon.js this has
-    // no NAS helper to hide it behind.
-    const streamUrl = (item) => {
+    // Mint this one item's opaque address. The Jellyfin token goes into this
+    // POST body and stays on the NAS from here on — the helper hands back
+    // /video/c/<key>, which 302s to a transcoding HLS address (forced to a
+    // container and codecs almost everything plays, decided now rather than
+    // negotiated per device the way Jellyfin's own player does it). Mirrors
+    // music/playon.js's own mint() for an album; see the file header.
+    const mintCastUrl = async (item) => {
         const M = LM();
         const server = M && M.getServer();
         if (!server) throw new Error('Not signed in to Jellyfin');
-        const deviceId = myDeviceId() || 'homer-castvideo';
-        const params = new URLSearchParams({
-            api_key: server.AccessToken,
-            DeviceId: deviceId,
-            VideoCodec: 'h264',
-            AudioCodec: 'aac',
-            MaxStreamingBitrate: '20000000',
-            TranscodingMaxAudioChannels: '2',
+        const res = await fetch(helper() + '/video/cast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                itemId: item.Id,
+                token: server.AccessToken,
+                deviceId: myDeviceId() || 'homer-castvideo',
+            }),
         });
-        return `${location.origin}/Videos/${item.Id}/master.m3u8?${params.toString()}`;
+        const out = await res.json().catch(() => null);
+        if (!res.ok || !out || !out.url) throw new Error((out && out.error) || `The NAS helper said ${res.status}`);
+        return out.url;
     };
     const sendHA = async (row, item) => {
         const h = HA();
         if (!h) throw new Error('Home Assistant isn’t connected');
-        const url = streamUrl(item);
+        const url = await mintCastUrl(item);
         const contentType = item.Type === 'Episode' ? 'episode' : 'movie';
         await h.playMedia(row.entityId, url, contentType);
     };
