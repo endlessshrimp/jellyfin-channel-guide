@@ -7,9 +7,9 @@ Jellyfin page matches. On a phone, HOMER has a phone layout (see
 
 ## Home
 
-Home replaces Jellyfin's home page: a main menu (Live TV Guide, Now Playing,
-Movies, TV Shows, Books, Music, Recordings, Weather, Sports, News, Settings,
-Planes, and Rooms and Cameras once Home Assistant is connected), an On Now
+Home replaces Jellyfin's home page: a main menu (Live TV, Now Playing, Movies,
+TV Shows, Music, Radio, Books, Sports, News, Planes and Settings, plus House
+once Home Assistant is connected) and an On Now
 panel, and
 rows of Continue Watching, Up Next, On Now and Recently Added. The search box
 sits above the menu (▲ or `/`).
@@ -51,6 +51,39 @@ Both work with a remote (▲▼ move, OK selects, ▲ off the top item goes to t
 search box), a mouse and touch. On a phone there's no column for either, so
 the same list is a sheet: tap the HOMER mark in the top bar (see
 [On a phone](#on-a-phone)).
+
+Clicking (or pressing OK on) the item for the screen you're already on goes to
+the top of that screen instead of navigating again — Music's album wall from
+inside an album, the Movies or TV Shows grid from a details page, House's room
+list from a camera or a room, and so on. At the top of a flat screen it does
+nothing, on purpose: going Home from the item you're standing on was the bug.
+
+### Live TV and House: one item, a strip of tabs
+
+**Live TV** is the guide and the DVR (Recorded, Scheduled, Series) together:
+the guide is the first tab, the other three are the same Recordings screen as
+before, drawn as tabs of one place instead of two separate menu items. **G**
+still opens the guide from anywhere, and `#/livetv?tab=3` still opens
+Recordings directly.
+
+**House**, once Home Assistant is connected, is Rooms and Cameras together the
+same way — Rooms first (with Who's Home above the rooms), Cameras a tab over.
+The doorbell is still two presses away, not a trip back through the menu.
+
+### Radio is its own item
+
+**Radio** (`#/radio`) is the Music screen's Radio tab, promoted to a menu item
+of its own — same code, same station list and favourites, just without the
+rest of Music's tabs around it.
+
+### Weather isn't in the menu
+
+The forecast (`#/weather`) is reached from the weather bug in every screen's
+top bar, not from the main menu — the list only has so much room a sofa can
+read. The bug is a real button now: click it, Tab to it in a browser, or on
+Home ▶ out of the Search box reaches it by remote (◀ back, ▼ into the menu).
+`W`, or holding OK on an Apple TV remote (the Actions strip), opens it from
+any screen.
 
 ## Watching while you browse
 
@@ -325,7 +358,7 @@ HOMER's code or the injector config except, if you like, its address.
 
   ![Who's home, at the top of Rooms](docs/screenshots/rooms-people.jpg)
 
-- **Rooms** (Home's menu, or **Rooms** at the top of Home on a phone) lists
+- **Rooms** (House, on Home's menu, or **Rooms** at the top of Home on a phone) lists
   Home Assistant's areas, with what's on and the temperature, plus
   **Cameras** for every camera and **Climate** for the thermostat. A room
   shows, top to bottom:
@@ -446,9 +479,9 @@ proxy like Caddy on the same NAS.
 
 ## Cameras
 
-Once Home Assistant is connected, **Cameras** (Home's menu, after Rooms, or
-the **Cameras** chip on Home on a phone) puts every camera in the house on one
-wall and the doorbell's rings where you can see them.
+Once Home Assistant is connected, **Cameras** (the tab next to Rooms on House,
+on Home's menu, or the **Cameras** chip on Home on a phone) puts every camera
+in the house on one wall and the doorbell's rings where you can see them.
 
 ![The camera wall](docs/screenshots/cameras-wall.jpg)
 
@@ -604,7 +637,7 @@ reserve a fifth square, or change a name, add a line to that list.
 ## Planes
 
 What's flying over the house right now, on a map, at TV size (`#/planes`,
-Home's menu after Cameras). Jellyfin has nothing at that address.
+Home's menu). Jellyfin has nothing at that address.
 
 ![The Planes screen](docs/screenshots/planes.jpg)
 
@@ -1174,8 +1207,10 @@ in either orientation; a tablet keeps the TV layout, with touch (see
   doesn't.
 - **The top bar has two buttons.** A tap on the **HOMER mark** opens the menu:
   a sheet with every screen there is, in the same order as the TV's menu, Home
-  first and the one you're on ticked. The tab bar only has five, so this is how Now Playing, Books, Music,
-  Weather, Sports, News, Rooms, Cameras and Settings are reached. Tap a row to
+  first and the one you're on ticked. The tab bar only has five, so this is how Now Playing, Music,
+  Radio, Books, Sports, News, House and Settings are reached (Weather isn't
+  on the list any more — the top bar's own weather bug opens it, on a phone
+  same as on TV). Tap a row to
   go there; tap outside, swipe the sheet down, or press **Back** to put it
   away. (Back closes the sheet rather than leaving the screen.) Home is the
   first row, and the tab bar still has Home too.
@@ -1233,8 +1268,9 @@ in either orientation; a tablet keeps the TV layout, with touch (see
 
 - Every HOMER screen has a phone layout of its own now — the guide, Home,
   Movies and TV Shows with their details pages, Search, Recordings, Settings,
-  Weather, Rooms, Cameras and Planes. See `docs/phone.md` for how one is
-  built.
+  Rooms, Cameras and Planes (Live TV and House are one menu item apiece, over
+  the guide/DVR and the rooms/cameras pair). See `docs/phone.md` for how one
+  is built.
 - **Music** on a phone: chips for Recently Added / Artists / Albums / Songs /
   **Favorites** / Playlists / Genres, the art two across, and a sheet for an
   album (its tracks) or an artist (their albums) with Play / Shuffle /

@@ -869,6 +869,14 @@
             }
         };
         const onClick = (ev) => {
+            // the mark and HOMER wordmark go Home; House (the screen's own
+            // name) is the desktop's screen-home button — out of a camera or
+            // clip, back to the wall
+            if (ev.target.closest('.hc-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.hc-brand')) { goHome(); return; }
             const leg = ev.target.closest('.hc-legend [data-action]');
             if (leg) {

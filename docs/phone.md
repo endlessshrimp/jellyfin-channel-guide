@@ -5,7 +5,8 @@ server's Jellyfin Web, so they load HOMER through the JavaScript Injector, and
 so do mobile browsers. Every screen is reachable from the tab bar or from the
 menu sheet the HOMER mark opens (below). Every HOMER screen has a phone layout of its own: the
 guide, Home, Movies and TV Shows with their details pages, Search,
-Recordings, Settings, Weather, Rooms, Cameras, Planes, Music and Now Playing.
+Recordings, Settings, Weather, Rooms, Cameras, Planes, Music (Radio is the
+same screen, drawn on its own tab bar entry) and Now Playing.
 A screen without one would draw its TV layout, shrunk to fit.
 
 ## Deciding the layout: `shared/layout.js`
@@ -94,6 +95,29 @@ Returning `false` falls through to the defaults, which need no cooperation:
    it at its top. It costs a reload of that screen and it can't tell whether
    you're already there, so a registration is always better — this is only so
    a screen works before it has one.
+
+### The same contract, driven from the TV layout
+
+`setScreenHome()` isn't phone-only: a desktop mouse needs the same "back to
+the top of this screen" affordance, and it reuses this exact registration —
+no second mechanism. Two places call it:
+
+- **The persistent menu** (`shared/menu.js`, on Home and Now Playing) wraps
+  every item's `act()`: if the item's id matches the screen that's actually
+  up (`currentId()`) and `canScreenHome()` says there's somewhere above,
+  it calls `screenHome()` instead of navigating again. Otherwise the item
+  behaves as it always did.
+- **Each TV-layout screen's own top bar** splits its brand block in two: the
+  mark and the HOMER wordmark still go Home (`goHome()`, unchanged); the
+  screen's own name beside it (`.mu-brand-sub`, `.hc-brand-sub`, `.hl-brand-sub`,
+  and so on) calls `canScreenHome()` / `screenHome()`, the desktop mirror of
+  the phone's `.hp-here`. Before this, the whole brand block — mark, wordmark
+  *and* name — went straight to `goHome()`, so clicking a screen's own name
+  from inside an album, a details page or a camera left the screen entirely
+  instead of climbing one level. Every screen with a registration needs this
+  split; a screen that only relies on the defaults (Movies, TV Shows) still
+  benefits since `canScreenHome()`/`screenHome()` already fall through to the
+  details→grid and query-stripping defaults described above.
 
 Two things worth copying:
 

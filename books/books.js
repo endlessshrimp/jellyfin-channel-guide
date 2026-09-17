@@ -918,6 +918,13 @@
             ev.stopImmediatePropagation();
         };
         const onClick = (ev) => {
+            // the mark and HOMER wordmark go Home; Books (the screen's own
+            // name) is the desktop's screen-home button — back to the shelf
+            if (ev.target.closest('.bk-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.bk-brand')) { goHome(); return; }
             if (ev.target.closest('.bk-np')) { showView('listen'); return; }
             if (ev.target.closest('.bk-preview')) { const p = HP(); if (p && p.fullscreen) p.fullscreen(); return; }

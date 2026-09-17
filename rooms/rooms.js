@@ -2030,6 +2030,14 @@
 
         const onClick = (ev) => {
             const t = ev.target;
+            // the mark and HOMER wordmark go Home; House (the screen's own
+            // name) is the desktop's screen-home button — out of a room, a
+            // camera or the remote, back to the rooms list
+            if (t.closest('.ho-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (t.closest('.ho-brand')) { goHome(); return; }
             const leg = t.closest('.ho-legend [data-action]');
             if (leg) {

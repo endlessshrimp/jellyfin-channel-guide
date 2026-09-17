@@ -328,7 +328,17 @@
         };
         document.addEventListener('keydown', keyHandler, true);
         window.addEventListener('resize', fit);
-        $('.hl-brand').addEventListener('click', goHome);
+        $('.hl-brand').addEventListener('click', (ev) => {
+            // the mark and HOMER wordmark go Home; the screen's own name
+            // (Movies or Shows) is the desktop's screen-home button — the
+            // grid a details page belongs to, or nothing from the grid itself
+            if (ev.target.closest('.hl-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
+            goHome();
+        });
         $('.hl-legend').addEventListener('click', (ev) => {
             if (ev.target.closest('[data-action="home"]')) goHome();
             else if (ev.target.closest('[data-action="fullscreen"]') && P()) P().fullscreen();

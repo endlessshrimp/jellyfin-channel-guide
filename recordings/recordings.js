@@ -1033,7 +1033,17 @@
         window.addEventListener('wheel', onWheel, { capture: true, passive: false });
         window.addEventListener('resize', fit);
 
-        $('.hr-brand').addEventListener('click', goHome);
+        $('.hr-brand').addEventListener('click', (ev) => {
+            // the mark and HOMER wordmark go Home; Live TV (the screen's own
+            // name) is the desktop's screen-home button — out of a show's
+            // folder, then back to the first tab
+            if (ev.target.closest('.hr-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
+            goHome();
+        });
         root.querySelectorAll('.hr-tab').forEach((t) => t.addEventListener('click', () => {
             tabFocus = t.dataset.tab;
             if (runTab()) { markTabs(); return; }

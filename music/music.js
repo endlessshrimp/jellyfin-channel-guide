@@ -592,6 +592,12 @@
         };
         const drawTabs = () => {
             const box = viewEl('browse').querySelector('.mu-tabs');
+            // Radio's stations (or a favourite) can land before the browse
+            // view has ever been drawn once — Jellyfin's own library load
+            // gates the first drawBrowse(), and nothing here should race
+            // ahead of it. render() draws everything, tabs included, once
+            // M().loaded() is true, so there is nothing to catch up on here.
+            if (!box) return;
             box.innerHTML = '';
             TABS.forEach((t) => {
                 const n = (t.list() || []).length;
@@ -616,6 +622,7 @@
         };
         const drawGrid = () => {
             const box = viewEl('browse').querySelector('.mu-content');
+            if (!box) return; // same race as drawTabs(): nothing to draw into yet
             const t = TABS.find((x) => x.id === tab) || TABS[0];
             if (t.radio) {
                 const keepTop = box.scrollTop;
@@ -1617,6 +1624,14 @@
             if (st && root.contains(st)) {
                 ev.stopPropagation();
                 toggleFav(st._item || M().find(st.dataset.fav));
+                return;
+            }
+            // the mark and HOMER wordmark go Home; the screen's own name next
+            // to it (Music or Radio) is the desktop's equivalent of the
+            // phone's screen-home button — back to the browse wall, not Home
+            if (ev.target.closest('.mu-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
                 return;
             }
             if (ev.target.closest('.mu-brand')) { goHome(); return; }

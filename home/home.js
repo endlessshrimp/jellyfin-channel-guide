@@ -585,7 +585,6 @@
 
         // ---------- Input ----------
         const activate = () => { if (focused && focused._act) focused._act(); };
-        window.__hmDebug = () => ({ focused: focused && focused.className, isWx: focused === wxEl, hasAct: !!(focused && focused._act), wxEl: wxEl && wxEl.className, wxAct: !!(wxEl && wxEl._act), live: document.querySelector('.hm-focus') === focused });
         const onKey = (ev) => {
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (document.getElementById('cg-root')) return; // the guide is on top
