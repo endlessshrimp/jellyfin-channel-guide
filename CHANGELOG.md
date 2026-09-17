@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.24
 
 - **Play on… gets a visible button, on both players.** It used to exist
   only in the Actions strip (hold OK) and inside an album's sheet on a
