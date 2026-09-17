@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.21
 
 - **Soccer scores are back.** ESPN's soccer scoreboard is the one that
   refuses a day range — `dates=YYYYMMDD-YYYYMMDD` answers HTTP 400 — so the
