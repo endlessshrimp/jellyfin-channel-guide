@@ -13,7 +13,11 @@
  * Play on… (music/playon.js) sits beside Play / Shuffle / Instant Mix: it
  * sends the album to a speaker in the house through Home Assistant instead of
  * playing it in this tab, and says on each device's row what that device can
- * actually take. It only appears when Home Assistant is connected.
+ * actually take. It only appears when Home Assistant is connected. The same
+ * picker is also a cast icon on the player's own control row — for whatever
+ * is actually playing, station or track — so it isn't only reachable from an
+ * album's own hero or the Actions strip. Amber when HOMER already knows it
+ * sent the current thing to a speaker that's still going.
  *   Artist     one artist or genre: their albums, and Play all / Shuffle /
  *              Instant Mix for the lot.
  *   Radio      a tab of its own: internet radio, which isn't in Jellyfin at
@@ -49,7 +53,7 @@
  * window.HomerMusic = { open, close, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window.HomerMusic && typeof window.HomerMusic.destroy === 'function') {
         window.HomerMusic.destroy();
@@ -734,6 +738,37 @@
                 startPlaying([t], 0, { source: { kind: 'station', id: st.id, name: st.name } });
             }).catch((err) => toast(err.message, true));
         };
+        // The device button's own state: cheap, but devices() walks every
+        // Home Assistant room, so this only actually recomputes once a
+        // second even though paintPlaying() (below) asks on every tick.
+        let lastCastAt = 0;
+        const syncCast = (force) => {
+            const btn = viewEl('playing').querySelector('[data-k="cast"]');
+            if (!btn) return;
+            const now = Date.now();
+            if (!force && now - lastCastAt < 1000) return;
+            lastCastAt = now;
+            const p = PO();
+            const cur = p && p.current ? p.current() : null;
+            btn.classList.toggle('set', !!cur);
+            btn.innerHTML = icon(cur ? 'cast_connected' : 'cast');
+            const label = cur ? `Playing on ${cur.device.label || cur.device.name}` : 'Play on…';
+            btn.dataset.okLabel = label;
+            btn.title = label;
+        };
+
+        // The device button on the player: whatever is playing right now —
+        // the station, or the current track — the same picker the Actions
+        // strip and the 'O' key already use. Not gated on canPlayOn(): with
+        // no Home Assistant, or no speaker, the picker says so plainly, and
+        // that is a more honest answer than a button that does nothing.
+        const playOnCurrent = () => {
+            if (!PO()) return;
+            const st = radioSubject();
+            if (st) { playOnStation(st); return; }
+            playOn(subject());
+        };
+
         // …or send it to a speaker, which goes through Music Assistant.
         const playOnStation = (st) => {
             const p = PO();
@@ -1054,7 +1089,12 @@
             const s = player().state();
             box.innerHTML = '';
             if (!s.track) {
-                box.innerHTML = `<div class="mu-empty-row big">Nothing is playing. Pick something to play.</div>`;
+                const cur = PO() && PO().current ? PO().current() : null;
+                box.innerHTML = cur
+                    ? `<div class="mu-empty-row big">Nothing is playing here — HOMER sent
+                        ${esc(cur.info.name || 'something')} to <b>${esc(cur.device.label || cur.device.name)}</b>,
+                        and it's still going.</div>`
+                    : `<div class="mu-empty-row big">Nothing is playing. Pick something to play.</div>`;
                 return;
             }
             box.innerHTML = `
@@ -1083,6 +1123,7 @@
                         <div class="mu-round small" data-k="fav">${icon('star_border')}</div>
                         <div class="mu-round small" data-k="shuffle">${icon('shuffle')}</div>
                         <div class="mu-round small" data-k="repeat">${icon('repeat')}</div>
+                        <div class="mu-round small mu-cast" data-k="cast">${icon('cast')}</div>
                         <div class="mu-vol" data-k="vol">${icon('volume_up')}<span class="mu-vol-bar"><b></b></span><span class="mu-vol-n"></span></div>
                     </div>
                     <div class="mu-pl-next"></div>
@@ -1105,6 +1146,7 @@
                 fav: [() => toggleFav(P.state().track), 'Favorite'],
                 shuffle: [() => { P.toggleShuffle(); toast(P.state().shuffle ? 'Shuffle on' : 'Shuffle off'); }, 'Shuffle'],
                 repeat: [() => { P.cycleRepeat(); const r = P.state().repeat; toast(r === 'off' ? 'Repeat off' : r === 'all' ? 'Repeat all' : 'Repeat one'); }, 'Repeat'],
+                cast: [() => playOnCurrent(), 'Play on…'],
                 vol: [() => P.toggleMute(), 'Mute'],
                 seek: [() => P.toggle(), 'Play / pause'],
                 'pane:lyrics': [() => { rightPane = 'lyrics'; drawPane(); }, 'Lyrics'],
@@ -1129,6 +1171,7 @@
             };
             drawPane();
             paintPlaying();
+            syncCast(true);
             if (s.track.live) pollLive();
             else M().lyrics(s.track.id);
         };
@@ -1316,6 +1359,7 @@
                     ? `<span class="mu-pl-next-k">Next</span><b>${esc(s.next.name)}</b><span>${esc(s.next.artist || '')}</span>`
                     : (s.repeat === 'off' ? `<span class="mu-pl-next-k">Next</span><span>End of the queue</span>` : '');
             q('.mu-pl-err').textContent = s.error || '';
+            syncCast();
             // the queue only needs redrawing when the track changes, not four
             // times a second: redrawing it would eat the focus mid-press
             if (rightPane === 'lyrics') paintLyrics(false);
@@ -1398,6 +1442,15 @@
             drawHero();
         }) : () => {};
         if (RM()) RM().load().catch(() => {});
+        // A speaker starting, stopping, or being taken over by someone else's
+        // remote changes the device button's own state, not HOMER's — so it
+        // needs Home Assistant's own events, not just the player's.
+        const offHA = window.HomerHA && window.HomerHA.onChange
+            ? window.HomerHA.onChange(() => {
+                if (view !== 'playing') return;
+                if (player().state().track) syncCast(true); else drawPlaying();
+            })
+            : () => {};
 
         // ----- loading / empty -----
         const setState = (kind) => {
@@ -1578,11 +1631,7 @@
             }
             if (k === 'o' || k === 'O') {
                 eat(ev);
-                if (!ev.repeat) {
-                    const st = radioSubject();
-                    if (st) playOnStation(st);
-                    else if (canPlayOn()) playOn(subject());
-                }
+                if (!ev.repeat) playOnCurrent();
                 return;
             }
             if (k === 'i' || k === 'I') {
@@ -1772,6 +1821,7 @@
                 clearInterval(idleTimer);
             clearInterval(liveTimer);
             offRadio();
+                offHA();
                 clearTimeout(toastTimer);
                 wxDetach();
                 root.remove();

@@ -870,7 +870,17 @@ a small now-playing strip in the corner with the cover, the track and
   what's next, and the **lyrics** — the line you're on lit and scrolling when
   the file has timings (an `.lrc` beside it, or lyrics in its tags). Plain
   lyrics show unlit. The right column switches between **Lyrics** and
-  **Up next** (the queue; OK on a row jumps to it).
+  **Up next** (the queue; OK on a row jumps to it). A **cast icon** sits in
+  the transport row (beside the volume) and, on a phone, at the top of the
+  full player too — the same **Play on…** picker (below), one press away
+  instead of a hold-OK Action. It shows amber when HOMER already knows it
+  sent the current thing to a speaker and that speaker is still going, so
+  the button never claims to be idle when it isn't.
+- **On a phone, the player sits at the top of the album list** whenever
+  something is playing — not a separate screen, the first thing you scroll
+  past. It shrinks to a single row once you scroll down to browse and pins
+  there, so it never fights the wall for space; scroll back up and it opens
+  back out.
 
 ![Now playing, with synced lyrics](docs/screenshots/music-lyrics.jpg)
 
@@ -921,6 +931,14 @@ would have put it — then every Home Assistant player that can take music, with
 the device you used last marked and focused. Speakers playing as a group (two
 WiiMs, a pair of Sonos) are one row naming both rooms. Arrows and OK, a mouse,
 or a thumb on a phone; **Now Playing** at the bottom goes to see it.
+
+**The same picker is also on the player itself** — the cast icon on the TV's
+Now Playing screen, and on the phone's player, both the compact row and the
+full sheet — for whatever's actually playing right now, so it's one press away
+instead of buried in the Actions strip (hold OK) or an album's own sheet.
+
+![The device button, on the TV player](docs/screenshots/music-player-cast-tv.jpg)
+![The picker open from the player](docs/screenshots/music-player-cast-picker.jpg)
 
 **Every row says what that speaker will actually do**, because they don't all
 do the same thing. Home Assistant's `play_media` takes one item and an album is

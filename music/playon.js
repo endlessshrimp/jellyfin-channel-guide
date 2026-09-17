@@ -43,11 +43,11 @@
  * Music Assistant's own players (music/radio-model.js speakers()) and the row
  * says which room is already playing something.
  *
- * window.HomerPlayOn = { ready, devices, last, setLast, send, sent, forget,
- *                        open, close, isOpen, destroy, version }
+ * window.HomerPlayOn = { ready, devices, last, setLast, current, send, sent,
+ *                        forget, open, close, isOpen, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window.HomerPlayOn && typeof window.HomerPlayOn.destroy === 'function') {
         window.HomerPlayOn.destroy();
@@ -266,6 +266,23 @@
 
     const last = () => store.get(LAST_KEY, '') || '';
     const setLast = (id) => store.set(LAST_KEY, id || '');
+
+    // What the device button on the player asks: is HOMER, right now, actually
+    // sending sound somewhere else? Only "yes" if both things are true — the
+    // last device used still remembers what HOMER sent it (sent(), within its
+    // TTL) AND Home Assistant currently sees that player as busy. Either one
+    // going stale (the M3U expired, or the speaker was stopped from its own
+    // remote) answers "no", because a button that keeps claiming a dead cast
+    // is worse than one that undersells a live one.
+    const current = () => {
+        const id = last();
+        if (!id || id === HERE) return null;
+        const info = sent(id);
+        if (!info) return null;
+        const d = devices().find((x) => x.id === id);
+        if (!d || !d.busy) return null;
+        return { device: d, info };
+    };
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -557,6 +574,7 @@
         devices,
         last,
         setLast,
+        current,
         send,
         sent,
         forget,
