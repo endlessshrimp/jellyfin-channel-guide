@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.25
 
 - **The album page's "Play on…" comes back when Home Assistant is slow.**
   Whether an album page offered the button was decided once, when the page was
