@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.28
 
 - **Play on… for a movie or episode, not just an album.** A new picker
   (`library/castvideo.js`, `library/castvideo.css`) puts a **Play on…**
