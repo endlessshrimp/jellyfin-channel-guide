@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.30
 
 - **Home Assistant's sign-in survives a browser losing its storage, and
   follows you between HOMER addresses.** The refresh token
