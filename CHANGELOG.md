@@ -1,5 +1,89 @@
 # Changelog
 
+## v0.4.17
+
+- **Cameras' Recent strip shows a real picture of the ring.** Home Assistant
+  now saves a still the instant the doorbell is pressed, and HOMER shows it as
+  that event's thumbnail instead of a clip's first frame or a plain row.
+  - **Two Home Assistant automations**, *Doorbell stills: save a picture of
+    every ring* and *…when a person is seen*, call `camera.snapshot` into
+    `/media/doorbell/<date>/<ring|person>-<YYYYMMDD-HHMMSS>.jpg`. They live in
+    Home Assistant, not here — HOMER only reads what they leave behind — and
+    the README says how to find and remove them.
+  - They snapshot **`camera.front_door_snapshots_fluent`**, the still-image
+    entity, not the streaming one: same 640×480 in the same ~400 ms, but Home
+    Assistant fetches a JPEG from the camera's snapshot endpoint rather than
+    opening the sub-stream to decode a frame, and the live stream is left
+    alone at the one moment the doorbell is busiest.
+  - They fire on the **state change**, never a poll. The visitor sensor's
+    pulse is shorter than the recorder reliably catches, which is exactly how
+    a ring used to end up with no record at all.
+  - `cameras/cameras-model.js` reads them back from
+    `media-source://media_source/local/doorbell` (a folder per day, newest
+    four walked) and lays each still over the event at the same moment —
+    within 90 s and matching on kind, rings placed first so they get first
+    claim on a clip that was both. **A still that matches nothing becomes its
+    own event**, which is not a corner case: the picture is often the only
+    trace of a ring the recorder missed. Clips stay exactly as playable.
+  - `M.stillUrl(ev)` resolves per paint rather than being held, because a
+    media-source URL is signed and expires in about half a minute — the same
+    reason `M.clipUrl(ev)` already worked that way. A "No clip" event that has
+    a still is no longer dimmed: there's a real picture of it.
+  - Worth knowing, measured on the real doorbell: both stills were on screen
+    in under a second while **none** of the 22 clip first-frames had decoded a
+    minute later — the camera serves playback one request at a time. The still
+    isn't just a nicer thumbnail; it's frequently the only one that arrives.
+  - **Nothing prunes these.** ~20 KB each, so the rings are negligible and the
+    person automation is throttled to one picture per two minutes, but
+    `/media/doorbell` grows without limit: Home Assistant ships no service
+    that deletes a file, so an automation can't do it. The README has the
+    `shell_command` to add when there's file access.
+
+- **Movies and TV Shows can be narrowed down.** Two rows of chips sit above the
+  list, in the guide's chip language rather than a second pattern to learn: the
+  order on top, then what the list is narrowed to.
+  - **Genre** and **decade**, both read off the library itself — the ten genres
+    it actually leans on, most-used first, and the decades its years really
+    fall in, rather than a list of forty and a range nothing is in.
+  - **Unwatched** (a movie you haven't finished, a show with episodes left),
+    **Favourites**, and **4K**. The 4K set comes from Jellyfin's own `Is4K`
+    filter in one small extra query beside the main one — ids only, no second
+    pass over every title's media — so a library with nothing in 2160p simply
+    doesn't get the chip. Nor does one nobody has hearted.
+  - **Everything combines**, and the search box (**/**) narrows what's left.
+    Every chip carries the number of titles it would leave, counted against
+    everything else that's on, so a dead end is visible before you press it: a
+    chip that would leave nothing goes dim and dashed.
+  - **Sorting** is now Recently added, A–Z, Year and Rating, plus **Recently
+    aired** on TV Shows (by premiere date). The sort moved out of the list
+    header into the chip row and is still remembered per library.
+  - **The arrows reach all of it**, exactly as they reach the guide's
+    categories: **▲** off the top title goes up into the genre/decade row,
+    **▲** again into the order row, **◀ ▶** run along a row, **OK** presses
+    (a lit chip turns off), and **▼** drops back onto the title you left.
+  - **One press clears it.** **ESC** takes every chip and the search box off
+    together, an amber **Clear** chip appears while anything is on, and the
+    Actions strip (**M**, or holding OK on the Siri Remote) carries Filters,
+    Sort and Clear filters for a remote with no letters.
+  - **Nothing matched** now says which filters did it, over the whole stage
+    (the preview window has nothing to preview, so it stands aside), with the
+    same one press out.
+  - **What's on is readable from the sofa**: the lit chips are filled and
+    ringed, an active chip that has scrolled off the end is pulled back into
+    view, and the list header reads `COMEDY · 1980S` beside `11 of 178`.
+  - **Remembered for the sitting, not for good.** Leave Movies and come back
+    and the chips are where you left them; come back tomorrow (or after two
+    hours) and the whole library is there again. A filter isn't a setting.
+  - **On a phone**, the same filters are a row you flick, with the count beside
+    the sorts and an amber **Clear** pinned outside the row so it's still
+    reachable when the row has been flicked to its end. The row is built once
+    and then only updated, so tapping a chip near the end doesn't throw the row
+    back to its start.
+  - Both layouts take the chips, the counts and the sort order from one place,
+    `HomerLibraryModel.makeFilters` / `sortsFor` / `sortCompare`, so they can't
+    drift apart. Filtering is one pass over the titles the screen already has —
+    178 movies and 18 shows here — not another round trip.
+
 ## v0.4.16
 
 - **The phone's top bar is two buttons, not one.** The HOMER mark still opens
@@ -113,90 +197,6 @@
   track floors at its content's minimum width, so one wide cover stretched
   the first column and squashed the second to a sliver; the same guard went
   into the other phone grids that split in two.
-## Unreleased
-
-- **Cameras' Recent strip shows a real picture of the ring.** Home Assistant
-  now saves a still the instant the doorbell is pressed, and HOMER shows it as
-  that event's thumbnail instead of a clip's first frame or a plain row.
-  - **Two Home Assistant automations**, *Doorbell stills: save a picture of
-    every ring* and *…when a person is seen*, call `camera.snapshot` into
-    `/media/doorbell/<date>/<ring|person>-<YYYYMMDD-HHMMSS>.jpg`. They live in
-    Home Assistant, not here — HOMER only reads what they leave behind — and
-    the README says how to find and remove them.
-  - They snapshot **`camera.front_door_snapshots_fluent`**, the still-image
-    entity, not the streaming one: same 640×480 in the same ~400 ms, but Home
-    Assistant fetches a JPEG from the camera's snapshot endpoint rather than
-    opening the sub-stream to decode a frame, and the live stream is left
-    alone at the one moment the doorbell is busiest.
-  - They fire on the **state change**, never a poll. The visitor sensor's
-    pulse is shorter than the recorder reliably catches, which is exactly how
-    a ring used to end up with no record at all.
-  - `cameras/cameras-model.js` reads them back from
-    `media-source://media_source/local/doorbell` (a folder per day, newest
-    four walked) and lays each still over the event at the same moment —
-    within 90 s and matching on kind, rings placed first so they get first
-    claim on a clip that was both. **A still that matches nothing becomes its
-    own event**, which is not a corner case: the picture is often the only
-    trace of a ring the recorder missed. Clips stay exactly as playable.
-  - `M.stillUrl(ev)` resolves per paint rather than being held, because a
-    media-source URL is signed and expires in about half a minute — the same
-    reason `M.clipUrl(ev)` already worked that way. A "No clip" event that has
-    a still is no longer dimmed: there's a real picture of it.
-  - Worth knowing, measured on the real doorbell: both stills were on screen
-    in under a second while **none** of the 22 clip first-frames had decoded a
-    minute later — the camera serves playback one request at a time. The still
-    isn't just a nicer thumbnail; it's frequently the only one that arrives.
-  - **Nothing prunes these.** ~20 KB each, so the rings are negligible and the
-    person automation is throttled to one picture per two minutes, but
-    `/media/doorbell` grows without limit: Home Assistant ships no service
-    that deletes a file, so an automation can't do it. The README has the
-    `shell_command` to add when there's file access.
-
-- **Movies and TV Shows can be narrowed down.** Two rows of chips sit above the
-  list, in the guide's chip language rather than a second pattern to learn: the
-  order on top, then what the list is narrowed to.
-  - **Genre** and **decade**, both read off the library itself — the ten genres
-    it actually leans on, most-used first, and the decades its years really
-    fall in, rather than a list of forty and a range nothing is in.
-  - **Unwatched** (a movie you haven't finished, a show with episodes left),
-    **Favourites**, and **4K**. The 4K set comes from Jellyfin's own `Is4K`
-    filter in one small extra query beside the main one — ids only, no second
-    pass over every title's media — so a library with nothing in 2160p simply
-    doesn't get the chip. Nor does one nobody has hearted.
-  - **Everything combines**, and the search box (**/**) narrows what's left.
-    Every chip carries the number of titles it would leave, counted against
-    everything else that's on, so a dead end is visible before you press it: a
-    chip that would leave nothing goes dim and dashed.
-  - **Sorting** is now Recently added, A–Z, Year and Rating, plus **Recently
-    aired** on TV Shows (by premiere date). The sort moved out of the list
-    header into the chip row and is still remembered per library.
-  - **The arrows reach all of it**, exactly as they reach the guide's
-    categories: **▲** off the top title goes up into the genre/decade row,
-    **▲** again into the order row, **◀ ▶** run along a row, **OK** presses
-    (a lit chip turns off), and **▼** drops back onto the title you left.
-  - **One press clears it.** **ESC** takes every chip and the search box off
-    together, an amber **Clear** chip appears while anything is on, and the
-    Actions strip (**M**, or holding OK on the Siri Remote) carries Filters,
-    Sort and Clear filters for a remote with no letters.
-  - **Nothing matched** now says which filters did it, over the whole stage
-    (the preview window has nothing to preview, so it stands aside), with the
-    same one press out.
-  - **What's on is readable from the sofa**: the lit chips are filled and
-    ringed, an active chip that has scrolled off the end is pulled back into
-    view, and the list header reads `COMEDY · 1980S` beside `11 of 178`.
-  - **Remembered for the sitting, not for good.** Leave Movies and come back
-    and the chips are where you left them; come back tomorrow (or after two
-    hours) and the whole library is there again. A filter isn't a setting.
-  - **On a phone**, the same filters are a row you flick, with the count beside
-    the sorts and an amber **Clear** pinned outside the row so it's still
-    reachable when the row has been flicked to its end. The row is built once
-    and then only updated, so tapping a chip near the end doesn't throw the row
-    back to its start.
-  - Both layouts take the chips, the counts and the sort order from one place,
-    `HomerLibraryModel.makeFilters` / `sortsFor` / `sortCompare`, so they can't
-    drift apart. Filtering is one pass over the titles the screen already has —
-    178 movies and 18 shows here — not another round trip.
-
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.
