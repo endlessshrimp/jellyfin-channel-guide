@@ -61,7 +61,18 @@
  * the events fall back to Home Assistant's history of the ring and detection
  * sensors: the times are right, there's just nothing to play.
  *
- * window.HomerCamerasModel = { create, PLANNED, version }
+ * The pictures Home Assistant can't hand out
+ * ------------------------------------------
+ * Home Assistant's snapshot proxy 500s for the garage and front yard cameras
+ * (an open upstream bug, home-assistant/core#158305 — not something wrong
+ * here). Rather than wait on that, the NAS itself grabs a frame straight off
+ * each camera over RTSP and serves it from homerfeeds, HOMER's own helper —
+ * which also means these two still work from outside the house (Home
+ * Assistant is plain http; HOMER is https and can't reach it from there) and
+ * while Home Assistant itself is down. nasStillUrl(id) is '' for every other
+ * camera, so nothing else changes.
+ *
+ * window.HomerCamerasModel = { create, PLANNED, NAS_CAMS, nasStillUrl, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -78,7 +89,48 @@
         { key: 'side_yard', name: 'Side Yard', match: /side\s*-?\s*yard|side\s*gate/i }
     ];
 
+    // The cameras the NAS grabs stills for on its own (see the docstring
+    // above) — matched the same way PLANNED is, by the camera's Home
+    // Assistant name or entity id. `nas` is the short name homerfeeds knows
+    // it by (GET /camera/<nas>.jpg).
+    const NAS_CAMS = [
+        { nas: 'garage', match: /garage/i },
+        { nas: 'frontyard', match: /front\s*-?\s*yard/i }
+    ];
+
     const HA = () => window.HomerHA || null;
+
+    // The Jellyfin token HOMER itself signed in with (the same place
+    // shared/homeassistant.js reads it from) — homerfeeds requires one on
+    // every /camera request and checks it's an administrator's.
+    const jfServer = () => {
+        try {
+            const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+            const s = (creds.Servers || [])[0];
+            return s && s.AccessToken ? s : null;
+        } catch { return null; }
+    };
+
+    // HOMER's helper on the NAS: through the https name's /homer-feeds, or
+    // straight to port 8095 on the LAN (the same rule shared/arr.js uses).
+    const feedsBase = () => (location.protocol === 'https:'
+        ? location.origin + '/homer-feeds'
+        : 'http://' + location.hostname + ':8095');
+
+    // A still pulled straight off the camera by the NAS, for a camera
+    // NAS_CAMS names — '' for every other camera, so the caller falls back
+    // to Home Assistant's own snapshotUrl exactly as before. Works with no
+    // Home Assistant connection at all: `id` alone is enough to match.
+    const nasStillUrl = (id, fresh) => {
+        const h = HA();
+        const nm = h ? h.name(id) : id;
+        const hit = NAS_CAMS.find((c) => c.match.test(nm || '') || c.match.test(id || ''));
+        if (!hit) return '';
+        const srv = jfServer();
+        if (!srv || !srv.AccessToken) return '';
+        const q = 'api_key=' + encodeURIComponent(srv.AccessToken) + (fresh ? '&t=' + Date.now() : '');
+        return `${feedsBase()}/camera/${hit.nas}.jpg?${q}`;
+    };
 
     // ---------- Clip titles ----------
 
@@ -525,5 +577,5 @@
         };
     };
 
-    window.HomerCamerasModel = { version: VERSION, create, PLANNED };
+    window.HomerCamerasModel = { version: VERSION, create, PLANNED, NAS_CAMS, nasStillUrl };
 })();
