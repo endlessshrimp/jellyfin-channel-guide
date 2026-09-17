@@ -71,6 +71,7 @@
     css('shared/phone.css', 'homer-phone'); // the phone layout's top bar and tab bar
     css('shared/hub.css', 'hb-css'); // the hubs (Sports, News)
     css('shared/arr.css', 'homer-arr-css'); // Sonarr/Radarr's chips (Search, the guide)
+    css('shared/tmdb.css', 'homer-tmdb-css'); // TMDB's rows (Movies, TV Shows)
     css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
     css('shared/alerts.css', 'homer-alerts-css'); // the alert crawl, over every screen
     css('music/playon.css', 'homer-playon-css'); // "Play on…", the Music screens' device picker
@@ -87,6 +88,7 @@
     js('shared/alerts.js'); // the alert crawl: severe weather and the house, over any screen
     js('shared/logos.js'); // before the screens: they hand it their channel logos
     js('shared/arr.js'); // before the screens: Sonarr and Radarr through HOMER's NAS helper
+    js('shared/tmdb.js'); // before the screens: what's out there, through the same helper
     js('guide/guide-model.js'); // the guide's channels, listings and recordings
     js('guide/guide.js');
     js('guide/guide-phone.js'); // the guide's phone layout

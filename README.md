@@ -140,6 +140,59 @@ only for this sitting. A filter isn't a setting: come back tomorrow and the
 whole library is there again. (The sort *is* a setting, and is remembered per
 library.)
 
+### What's out there
+
+![Trending, in theaters and coming soon, under Movies](docs/screenshots/library-tmdb-movies.jpg)
+
+Under your own titles, both screens carry rows of what you *haven't* got —
+**Trending this week**, **In theaters now** (**On the air** on TV Shows) and
+**Coming soon** — from [TMDB](https://www.themoviedb.org). **▼** off the last
+title drops into them, **▲** off the first one comes back, and **OK** on any of
+them hands it to Radarr or Sonarr: the same two-press confirm as everywhere
+else ("Get this movie? Press OK again"), the same chips and flags
+("Not in your library", "Downloading 42%"), and the same result — it starts
+downloading. A show's three choices are there too: **Get new episodes**, **Get
+every episode**, **Get the latest season**.
+
+![Trending shows under TV Shows](docs/screenshots/library-tmdb-tv.jpg)
+
+Anything already in the library is left out of these rows, so they only ever
+show things that would be new. The filter chips narrow *your* library and have
+nothing to say about TMDB's, so the rows stand down while any chip is on; the
+search box narrows them by title along with everything else.
+
+On a movie's page, **More like this** sits beside About; on a show's page it
+sits under the season's episodes. Same rows, same one press to get one.
+
+![More like this, beside About](docs/screenshots/library-tmdb-more-like-this.jpg)
+
+TMDB hands out TMDB ids and Sonarr wants TheTVDB's, so a show's is looked up
+(TMDB's external ids, then Sonarr's own search) before the button is pressed —
+there's no such thing as a dead Get button here.
+
+**This needs a TMDB key**, and without one none of it draws: no rows, no
+headings, no error — Movies and TV Shows are exactly what they were. The key
+lives on the NAS with HOMER's helper and never reaches the browser or this
+repository. One is already installed; to replace it (a free key comes from
+themoviedb.org → your account → **Settings → API**), one command:
+
+```sh
+ssh 192.168.68.100 'umask 077; printf %s "YOUR-KEY-HERE" > /Volume1/docker/mediastack/config/homerfeeds/tmdb.key'
+```
+
+It takes effect within ten seconds — nothing to restart — and running it again
+just replaces the key. To keep the key out of your shell history, leave it off
+the command and paste it instead:
+
+```sh
+ssh 192.168.68.100 'umask 077; cat > /Volume1/docker/mediastack/config/homerfeeds/tmdb.key'
+```
+
+then paste the key and press Ctrl-D. TMDB's v4 *read access token* works too,
+in `tmdb.token` beside it (it's preferred when both are there). Deleting the
+file turns the rows off again. These rows are the TV layout's; the phone
+layout's Movies and TV Shows don't show them yet.
+
 ## Weather
 
 Home's **Weather** item opens a forecast board laid out like a TV weather
@@ -993,7 +1046,11 @@ Jellyfin has no item for. All of it is kept per device.
   searching.
 - **E** on a series (in Search or the guide) gets all its new episodes.
   Shows already in Sonarr say so ("Getting new episodes").
-- Talks to Sonarr and Radarr through HOMER's helper on the NAS, so no API
+- Movies and TV Shows carry rows of what you haven't got (trending, in
+  theaters / on the air, coming soon) and **More like this** on an item's
+  page, all from TMDB and all with the same OK-twice Get. See
+  [What's out there](#whats-out-there).
+- Talks to Sonarr, Radarr and TMDB through HOMER's helper on the NAS, so no API
   keys are stored in the browser.
 
 ## Channel Guide

@@ -234,11 +234,11 @@
 
         const toastEl = $('.hl-toast');
         let toastTimer = 0;
-        const toast = (msg, kind = '') => {
+        const toast = (msg, kind = '', ms = 3200) => {
             toastEl.innerHTML = `<span class="hl-toast-text">${esc(msg)}</span>`;
             toastEl.className = 'hl-toast show' + (kind ? ' ' + kind : '');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => { toastEl.className = 'hl-toast'; }, 3200);
+            toastTimer = setTimeout(() => { toastEl.className = 'hl-toast'; }, ms);
         };
 
         // legend: [{ key, label, action }] with 'spacer' for the gap. Every screen
@@ -367,6 +367,204 @@
     const stop = (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+    };
+
+
+    // ---------- More like this (shared/tmdb.js) ----------
+    // On a details screen: what TMDB says is like the thing he's looking at,
+    // with Sonarr's and Radarr's own buttons on it (shared/arr.js), so the
+    // answer to "what else?" is one press from being downloaded. The details
+    // screens hand it a box to draw in and take back the actions it wants
+    // drawn; with no TMDB key on the NAS it never draws anything.
+    const createLikes = ({ shell, box, inner, scroller, toast, onActions, label = 'More like this', head: withHead = true }) => {
+        const T = () => window.HomerTmdb || null;
+        const A = () => window.HomerArr || null;
+        const head = el('div', 'hl-like-head', `<b>${esc(label)}</b><i>TMDB</i>`);
+        let rows = []; // { card, el }
+        let sel = -1;
+        let alive = true;
+        let timer = 0;
+
+        const mark = (g) => {
+            const v = T() && T().peek(g.card);
+            const flag = A() && v ? A().flagHtml(v) : '';
+            g.el.querySelector('.hl-row-flag').innerHTML = flag || '<span class="material-icons hl-getmark">add</span>';
+        };
+
+        const make = (card) => {
+            const r = el('div', 'hl-row hl-getrow');
+            const poster = T() ? T().img(card.poster, 'thumb') : card.poster;
+            const sub = [card.year ? String(card.year) : '', card.rating ? `★ ${Number(card.rating).toFixed(1)}` : ''].filter(Boolean).join(' · ');
+            r.innerHTML = `
+                <div class="hl-thumb">${poster ? `<img data-src="${esc(poster)}" alt="">` : `<span>${esc((card.title || '?').slice(0, 1))}</span>`}</div>
+                <div class="hl-row-text"><div class="hl-row-title">${esc(card.title)}</div><div class="hl-row-sub">${esc(sub)}</div></div>
+                <div class="hl-row-flag"></div>`;
+            const img = r.querySelector('img');
+            if (img) {
+                img.onload = () => img.classList.add('in');
+                img.onerror = () => { img.parentNode.innerHTML = `<span>${esc((card.title || '?').slice(0, 1))}</span>`; };
+            }
+            return r;
+        };
+
+        const runner = A() ? A().runner({
+            hint: 'Press OK again',
+            toast: (m) => toast(m.text, m.kind === 'err' ? 'err' : '', m.ms || 3200),
+            update: () => {
+                const g = rows[sel];
+                if (g) { mark(g); info(g); }
+            }
+        }) : null;
+        const offChange = A() ? A().onChange(() => {
+            const g = rows[sel];
+            if (g) { mark(g); info(g); }
+        }) : () => {};
+
+        const actionsFor = (g) => {
+            const arr = A();
+            const t = T();
+            if (!arr || !t || !runner) return [];
+            const v = t.peek(g.card) || t.asView(g.card);
+            const busy = runner.busy(v);
+            return arr.actions(v).map((a) => ({
+                id: 'arr-' + a.id,
+                icon: busy ? 'hourglass_empty' : a.icon,
+                label: busy ? 'Asking…' : runner.label(a, v),
+                arr: a,
+                view: v
+            }));
+        };
+
+        const info = (g) => {
+            const t = T();
+            const arr = A();
+            const c = g.card;
+            const v = t ? (t.peek(c) || t.asView(c)) : null;
+            const soon = t ? t.when(c) : '';
+            shell.renderInfo({
+                kicker: `<b>${esc(label)}</b>${esc(soon ? (c.kind === 'movie' ? `In theaters ${soon}` : `Starts ${soon}`) : '')}`,
+                title: c.title,
+                chips: [
+                    { text: c.year ? String(c.year) : '' },
+                    { text: c.kind === 'show' ? 'Series' : 'Movie' },
+                    { text: c.rating ? `★ ${Number(c.rating).toFixed(1)}` : '' }
+                ],
+                desc: c.overview || '',
+                art: t ? t.img(c.fanart, 'art') : c.fanart,
+                poster: t ? t.img(c.poster, 'poster') : c.poster,
+                badge: arr && v ? arr.chipHtml(v) : '',
+                barLeft: c.date ? fmtDate(c.date + 'T12:00:00') : '',
+                barRight: 'TMDB'
+            });
+            onActions(actionsFor(g));
+        };
+
+        // what Sonarr or Radarr already know about the one he's settled on
+        const queueStatus = (g) => {
+            clearTimeout(timer);
+            const t = T();
+            if (!t || !A() || t.peek(g.card)) return;
+            timer = setTimeout(async () => {
+                if (!alive) return;
+                try {
+                    await t.status(g.card);
+                } catch {
+                    return;
+                }
+                if (!alive || !t.peek(g.card)) return;
+                mark(g);
+                if (rows[sel] === g) info(g);
+            }, 600);
+        };
+
+        const select = (i, { scroll = true } = {}) => {
+            if (!rows[i]) return;
+            if (rows[sel]) rows[sel].el.classList.remove('sel');
+            sel = i;
+            rows[i].el.classList.add('sel');
+            if (scroll && scroller) scroller.reveal(rows[i].el.offsetTop - 46, rows[i].el.offsetHeight + 58);
+            info(rows[i]);
+            queueStatus(rows[i]);
+        };
+
+        return {
+            count: () => rows.length,
+            at: () => sel,
+            rows: () => rows,
+            // the head and the rows, back in the box (a details screen redraws
+            // its list when the season changes)
+            append() {
+                if (!rows.length) return;
+                if (withHead) inner.appendChild(head);
+                for (const g of rows) inner.appendChild(g.el);
+            },
+            async load(kind, tmdbId) {
+                const t = T();
+                if (!t || !tmdbId) return 0;
+                let items = [];
+                try {
+                    if (!(await t.available())) return 0;
+                    items = await t.similar(kind, tmdbId);
+                } catch (err) {
+                    console.warn('[HOMER Library] TMDB recommendations:', err);
+                    return 0;
+                }
+                if (!alive || !items.length) return 0;
+                rows = items.slice(0, 12).map((card) => {
+                    const g = { card, el: make(card) };
+                    mark(g);
+                    return g;
+                });
+                this.append();
+                if (box) box.classList.add('has-like');
+                if (scroller) scroller.refresh();
+                return rows.length;
+            },
+            select,
+            step(d) {
+                if (!rows.length) return;
+                select(clamp((sel < 0 ? 0 : sel) + d, 0, rows.length - 1));
+            },
+            enter() {
+                if (!rows.length) return false;
+                select(sel < 0 ? 0 : sel);
+                return true;
+            },
+            leave() {
+                if (rows[sel]) rows[sel].el.classList.remove('sel');
+                sel = -1;
+                clearTimeout(timer);
+                if (runner) runner.disarm();
+            },
+            // OK on one of them: Sonarr and Radarr, through shared/arr.js. A
+            // show is a TMDB id and Sonarr wants TheTVDB's, so that is settled
+            // first — the button is never dead.
+            async press(a) {
+                const g = rows[sel];
+                const t = T();
+                if (!g || !a || !a.arr || !runner || !t) return;
+                let v;
+                try {
+                    v = await t.view(g.card);
+                } catch (err) {
+                    console.warn('[HOMER Library] TMDB → arr:', err);
+                    if (alive) toast(`Couldn't look ${g.card.title} up in ${g.card.kind === 'show' ? 'Sonarr' : 'Radarr'}`, 'err');
+                    return;
+                }
+                if (!alive || rows[sel] !== g) return;
+                runner.press(a.arr, v);
+            },
+            // the pointer over one of them
+            rowAt(node) {
+                return rows.findIndex((g) => g.el === node);
+            },
+            dispose() {
+                alive = false;
+                clearTimeout(timer);
+                offChange();
+                if (runner) runner.dispose();
+            }
+        };
     };
 
     // ---------- Library screen (Movies / TV Shows) ----------
@@ -532,6 +730,7 @@
                 rows[i].el.style.display = shown.has(i) ? '' : 'none';
                 inner.appendChild(rows[i].el); // DOM order = display order
             }
+            appendGet(); // what's out there stays under what's his
             renderBar(pool.map((i) => rows[i].it));
             markBar();
             const total = rows.length;
@@ -543,6 +742,7 @@
             $('.hl-search-count').textContent = query ? `${view.length} ${view.length === 1 ? nouns.slice(0, -1) : nouns}` : '';
             root.classList.toggle('filtering', narrowed);
             root.classList.toggle('no-results', !view.length); // no title to preview: no preview
+            applyGetView();
             scroller.reset();
             if (!view.length) {
                 const why = [F.summary(), query ? `“${query}”` : ''].filter(Boolean).join(' · ');
@@ -576,6 +776,9 @@
         const select = (i, { scroll = true } = {}) => {
             if (!rows[i] || view.indexOf(i) < 0) return;
             if (rows[sel]) rows[sel].el.classList.remove('sel');
+            if (getRows[getSel]) getRows[getSel].el.classList.remove('sel');
+            getSel = -1;
+            actOn = 'list';
             const changed = sel !== i;
             sel = i;
             rows[i].el.classList.add('sel');
@@ -640,6 +843,14 @@
                 return shell.setLegend([{ key: '▲', label: 'Filters' }, { key: '/', label: 'Search', action: 'filter' }, ...back]);
             }
             const ok = actions[zone === 'actions' ? act : 0];
+            if (zone === 'get' || actOn === 'get') {
+                return shell.setLegend([
+                    { key: '▲▼', label: 'Browse' },
+                    ...(actions.length > 1 ? [{ key: '◀▶', label: 'Options' }] : []),
+                    ...(ok ? [{ key: 'OK', label: ok.label, action: 'ok' }] : []),
+                    ...back
+                ]);
+            }
             shell.setLegend([
                 { key: '▲▼', label: 'Browse' },
                 { key: '◀▶', label: 'Options' },
@@ -717,6 +928,13 @@
         // ----- actions -----
         const run = (a) => {
             if (!a) return;
+            if (a.arr) { pressGet(a); return; } // Get it: Sonarr or Radarr (shared/arr.js)
+            if (a.id === 'open' && a.item) { // something in More like this he already has
+                typeCache.set(a.item.Id, a.item.Type);
+                fresh.set(a.item.Id, a.item);
+                nav(detailsHash(a.item.Id));
+                return;
+            }
             const it = current();
             if (a.id === 'episodes') {
                 typeCache.set(it.Id, 'Series');
@@ -736,10 +954,275 @@
 
         const setZone = (z) => {
             zone = z;
-            root.classList.remove('hl-zone-list', 'hl-zone-actions', 'hl-zone-bar');
+            root.classList.remove('hl-zone-list', 'hl-zone-actions', 'hl-zone-bar', 'hl-zone-get');
             root.classList.add('hl-zone-' + z);
             markBar();
             drawActions();
+            updateLegend();
+        };
+
+
+        // ----- What's out there (shared/tmdb.js) -----
+        // Under his own titles, rows of what he hasn't got: trending this week,
+        // what's on now, what's coming. Every one of them is one press from
+        // Sonarr or Radarr going and getting it (shared/arr.js does the adding,
+        // and its matcher says which of them he already has, so those are left
+        // out). With no TMDB key on the NAS none of this draws and nothing else
+        // about the screen changes.
+        const T = () => window.HomerTmdb || null;
+        const MAX_GET = 12; // per row; enough to browse, not enough to scroll forever
+        let getRows = []; // { card, sec, el, owned? } one per card drawn
+        let getEls = []; // the headings and the rows together, in the order they're drawn
+        let getView = []; // indices into getRows that the search box left
+        let getSel = -1;
+        let getOn = false; // the rows are in
+        let getStatusTimer = 0;
+        let actOn = 'list'; // which list the buttons belong to: 'list' | 'get'
+
+        const resetGet = () => {
+            clearTimeout(getStatusTimer);
+            getRows = [];
+            getEls = [];
+            getView = [];
+            getSel = -1;
+            getOn = false;
+            actOn = 'list';
+        };
+
+        const makeGetRow = (card) => {
+            const r = el('div', 'hl-row hl-getrow');
+            const poster = T() ? T().img(card.poster, 'thumb') : card.poster;
+            const sub = [card.year ? String(card.year) : '', card.rating ? `★ ${Number(card.rating).toFixed(1)}` : ''].filter(Boolean).join(' · ');
+            r.innerHTML = `
+                <div class="hl-thumb">${poster ? `<img data-src="${esc(poster)}" alt="">` : `<span>${esc((card.title || '?').slice(0, 1))}</span>`}</div>
+                <div class="hl-row-text"><div class="hl-row-title">${esc(card.title)}</div><div class="hl-row-sub">${esc(sub)}</div></div>
+                <div class="hl-row-flag"></div>`;
+            const img = r.querySelector('img');
+            if (img) {
+                img.onload = () => img.classList.add('in');
+                img.onerror = () => { img.parentNode.innerHTML = `<span>${esc((card.title || '?').slice(0, 1))}</span>`; };
+            }
+            return r;
+        };
+
+        // the right-hand end of a row: what Sonarr or Radarr says about it once
+        // they've said anything, else the mark that says this one can be got
+        const markGetRow = (g) => {
+            const arr = window.HomerArr;
+            const v = T() && T().peek(g.card);
+            const flag = arr && v ? arr.flagHtml(v) : '';
+            g.el.querySelector('.hl-row-flag').innerHTML = flag
+                || (g.owned ? '<span class="material-icons hl-check">check</span>'
+                    : '<span class="material-icons hl-getmark">add</span>');
+        };
+
+        const makeGetHead = (sec, first) => {
+            const h = el('div', 'hl-get-head');
+            h.innerHTML = `<b>${esc(sec.label)}</b>${first ? '<i>Not in your library</i>' : ''}`;
+            return h;
+        };
+
+        const appendGet = () => {
+            if (!getOn) return;
+            for (const e of getEls) inner.appendChild(e);
+        };
+
+        // The chips narrow his own library and have nothing to say about what
+        // TMDB knows, so while any of them is on these rows stand down; the
+        // search box does narrow them, by title.
+        const applyGetView = () => {
+            if (!getOn) return;
+            const off = F.on() || !view.length;
+            const hit = (g) => !off && (!query || lc(`${g.card.title} ${g.card.year || ''}`).includes(query));
+            for (const g of getRows) g.el.style.display = hit(g) ? '' : 'none';
+            for (const sec of new Set(getRows.map((g) => g.sec))) {
+                const any = getRows.some((g) => g.sec === sec && g.el.style.display !== 'none');
+                if (sec.head) sec.head.style.display = any ? '' : 'none';
+            }
+            getView = getRows.map((g, i) => i).filter((i) => getRows[i].el.style.display !== 'none');
+            if (getSel >= 0 && getView.indexOf(getSel) < 0) {
+                if (getRows[getSel]) getRows[getSel].el.classList.remove('sel');
+                getSel = -1;
+                actOn = 'list';
+                if (zone === 'get' || zone === 'actions') setZone('list');
+            }
+        };
+
+        const showGetInfo = (g) => {
+            const t = T();
+            const arr = window.HomerArr;
+            const card = g.card;
+            const v = t ? (t.peek(card) || t.asView(card)) : null;
+            const soon = t ? t.when(card) : '';
+            const lead = soon ? (card.kind === 'movie' ? `In theaters ${soon}` : `Starts ${soon}`) : '';
+            shell.renderInfo({
+                kicker: `<b>${esc(g.sec.label)}</b>${esc(lead)}`,
+                title: card.title,
+                chips: [
+                    { text: card.year ? String(card.year) : '' },
+                    { text: card.kind === 'show' ? 'Series' : 'Movie' },
+                    { text: card.rating ? `★ ${Number(card.rating).toFixed(1)}` : '' }
+                ],
+                desc: card.overview || '',
+                art: t ? t.img(card.fanart, 'art') : card.fanart,
+                poster: t ? t.img(card.poster, 'poster') : card.poster,
+                badge: g.owned ? '<span class="hl-chip">In your library</span>' : (arr && v ? arr.chipHtml(v) : ''),
+                barLeft: card.date ? fmtDate(card.date + 'T12:00:00') : '',
+                barRight: 'TMDB'
+            });
+            actions = getActions(g);
+            drawActions();
+            updateLegend();
+        };
+
+        // What a TMDB row offers: whatever shared/arr.js says can be done with
+        // it — "Get this movie", "Get every episode" — or, for something in
+        // More like this he already has, the way to it.
+        const getActions = (g) => {
+            const arr = window.HomerArr;
+            const t = T();
+            if (g.owned) return [{ id: 'open', icon: 'video_library', label: 'Open', item: g.owned }];
+            if (!arr || !t || !arrRun) return [];
+            const v = t.peek(g.card) || t.asView(g.card);
+            const busy = arrRun.busy(v);
+            return arr.actions(v).map((a) => ({
+                id: 'arr-' + a.id,
+                icon: busy ? 'hourglass_empty' : a.icon,
+                label: busy ? 'Asking…' : arrRun.label(a, v),
+                arr: a,
+                view: v
+            }));
+        };
+
+        // Sonarr's and Radarr's side of it: the confirm ("Press OK again"), the
+        // add, and the toasts on the way — all shared/arr.js's, so this screen
+        // says it exactly the way Search and the guide do.
+        const arrRun = window.HomerArr ? window.HomerArr.runner({
+            hint: 'Press OK again',
+            toast: (m) => toast(m.text, m.kind === 'err' ? 'err' : '', m.ms || 3200),
+            update: () => {
+                const g = getRows[getSel];
+                if (!g) return;
+                markGetRow(g);
+                showGetInfo(g);
+            }
+        }) : null;
+        const offArrChange = window.HomerArr ? window.HomerArr.onChange(() => {
+            const g = getRows[getSel];
+            if (!g) return;
+            markGetRow(g);
+            if (zone === 'get' || actOn === 'get') showGetInfo(g);
+        }) : () => {};
+
+        // Pressing Get. A show is a TMDB id and Sonarr wants TheTVDB's, so that
+        // is settled first (TMDB's external ids, then Sonarr's own search):
+        // the button is never dead, and it says so when neither knows the show.
+        const pressGet = async (a) => {
+            const g = getRows[getSel];
+            const t = T();
+            if (!g || !a || !a.arr || !arrRun || !t) return;
+            let v;
+            try {
+                v = await t.view(g.card);
+            } catch (err) {
+                console.warn('[HOMER Library] TMDB → arr:', err);
+                if (alive) toast(`Couldn't look ${g.card.title} up in ${g.card.kind === 'show' ? 'Sonarr' : 'Radarr'}`, 'err');
+                return;
+            }
+            if (!alive || getRows[getSel] !== g) return;
+            arrRun.press(a.arr, v);
+        };
+
+        // What Sonarr or Radarr already know about the one he's settled on
+        // (he may have added it months ago and never got the file). One
+        // request, once he stops moving.
+        const queueGetStatus = (g) => {
+            clearTimeout(getStatusTimer);
+            const t = T();
+            if (!t || !window.HomerArr || g.owned || t.peek(g.card)) return;
+            getStatusTimer = setTimeout(async () => {
+                if (!alive) return;
+                try {
+                    await t.status(g.card);
+                } catch {
+                    return; // no word from them: the row stays as it is
+                }
+                if (!alive || !t.peek(g.card)) return;
+                markGetRow(g);
+                if (getRows[getSel] === g) showGetInfo(g);
+            }, 600);
+        };
+
+        const selectGet = (i, { scroll = true } = {}) => {
+            if (!getRows[i] || getView.indexOf(i) < 0) return;
+            if (getRows[getSel]) getRows[getSel].el.classList.remove('sel');
+            if (rows[sel]) rows[sel].el.classList.remove('sel');
+            const changed = getSel !== i;
+            getSel = i;
+            actOn = 'get';
+            getRows[i].el.classList.add('sel');
+            if (scroll) scroller.reveal(getRows[i].el.offsetTop - 46, getRows[i].el.offsetHeight + 58);
+            if (changed) act = 0;
+            showGetInfo(getRows[i]);
+            queueGetStatus(getRows[i]);
+        };
+
+        const stepGet = (d) => {
+            if (!getView.length) return;
+            const at = getView.indexOf(getSel);
+            selectGet(getView[clamp(at + d, 0, getView.length - 1)]);
+        };
+
+        const enterGet = () => {
+            if (!getView.length) return false;
+            setZone('get');
+            selectGet(getView[0]);
+            return true;
+        };
+
+        const leaveGet = () => {
+            if (getRows[getSel]) getRows[getSel].el.classList.remove('sel');
+            getSel = -1;
+            actOn = 'list';
+            setZone('list');
+            if (view.length) select(view[view.length - 1]);
+        };
+
+        // TMDB's rows, once the library is in (it's what says which of them he
+        // already has). Nothing here draws before available() says there's a
+        // key, and nothing is said when there isn't one.
+        const loadGet = async () => {
+            const t = T();
+            if (!t || getOn || status !== 'ready' || !rows.length) return;
+            let list = [];
+            try {
+                if (!(await t.available())) return;
+                list = await t.rows(isTv ? 'show' : 'movie');
+            } catch (err) {
+                console.warn('[HOMER Library] TMDB:', err);
+                return;
+            }
+            if (!alive || !list.length || status !== 'ready') return;
+            const library = rows.map((r) => r.it);
+            let first = true;
+            for (const sec of list) {
+                const items = t.drop(sec.items, library).slice(0, MAX_GET);
+                if (!items.length) continue;
+                sec.head = makeGetHead(sec, first);
+                first = false;
+                getEls.push(sec.head);
+                for (const card of items) {
+                    const g = { card, sec, el: makeGetRow(card) };
+                    markGetRow(g);
+                    getRows.push(g);
+                    getEls.push(g.el);
+                }
+            }
+            if (!getRows.length) return;
+            getOn = true;
+            appendGet();
+            applyGetView();
+            scroller.refresh(); // the list is taller now; stay where he is
             updateLegend();
         };
 
@@ -829,9 +1312,10 @@
         const offActions = window.HomerActions ? window.HomerActions.provide(() => {
             const list = [];
             const it = current();
+            const name = getRows[getSel] ? getRows[getSel].card.title : (it && it.Name) || '';
             const primary = actions[zone === 'actions' ? act : 0];
-            if (it && primary) {
-                list.push({ id: 'ok', key: 'OK', icon: primary.icon, label: primary.label, sub: it.Name || '', run: () => run(primary) });
+            if (name && primary) {
+                list.push({ id: 'ok', key: 'OK', icon: primary.icon, label: primary.label, sub: name, run: () => run(primary) });
             }
             if (rows.length) {
                 list.push({
@@ -919,8 +1403,11 @@
                 return;
             }
             if (zone === 'list') {
-                if (k === 'ArrowDown') step(1);
-                else if (k === 'ArrowUp') {
+                if (k === 'ArrowDown') {
+                    // off the bottom of his own titles and into what's out there
+                    if (view.indexOf(sel) === view.length - 1 && enterGet()) return;
+                    step(1);
+                } else if (k === 'ArrowUp') {
                     if (view.indexOf(sel) === 0) enterBar(1);
                     else step(-1);
                 } else if (k === 'PageDown') step(8);
@@ -931,14 +1418,32 @@
                     act = 0;
                     setZone('actions');
                 } else if (k === 'Enter') run(actions[0]);
+            } else if (zone === 'get') {
+                if (k === 'ArrowDown') stepGet(1);
+                else if (k === 'ArrowUp') {
+                    if (getView.indexOf(getSel) <= 0) leaveGet(); // back up onto his own titles
+                    else stepGet(-1);
+                } else if (k === 'PageDown') stepGet(8);
+                else if (k === 'PageUp') stepGet(-8);
+                else if (k === 'Home') stepGet(-getView.length);
+                else if (k === 'End') stepGet(getView.length);
+                else if (k === 'ArrowRight' && actions.length) {
+                    act = 0;
+                    setZone('actions');
+                } else if (k === 'Enter') run(actions[0]);
             } else if (zone === 'actions') {
                 if (k === 'ArrowRight') { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
                 else if (k === 'ArrowLeft') {
-                    if (act === 0) setZone('list');
+                    if (act === 0) setZone(actOn === 'get' ? 'get' : 'list');
                     else { act -= 1; drawActions(); updateLegend(); }
                 } else if (k === 'ArrowUp' || k === 'ArrowDown') {
-                    setZone('list');
-                    step(k === 'ArrowDown' ? 1 : -1);
+                    if (actOn === 'get') {
+                        setZone('get');
+                        stepGet(k === 'ArrowDown' ? 1 : -1);
+                    } else {
+                        setZone('list');
+                        step(k === 'ArrowDown' ? 1 : -1);
+                    }
                 } else if (k === 'Enter') run(actions[act]);
             }
         });
@@ -951,7 +1456,14 @@
             if (!moved(ev)) return;
             const r = ev.target.closest('.hl-row');
             const i = rows.findIndex((x) => x.el === r);
-            if (i < 0) return;
+            if (i < 0) {
+                const j = getRows.findIndex((x) => x.el === r);
+                if (j < 0 || getView.indexOf(j) < 0) return;
+                actOn = 'get';
+                if (zone !== 'get') setZone('get');
+                if (j !== getSel) selectGet(j, { scroll: false });
+                return;
+            }
             if (zone !== 'list') setZone('list');
             if (i !== sel) select(i, { scroll: false });
         });
@@ -959,7 +1471,15 @@
             if (ev.target.closest('.hl-clear-btn')) { clearAll(); return; }
             const r = ev.target.closest('.hl-row');
             const i = rows.findIndex((x) => x.el === r);
-            if (i < 0) return;
+            if (i < 0) {
+                const j = getRows.findIndex((x) => x.el === r);
+                if (j < 0 || getView.indexOf(j) < 0) return;
+                actOn = 'get';
+                if (zone !== 'get') setZone('get');
+                selectGet(j, { scroll: false });
+                run(actions[0]);
+                return;
+            }
             select(i, { scroll: false });
             run(actions[0]);
         });
@@ -1016,6 +1536,7 @@
             rows = [];
             view = [];
             sel = -1;
+            resetGet();
             setState(`<div class="hl-spinner"></div><b>Loading ${nouns}…</b>`);
             shell.renderInfo({ title: '', chips: [], desc: '' });
             $('.hl-count').textContent = '';
@@ -1044,6 +1565,7 @@
                 }
                 setZone('list');
                 applyView(saved.id);
+                loadGet(); // and, under them, what he hasn't got (nothing at all without a TMDB key)
             } catch (err) {
                 console.error('[HOMER Library]', err);
                 if (!alive) return;
@@ -1063,6 +1585,9 @@
             teardown() {
                 alive = false;
                 clearTimeout(nextUpTimer);
+                clearTimeout(getStatusTimer);
+                offArrChange();
+                if (arrRun) arrRun.dispose();
                 offActions();
                 shell.teardown();
             }
@@ -1108,6 +1633,19 @@
         const tabsInner = $('.hl-tabs-inner');
         const scroller = makeScroller(rowsView, inner, false, loadNear(inner));
         const tabScroller = makeScroller($('.hl-tabs'), tabsInner, true);
+        // More like this, under the season's episodes (shared/tmdb.js)
+        const likes = createLikes({
+            shell,
+            inner,
+            scroller,
+            toast,
+            onActions: (list) => {
+                actions = list;
+                act = clamp(act, 0, Math.max(0, list.length - 1));
+                drawActions();
+                updateLegend();
+            }
+        });
         const moved = hoverTracker();
         const stateEl = $('.hl-state');
         const setState = (html) => {
@@ -1126,12 +1664,16 @@
         };
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
-            shell.renderActions(actions, act, zone === 'actions');
+            shell.renderActions(actions, act, zone === 'actions' || zone === 'likes');
         };
         const updateLegend = () => {
             const items = [];
             if (status === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
-            else if (zone === 'episodes') {
+            else if (zone === 'likes') {
+                items.push({ key: '▲▼', label: 'More like this' });
+                if (actions.length > 1) items.push({ key: '◀▶', label: 'Options' });
+                if (actions[act]) items.push({ key: 'OK', label: actions[act].label, action: 'ok' });
+            } else if (zone === 'episodes') {
                 items.push({ key: '▲▼', label: 'Episodes' }, { key: '▶', label: 'Options' });
                 if (actions[0]) items.push({ key: 'OK', label: actions[0].label, action: 'ok' });
             } else if (zone === 'seasons') {
@@ -1256,6 +1798,7 @@
                 inner.appendChild(r);
                 return r;
             });
+            likes.append(); // the season's list was redrawn: put them back under it
             selectEp(pickEpisode(eps, preferId));
             scroller.refresh(); // load the art for the rows now on screen
         };
@@ -1297,9 +1840,10 @@
         };
 
         const setZone = (z) => {
-            if (z !== 'actions') lastBelow = z;
+            if (z !== 'actions' && z !== 'likes') lastBelow = z;
+            if (z !== 'likes') likes.leave();
             zone = z;
-            root.classList.remove('hl-zone-actions', 'hl-zone-seasons', 'hl-zone-episodes');
+            root.classList.remove('hl-zone-actions', 'hl-zone-seasons', 'hl-zone-episodes', 'hl-zone-likes');
             root.classList.add('hl-zone-' + z);
             markTabs();
             drawActions();
@@ -1308,6 +1852,7 @@
 
         // ----- actions -----
         const run = (a) => {
+            if (a && a.arr) { likes.press(a); return; } // one of More like this
             const ep = current();
             if (!a || !ep) return;
             const start = a.id === 'resume' ? posOf(ep) : 0;
@@ -1334,9 +1879,26 @@
                 return;
             }
             if (status !== 'ready' || (ev.repeat && k === 'Enter')) return;
-            if (zone === 'episodes') {
-                if (k === 'ArrowDown') selectEp(Math.min(eps.length - 1, sel + 1));
+            if (zone === 'likes') {
+                if (k === 'ArrowDown') likes.step(1);
                 else if (k === 'ArrowUp') {
+                    if (likes.at() <= 0) { // back up onto the last episode
+                        setZone('episodes');
+                        selectEp(eps.length - 1);
+                    } else likes.step(-1);
+                } else if (k === 'ArrowRight') { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
+                else if (k === 'ArrowLeft') { act = Math.max(0, act - 1); drawActions(); updateLegend(); }
+                else if (k === 'Enter') run(actions[act]);
+                return;
+            }
+            if (zone === 'episodes') {
+                if (k === 'ArrowDown') {
+                    // off the bottom of the season and into More like this
+                    if (sel >= eps.length - 1 && likes.count()) {
+                        setZone('likes');
+                        likes.enter();
+                    } else selectEp(Math.min(eps.length - 1, sel + 1));
+                } else if (k === 'ArrowUp') {
                     if (sel <= 0) setZone('seasons');
                     else selectEp(sel - 1);
                 } else if (k === 'PageDown') selectEp(Math.min(eps.length - 1, sel + 4));
@@ -1375,6 +1937,13 @@
             if (i !== sel) selectEp(i, { scroll: false });
         });
         rowsView.addEventListener('click', (ev) => {
+            const like = likes.rowAt(ev.target.closest('.hl-row'));
+            if (like >= 0) {
+                if (zone !== 'likes') setZone('likes');
+                likes.select(like, { scroll: false });
+                run(actions[0]);
+                return;
+            }
             const i = epRows.indexOf(ev.target.closest('.hl-ep'));
             if (i < 0) return;
             selectEp(i, { scroll: false });
@@ -1450,6 +2019,15 @@
                 setZone(zone);
                 await selectSeason(idx, preferId);
                 if (alive && !eps.length && zone !== 'seasons') setZone('seasons');
+                // and, under the episodes, what TMDB says is like this show
+                if (alive) {
+                    let tmdbId = (s.ProviderIds && Number(s.ProviderIds.Tmdb)) || 0;
+                    if (!tmdbId) {
+                        const full = await M.load.item(server, seriesId).catch(() => null);
+                        tmdbId = (full && full.ProviderIds && Number(full.ProviderIds.Tmdb)) || 0;
+                    }
+                    if (alive && tmdbId) likes.load('show', tmdbId);
+                }
             } catch (err) {
                 console.error('[HOMER Library]', err);
                 if (!alive) return;
@@ -1468,6 +2046,7 @@
             refreshLegend: shell.refreshLegend,
             teardown() {
                 alive = false;
+                likes.dispose();
                 shell.teardown();
             }
         };
@@ -1480,10 +2059,16 @@
         const { root, $, toast } = shell;
         $('.hl-body').innerHTML = `
             <div class="hl-info">${TEXT_HTML}${PREVIEW_HTML}</div>
-            <div class="hl-panel">
-                <div class="hl-tabs-head"><div class="hl-panel-label"><b>ABOUT</b></div><div class="hl-count"></div></div>
-                <div class="hl-facts"></div>
-                <div class="hl-state"></div>
+            <div class="hl-panel hl-panel-split">
+                <div class="hl-pane hl-pane-about">
+                    <div class="hl-tabs-head"><div class="hl-panel-label"><b>ABOUT</b></div><div class="hl-count"></div></div>
+                    <div class="hl-facts"></div>
+                    <div class="hl-state"></div>
+                </div>
+                <div class="hl-pane hl-pane-like">
+                    <div class="hl-tabs-head"><div class="hl-panel-label"><b>MORE LIKE THIS</b></div></div>
+                    <div class="hl-rows"><div class="hl-rows-inner"></div></div>
+                </div>
             </div>`;
         root.classList.add('hl-zone-actions');
         let it = item;
@@ -1491,19 +2076,46 @@
         let actions = [];
         let status = 'loading';
         let alive = true;
+        let zone = 'actions'; // actions | likes
         const stateEl = $('.hl-state');
         const setState = (html) => {
             stateEl.innerHTML = html || '';
             stateEl.classList.toggle('show', !!html);
         };
 
+        // More like this, in the panel beside About (shared/tmdb.js)
+        const likesBox = $('.hl-panel');
+        const likesInner = $('.hl-pane-like .hl-rows-inner');
+        const likesScroller = makeScroller($('.hl-pane-like .hl-rows'), likesInner, false, loadNear(likesInner));
+        const likes = createLikes({
+            shell,
+            box: likesBox,
+            inner: likesInner,
+            scroller: likesScroller,
+            toast,
+            head: false, // the pane is headed already
+            onActions: (list) => {
+                actions = list;
+                drawActions();
+            }
+        });
+
+        const setZone = (z) => {
+            zone = z;
+            root.classList.remove('hl-zone-actions', 'hl-zone-likes');
+            root.classList.add('hl-zone-' + z);
+        };
+
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
             shell.renderActions(actions, act, true);
+            const many = actions.length > 1;
             shell.setLegend([
                 ...(status === 'error' ? [{ key: 'OK', label: 'Try again', action: 'ok' }] : [
-                    { key: '◀▶', label: 'Options' },
-                    ...(actions[act] ? [{ key: 'OK', label: actions[act].label, action: 'ok' }] : [])
+                    ...(zone === 'likes' ? [{ key: '▲▼', label: 'More like this' }] : []),
+                    ...(many || zone !== 'likes' ? [{ key: '◀▶', label: 'Options' }] : []),
+                    ...(actions[act] ? [{ key: 'OK', label: actions[act].label, action: 'ok' }] : []),
+                    ...(zone === 'actions' && likes.count() ? [{ key: '▼', label: 'More like this' }] : [])
                 ]),
                 'spacer',
                 { key: 'ESC', label: 'Back', action: 'back' }
@@ -1549,6 +2161,7 @@
 
         const run = (a) => {
             if (!a || status !== 'ready') return;
+            if (a.arr) { likes.press(a); return; } // one of More like this: Sonarr or Radarr
             const start = a.id === 'resume' ? posOf(it) : 0;
             toast(`${a.id === 'resume' ? 'Resuming' : a.id === 'restart' ? 'Restarting' : 'Playing'} ${it.Name}`);
             play(it.Id, start).catch((err) => {
@@ -1573,7 +2186,20 @@
             if (ev.repeat && k === 'Enter') return;
             if (k === 'ArrowRight') act = Math.min(actions.length - 1, act + 1);
             else if (k === 'ArrowLeft') act = Math.max(0, act - 1);
-            else if (k === 'Enter') return run(actions[act]);
+            else if (k === 'ArrowDown') {
+                if (zone === 'likes') { likes.step(1); return; }
+                if (likes.count()) { setZone('likes'); likes.enter(); return; }
+            } else if (k === 'ArrowUp') {
+                if (zone !== 'likes') return;
+                if (likes.at() <= 0) { // back up onto the movie itself
+                    likes.leave();
+                    setZone('actions');
+                    render();
+                    return;
+                }
+                likes.step(-1);
+                return;
+            } else if (k === 'Enter') return run(actions[act]);
             drawActions();
         });
         const actionsBox = $('.hl-actions');
@@ -1587,6 +2213,15 @@
             const b = ev.target.closest('.hl-btn');
             if (b) run(actions[Number(b.dataset.i)]);
         });
+        // More like this, with a pointer
+        $('.hl-pane-like').addEventListener('click', (ev) => {
+            const i = likes.rowAt(ev.target.closest('.hl-row'));
+            if (i < 0) return;
+            setZone('likes');
+            likes.select(i, { scroll: false });
+            run(actions[0]);
+        });
+        $('.hl-pane-like').addEventListener('wheel', (ev) => likesScroller.wheel(ev), { passive: true });
         $('.hl-legend').addEventListener('click', (ev) => {
             const itemEl = ev.target.closest('[data-action]');
             if (!itemEl) return;
@@ -1605,6 +2240,10 @@
                 it = full;
                 status = 'ready';
                 render();
+                // and, beside it, what TMDB says is like it
+                likes.load('movie', (it.ProviderIds && Number(it.ProviderIds.Tmdb)) || 0).then(() => {
+                    if (alive && zone === 'actions') drawActions();
+                });
             } catch (err) {
                 console.error('[HOMER Library]', err);
                 if (!alive) return;
@@ -1618,6 +2257,9 @@
         if (item.People || item.MediaSources) {
             status = 'ready';
             render();
+            likes.load('movie', (it.ProviderIds && Number(it.ProviderIds.Tmdb)) || 0).then(() => {
+                if (alive && zone === 'actions') drawActions();
+            });
         } else load();
 
         return {
@@ -1626,6 +2268,7 @@
             refreshLegend: shell.refreshLegend,
             teardown() {
                 alive = false;
+                likes.dispose();
                 shell.teardown();
             }
         };
