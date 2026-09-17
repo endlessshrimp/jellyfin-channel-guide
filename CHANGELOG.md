@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.4.22
+
+- **Movies and TV Shows stop being a list of only what you own.** Under your
+  own titles, both screens now carry rows of what you haven't got — **Trending
+  this week**, **In theaters now** (**On the air** on TV Shows) and **Coming
+  soon** — from TMDB, and every one of them is one press from Radarr or Sonarr
+  going and getting it.
+  - **The add is the add HOMER already had.** The rows hand their cards
+    straight to `shared/arr.js`: its actions ("Get this movie", "Get new
+    episodes", "Get every episode", "Get the latest season"), its two-press
+    confirm ("Get X? Press OK again"), its toasts, chips and row flags
+    ("Not in your library", "Added · searching", "Downloading 42%"). Nothing
+    about getting something says it differently here than in Search or the
+    guide.
+  - **Only things that would be new.** Anything already in the Jellyfin
+    library is left out of the rows, matched with `shared/arr.js`'s own
+    matcher (Tvdb/Tmdb ids, else title and year) rather than a second one.
+  - **▼ off the last title** drops into them and **▲** off the first one comes
+    back. The filter chips narrow your library and have nothing to say about
+    TMDB's, so the rows stand down while any chip is on; the search box
+    narrows them by title.
+  - **More like this**, from TMDB's recommendations: beside About on a movie's
+    page, under the season's episodes on a show's. Same rows, same one press.
+  - **A show's TheTVDB id is settled before the button is pressed** — TMDB's
+    `/tv/{id}/external_ids`, then Sonarr's own search for the title when TMDB
+    hasn't got one — so a Get button is never dead.
+  - **The key stays on the NAS.** A narrow TMDB proxy in `homerfeeds.py`
+    (`/tmdb/health`, `/tmdb/row`, `/tmdb/similar`, `/tmdb/external`) adds it
+    server-side; those four paths are the only ones it will ever fetch. The
+    browser never sees a key, and nor does this repository.
+  - **No key, no rows.** The helper answers a clean "tmdb_not_configured",
+    HOMER asks once and then simply doesn't draw any of it: no error, no empty
+    skeletons, no change to anything that worked before. See the README for
+    the one command that installs a key.
+  - New `shared/tmdb.js` (+ `shared/tmdb.css`); `library/library.js` draws the
+    rows. The phone layout's Movies and TV Shows don't show them yet.
+
 ## v0.4.21
 
 - **Soccer scores are back.** ESPN's soccer scoreboard is the one that
@@ -187,42 +224,6 @@
     (adsbdb, which carries airport-data.com URLs) means hotlinking someone
     else's images under licensing HOMER can't vouch for, so the screen goes
     without.
-## Unreleased
-
-- **Movies and TV Shows stop being a list of only what you own.** Under your
-  own titles, both screens now carry rows of what you haven't got — **Trending
-  this week**, **In theaters now** (**On the air** on TV Shows) and **Coming
-  soon** — from TMDB, and every one of them is one press from Radarr or Sonarr
-  going and getting it.
-  - **The add is the add HOMER already had.** The rows hand their cards
-    straight to `shared/arr.js`: its actions ("Get this movie", "Get new
-    episodes", "Get every episode", "Get the latest season"), its two-press
-    confirm ("Get X? Press OK again"), its toasts, chips and row flags
-    ("Not in your library", "Added · searching", "Downloading 42%"). Nothing
-    about getting something says it differently here than in Search or the
-    guide.
-  - **Only things that would be new.** Anything already in the Jellyfin
-    library is left out of the rows, matched with `shared/arr.js`'s own
-    matcher (Tvdb/Tmdb ids, else title and year) rather than a second one.
-  - **▼ off the last title** drops into them and **▲** off the first one comes
-    back. The filter chips narrow your library and have nothing to say about
-    TMDB's, so the rows stand down while any chip is on; the search box
-    narrows them by title.
-  - **More like this**, from TMDB's recommendations: beside About on a movie's
-    page, under the season's episodes on a show's. Same rows, same one press.
-  - **A show's TheTVDB id is settled before the button is pressed** — TMDB's
-    `/tv/{id}/external_ids`, then Sonarr's own search for the title when TMDB
-    hasn't got one — so a Get button is never dead.
-  - **The key stays on the NAS.** A narrow TMDB proxy in `homerfeeds.py`
-    (`/tmdb/health`, `/tmdb/row`, `/tmdb/similar`, `/tmdb/external`) adds it
-    server-side; those four paths are the only ones it will ever fetch. The
-    browser never sees a key, and nor does this repository.
-  - **No key, no rows.** The helper answers a clean "tmdb_not_configured",
-    HOMER asks once and then simply doesn't draw any of it: no error, no empty
-    skeletons, no change to anything that worked before. See the README for
-    the one command that installs a key.
-  - New `shared/tmdb.js` (+ `shared/tmdb.css`); `library/library.js` draws the
-    rows. The phone layout's Movies and TV Shows don't show them yet.
 
 ## v0.4.20
 
