@@ -1,5 +1,71 @@
 # Changelog
 
+## Unreleased
+
+- **Radio on the Music screen** (`music/radio-model.js`, `music/radio.css`, and
+  a Radio tab in `music/music.js` and `music/music-phone.js`). Internet radio,
+  which is the first thing on that screen that isn't a Jellyfin item: SomaFM,
+  the local Dallas stations, a search across Radio Browser, and the stations
+  you've starred. TV and phone.
+  - **SomaFM** — all 46 channels with their own artwork and descriptions, read
+    straight from the browser (`somafm.com/channels.json`, CORS `*`, https
+    throughout). A channel's address lives in a `.pls` that's only read at the
+    moment you press play.
+  - **Local** — KERA 90.1, KXT 91.7, The Ticket 1310 and 105.3 The Fan. Each
+    one is a **Radio Browser lookup, not a saved URL**: a name and a station
+    UUID, resolved fresh, and re-found by name if the UUID has gone, so a dead
+    stream can be resolved again. 105.3 The Fan is the exception — Radio
+    Browser doesn't list it — so it carries Audacy's own address and says so.
+  - **Search** across Radio Browser, the open catalogue behind most radio apps
+    and the nearest thing to an open TuneIn. Through the NAS helper
+    (`/radio/rb`), which sends a real `User-Agent` (a browser can't) and caches
+    for ten minutes, which is their etiquette; direct if the helper is down.
+  - **Favourites are HOMER's own, per device** (`localStorage`
+    `homer-radio-favorites`), not Jellyfin's — Jellyfin has no item for a radio
+    station. Every other star in Music is still Jellyfin's. Enough of the
+    station is saved with the star that it works when Radio Browser is
+    unreachable.
+  - **One player, not a second one.** A station goes into
+    `HomerMusicModel.player` as a track with `live: true` and its own address;
+    the player skips the Jellyfin-only parts (building a stream URL,
+    preloading, lyrics, and reporting to `/Sessions/Playing`, which would
+    invent sessions for items Jellyfin has never heard of). The now-playing
+    strip, the mini player, Now playing, the media keys and the volume needed
+    no changes. Now playing shows a lit **LIVE** rail instead of a position,
+    counts up from when you tuned in, and drops prev/next, shuffle and repeat.
+  - **On a speaker, through Music Assistant.** *Play on…* grows a radio mode
+    (`opts.station`): the list is Music Assistant's own players, and HOMER
+    calls `music_assistant.play_media` with `media_type: radio` and the plain
+    stream address, which it turns into `builtin://radio/<url>` and fetches
+    itself. `HomerHA.massPlay` / `massPlayer` are new in
+    `shared/homeassistant.js`. Those players are separate entities from the
+    speakers' own and carry no area, so this is its own list rather than the
+    room-ordered one an album gets; a player Music Assistant has grouped with
+    another says **"with Office Wiim"** on its row, because sending to one
+    sounds both.
+  - **What's playing, and what honestly isn't.** SomaFM publishes its
+    now-playing (`/songs/<id>.json`) — artist, title and album, asked every 20
+    seconds. For everyone else a browser **cannot** read ICY metadata off an
+    `<audio>` element, so HOMER asks the NAS helper (`/radio/icy`), which
+    reads one metadata block and hangs up. Talk and sports stations usually
+    send nothing but their own name, and HOMER says so rather than inventing a
+    track. On a speaker Music Assistant reads the ICY itself, server-side, so a
+    station there names its track even where the browser couldn't.
+  - **Mixed content.** HOMER on the LAN is http and plays anything; at
+    `https://media.nel.sn` a plain-http stream is blocked, so those go through
+    a narrow relay on the helper (`/radio/stream` — http only, audio
+    content-types only, a few at a time) and the card says so. Of the four
+    locals only KERA needs it. With no helper they're marked unplayable here
+    and stay playable on a speaker. HLS-only stations (the BBC's) are marked
+    unplayable in Chrome, which won't play HLS without a library.
+  - A Radio Browser favicon is usually a 32px crumb or a dead link, so HOMER
+    measures it and draws a **letter tile** in the station's own colour below
+    64 pixels or on an error — its call sign where it has one.
+  - **O** opens *Play on…* for a station; the Radio tab's search box takes the
+    letter keys back from the screen's shortcuts while it's focused.
+  - **NAS helper** (`homerfeeds.py`) gains `/radio/rb`, `/radio/icy` and
+    `/radio/stream`.
+
 ## v0.4.19
 
 - **The alert crawl only shows weather worth reacting to**: severe watches,

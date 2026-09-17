@@ -31,7 +31,16 @@
  *
  * Favourites are Jellyfin's own, not HOMER's: a star here is a star in every
  * other Jellyfin client, and every item HOMER already fetches carries its
- * UserData.IsFavorite, so nothing is asked twice.
+ * UserData.IsFavorite, so nothing is asked twice. The one exception is a radio
+ * station, which Jellyfin has never heard of: its star goes to HOMER's own
+ * per-device store in music/radio-model.js.
+ *
+ * Radio: the same player also holds a live internet radio station (Radio, in
+ * music/radio-model.js), as a track with `live` on it and its own address.
+ * Live means: play that address rather than build a Jellyfin one, no duration,
+ * nothing preloaded behind it, no lyrics, and nothing reported to Jellyfin's
+ * sessions. Everything else — the volume, the keys, the now-playing strip,
+ * Now Playing — is the same player and needed no changes.
  *
  * window.HomerMusicModel = { load, library, albums, artists, songs, playlists,
  *   genres, recent, favorites, albumTracks, artistAlbums, artistSongs,
@@ -341,7 +350,13 @@
     // working.
     const favs = new Map(); // item id -> true | false
 
+    // A radio station is not a Jellyfin item, so its star lives in HOMER's own
+    // per-device store (music/radio-model.js) instead of on the server.
+    const R = () => window.HomerRadioModel || null;
+    const isLive = (it) => !!(it && typeof it === 'object' && it.live);
+
     const isFavorite = (it) => {
+        if (isLive(it)) return !!(R() && R().isFavorite(it.stationId || it.id));
         const id = typeof it === 'string' ? it : (it && it.id);
         if (!id) return false;
         if (favs.has(id)) return favs.get(id);
@@ -367,6 +382,12 @@
     // setFavorite(item, on) — the star moves at once; the promise says whether
     // Jellyfin agreed, and puts it back if it didn't.
     const setFavorite = (item, on) => {
+        if (isLive(item)) {
+            const r = R();
+            if (r) r.setFavorite(r.station(item.stationId || item.id) || item, on);
+            emit('favorites');
+            return Promise.resolve(!!on);
+        }
         const id = typeof item === 'string' ? item : (item && item.id);
         if (!id) return Promise.reject(new Error('No item'));
         const was = isFavorite(item);
@@ -447,6 +468,7 @@
     // (for a track with neither) nothing.
     const art = (it, h) => {
         if (!it) return '';
+        if (it.artUrl) return it.artUrl; // a radio station (music/radio-model.js)
         const size = `fillHeight=${h || 480}&fillWidth=${h || 480}&quality=90`;
         if (it.imageTag) return `/Items/${it.id}/Images/Primary?${size}&tag=${encodeURIComponent(it.imageTag)}`;
         if (it.albumId && it.albumTag) return `/Items/${it.albumId}/Images/Primary?${size}&tag=${encodeURIComponent(it.albumTag)}`;
@@ -544,6 +566,7 @@
         };
 
         const streamUrl = (t) => {
+            if (t.live && t.streamUrl) return t.streamUrl; // a radio station, not a Jellyfin track
             const server = getServer();
             const q = new URLSearchParams({
                 UserId: server ? server.UserId : '',
@@ -602,7 +625,7 @@
             }, extra || {});
         };
         const report = (kind, keepalive) => {
-            if (!cur()) return;
+            if (!cur() || cur().live) return; // Jellyfin has no item for a radio station
             lastReport = Date.now();
             if (kind === 'start') { started = true; post('/Sessions/Playing', body(), keepalive); }
             else if (kind === 'stop') { if (started) post('/Sessions/Playing/Stopped', body(), keepalive); started = false; }
@@ -611,6 +634,7 @@
 
         const state = () => ({
             track: cur(),
+            live: !!(cur() && cur().live),
             next: nextTrack(),
             queue: order.map((i) => queue[i]),
             index: pos,
@@ -619,7 +643,8 @@
             playing: !!(audio && cur() && !audio.paused),
             buffering: !!(audio && cur() && !audio.paused && audio.readyState < 3),
             position: at(),
-            duration: (audio && isFinite(audio.duration) && audio.duration) || (cur() && cur().duration) || 0,
+            duration: (cur() && cur().live) ? 0
+                : (audio && isFinite(audio.duration) && audio.duration) || (cur() && cur().duration) || 0,
             volume,
             muted,
             shuffle,
@@ -632,7 +657,7 @@
         let preloadedId = '';
         const preload = () => {
             const n = nextTrack();
-            if (!pre || !n || n === cur() || preloadedId === n.id) return;
+            if (!pre || !n || n.live || n === cur() || preloadedId === n.id) return;
             preloadedId = n.id;
             pre.src = streamUrl(n);
             try { pre.load(); } catch { /* the browser will get it on play */ }
@@ -723,7 +748,7 @@
             watchdog = setTimeout(() => {
                 if (cur() !== t || audio.readyState >= 2) return;
                 audio.pause();
-                error = 'Jellyfin isn\'t sending this track.';
+                error = t.live ? 'That station isn\'t answering.' : 'Jellyfin isn\'t sending this track.';
                 changed();
             }, 25000);
             if (autoplay !== false) {
@@ -735,7 +760,7 @@
                     changed();
                 });
             }
-            lyrics(t.id);
+            if (!t.live) lyrics(t.id);
             changed();
         };
 
@@ -795,6 +820,7 @@
             ensure();
             watchVideo();
             stopVideo();
+            error = null; // pressing play again clears what last went wrong
             audio.play().catch((err) => {
                 error = err && err.name === 'NotAllowedError'
                     ? 'Press OK to play (the browser wants a key press first)'

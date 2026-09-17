@@ -16,6 +16,12 @@
  * actually take. It only appears when Home Assistant is connected.
  *   Artist     one artist or genre: their albums, and Play all / Shuffle /
  *              Instant Mix for the lot.
+ *   Radio      a tab of its own: internet radio, which isn't in Jellyfin at
+ *              all. SomaFM with its artwork, the local Dallas stations, a
+ *              search across Radio Browser, and the stations starred here.
+ *              A station plays in HOMER through the same player, or goes to a
+ *              speaker through Music Assistant. music/radio-model.js has the
+ *              data and says plainly what each source can and can't tell you.
  *   Playing    what's playing: the cover, the track, the artist and album,
  *              where you are, what's next, and the lyrics — the line you're on
  *              lit and scrolling, when the file has timings.
@@ -61,8 +67,10 @@
     const Z = 99990; // just under the guide, so the guide can open on top
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
     const M = () => window.HomerMusicModel;
+    const RM = () => window.HomerRadioModel || null;
 
     const TABS = [
+        { id: 'radio', label: 'Radio', radio: true, list: () => (RM() ? RM().soma().concat(RM().local()) : []) },
         { id: 'recent', label: 'Recently Added', list: () => M().recent() },
         { id: 'artists', label: 'Artists', list: () => M().artists() },
         { id: 'albums', label: 'Albums', list: () => M().albums() },
@@ -166,11 +174,16 @@
         } else if (it.kind === 'playlist' || it.kind === 'genre') {
             if (it.tracks) bits.push(f.plural(it.tracks, 'track'));
             if (it.duration) bits.push(f.len(it.duration));
+        } else if (it.kind === 'station') {
+            if (it.sub) bits.push(it.sub);
+            if (it.codec) bits.push(it.bitrate ? `${it.codec} ${it.bitrate}k` : String(it.codec).toUpperCase());
+            if (it.listeners) bits.push(f.plural(it.listeners, 'listener'));
         }
         return bits;
     };
     const subOf = (it) => {
         if (!it) return '';
+        if (it.kind === 'station') return it.source === 'soma' ? 'SomaFM' : it.local ? 'Local radio' : 'Radio';
         if (it.kind === 'album') return it.artist || '';
         if (it.kind === 'track') return it.artists.join(', ') || it.artist || '';
         if (it.kind === 'artist') return 'Artist';
@@ -238,6 +251,10 @@
         let pageTracks = null; // its tracks (album, playlist)
         let pageAlbums = null; // its albums (artist, genre)
         let rightPane = 'lyrics'; // Now playing's right column: lyrics | queue
+        let radioQuery = ''; // what's in the Radio tab's search box
+        let radioResults = null; // what Radio Browser answered, or null for "not asked"
+        let radioBusy = false;
+        let radioSaid = ''; // the line under the search box
         let focused = null;
         const remembered = {};
         const player = () => M().player;
@@ -394,6 +411,7 @@
         // Play / Shuffle / Instant Mix for anything the hero or a page is about
         const tracksOf = (it) => {
             if (!it) return Promise.resolve([]);
+            if (it.kind === 'station') return RM() ? RM().tune(it).then((t) => (t ? [t] : [])) : Promise.resolve([]);
             if (it.kind === 'favorites') return Promise.resolve(M().favorites());
             if (it.kind === 'album') return M().albumTracks(it.id);
             if (it.kind === 'playlist') return M().playlistTracks(it.id);
@@ -404,6 +422,7 @@
         };
         const playItem = (it, shuffle) => {
             if (!it) return;
+            if (it.kind === 'station') { playStation(it); return; }
             if (it.kind === 'track') {
                 const from = view === 'browse' && (tab === 'songs' || tab === 'favorites') ? tab : null;
                 const list = from === 'songs' ? M().songs() : from === 'favorites' ? M().favorites() : [it];
@@ -488,6 +507,7 @@
         };
         const openItem = (it) => {
             if (!it) return;
+            if (it.kind === 'station') { playStation(it); return; }
             pageItem = it;
             pageTracks = null;
             pageAlbums = null;
@@ -530,9 +550,10 @@
             box.innerHTML = '';
             TABS.forEach((t) => {
                 const n = (t.list() || []).length;
-                const e = el('div', `mu-tab${t.id === tab ? ' on' : ''}`,
+                const e = el('div', `mu-tab${t.id === tab ? ' on' : ''}${t.radio ? ' mu-tab-radio' : ''}`,
                     `<span>${esc(t.label)}</span>${n ? `<b>${n}</b>` : ''}`);
-                e.classList.toggle('off', !n && t.id !== tab);
+                // Radio's tab is there before its stations have landed
+                e.classList.toggle('off', !n && t.id !== tab && !t.radio);
                 focusable(e, 'tab:' + t.id, () => {
                     if (tab === t.id) return;
                     tab = t.id;
@@ -551,6 +572,12 @@
         const drawGrid = () => {
             const box = viewEl('browse').querySelector('.mu-content');
             const t = TABS.find((x) => x.id === tab) || TABS[0];
+            if (t.radio) {
+                const keepTop = box.scrollTop;
+                drawRadio(box);
+                box.scrollTop = keepTop;
+                return;
+            }
             const list = t.list() || [];
             box.scrollTop = 0;
             box.innerHTML = '';
@@ -592,6 +619,160 @@
                 box.appendChild(card);
             });
         };
+        // ----- Radio -----
+        // A station's picture: SomaFM draws its own, and a Radio Browser
+        // station usually has nothing worth showing, so it gets a letter tile
+        // in a color of its own.
+        const stationTile = (st) => `<div class="mu-img mu-noart mu-st-tile" data-kind="station"
+            style="--st-h:${RM() ? RM().hue(st) : 210}"><span>${esc(RM() ? RM().initials(st) : '?')}</span></div>`;
+        const stationArt = (st, h) => {
+            const url = RM() ? RM().art(st, h) : '';
+            if (url) return `<img class="mu-img mu-st-img" src="${esc(url)}" alt="" draggable="false" loading="lazy">`;
+            return stationTile(st);
+        };
+        // A Radio Browser favicon is as likely to 404 as not, and when it does
+        // load it is often a 32px .ico blown up to fill a card. Either way the
+        // letter tile is the better picture, so measure it (off to one side,
+        // out of the same cache) and swap the tile back in when it's a crumb.
+        const MIN_ART = 64;
+        const bindStationArt = (host, st) => {
+            const img = host && host.querySelector('.mu-st-img');
+            if (!img) return host;
+            const tile = () => { if (img.parentNode) img.outerHTML = stationTile(st); };
+            img.onerror = tile;
+            if (st.source === 'soma') return host; // SomaFM draws its own, properly
+            const probe = new Image();
+            probe.onload = () => { if (probe.naturalWidth < MIN_ART) tile(); };
+            probe.onerror = tile;
+            probe.src = img.src;
+            return host;
+        };
+        const isCurStation = (st) => {
+            const s = player().state();
+            return !!(s.track && s.track.live && s.track.stationId === st.id);
+        };
+        const stationCard = (st) => {
+            const playable = RM() ? RM().playable(st) : false;
+            const card = el('div', `mu-card mu-card-station${playable ? '' : ' mu-st-off'}`, `
+                <div class="mu-card-art">${stationArt(st, 320)}
+                    ${isCurStation(st) ? '<span class="mu-eq"><i></i><i></i><i></i></span>' : ''}
+                    ${st.source === 'soma' ? '<span class="mu-st-badge">SomaFM</span>' : ''}</div>
+                <div class="mu-card-t">${esc(st.name)}</div>
+                <div class="mu-card-s">${esc(st.sub || '')}</div>
+                ${starHtml(st)}`);
+            bindStar(card, st);
+            bindStationArt(card, st);
+            card._fav = st;
+            focusable(card, 'st:' + st.id, () => playStation(st), playable ? 'Play' : 'Where it plays');
+            card._onFocus = () => { heroItem = st; drawHero(); };
+            return card;
+        };
+        // Play a station here, through the same player the library uses.
+        const playStation = (st) => {
+            const R = RM();
+            if (!R) return;
+            if (!R.playable(st)) {
+                toast(R.playUrl(st).why || 'HOMER can\u2019t play that one here', true);
+                playOnStation(st);
+                return;
+            }
+            toast(`Tuning in ${st.name}`);
+            R.tune(st).then((t) => {
+                if (!t) { toast(R.playUrl(st).why || 'That station didn\u2019t answer', true); return; }
+                startPlaying([t], 0, { source: { kind: 'station', id: st.id, name: st.name } });
+            }).catch((err) => toast(err.message, true));
+        };
+        // …or send it to a speaker, which goes through Music Assistant.
+        const playOnStation = (st) => {
+            const p = PO();
+            if (!p || !st) return;
+            p.open(stage, {
+                tv: true,
+                station: st,
+                toast,
+                onHere: () => playStation(st),
+                onNowPlaying: () => go('#/playing'),
+                onClose: () => updateLegend(),
+            });
+        };
+
+        const drawRadio = (box) => {
+            const R = RM();
+            box.className = 'mu-content mu-scroll-y mu-radio';
+            box.innerHTML = '';
+            if (!R) {
+                box.innerHTML = '<div class="mu-empty-row">Radio didn\u2019t load.</div>';
+                return;
+            }
+            // the search box: OK on it starts typing, Enter searches
+            const search = el('div', 'mu-radio-search', `
+                ${icon('search')}
+                <input class="mu-radio-input" type="search" placeholder="Search every station on Radio Browser"
+                    autocomplete="off" spellcheck="false" value="${esc(radioQuery)}">
+                <span class="mu-radio-said">${esc(radioSaid)}</span>`);
+            const input = search.querySelector('.mu-radio-input');
+            input.oninput = () => { radioQuery = input.value; };
+            focusable(search, 'radio:search', () => input.focus(), 'Search');
+            box.appendChild(search);
+
+            const section = (title, note, list, key) => {
+                if (!list || !list.length) return;
+                const sec = el('section', 'mu-radio-sec', `
+                    <div class="mu-radio-head"><h3>${esc(title)}</h3>${note ? `<span>${esc(note)}</span>` : ''}</div>
+                    <div class="mu-radio-wall"></div>`);
+                const wall = sec.querySelector('.mu-radio-wall');
+                list.forEach((st) => wall.appendChild(stationCard(st)));
+                sec.dataset.sec = key;
+                box.appendChild(sec);
+            };
+
+            if (radioResults) {
+                section(radioResults.length ? `Found ${M().fmt.plural(radioResults.length, 'station')}` : 'Nothing found',
+                    radioResults.length ? `for “${radioQuery}”, best-voted first` : `Radio Browser has nothing for “${radioQuery}”`,
+                    radioResults, 'results');
+            }
+            section('Favorites', 'Starred on this device — a station isn\u2019t a Jellyfin item, so these stay here',
+                R.favorites(), 'fav');
+            section('Local', 'Dallas–Fort Worth', R.local(), 'local');
+            section('SomaFM', 'Commercial-free, listener-supported, out of San Francisco', R.soma(), 'soma');
+
+            if (!box.querySelector('.mu-card')) {
+                box.appendChild(el('div', 'mu-empty-row', R.loaded()
+                    ? 'No stations. Search for one above.'
+                    : 'Finding stations…'));
+            }
+        };
+        const runRadioSearch = () => {
+            const R = RM();
+            const term = (radioQuery || '').trim();
+            if (!R || term.length < 2) { toast('Type at least two letters', true); return; }
+            radioBusy = true;
+            radioSaid = 'Searching…';
+            const said = viewEl('browse').querySelector('.mu-radio-said');
+            if (said) said.textContent = radioSaid;
+            R.search(term).then((list) => {
+                radioBusy = false;
+                radioResults = list;
+                radioSaid = list.length ? `${list.length} for “${term}”` : `Nothing for “${term}”`;
+                if (tab === 'radio' && view === 'browse') {
+                    drawGrid();
+                    const first = focusables().find((x) => keyOf(x).startsWith('st:'));
+                    if (first) setFocus(first);
+                    else restoreFocus('radio:search');
+                }
+            }).catch((err) => {
+                radioBusy = false;
+                radioSaid = '';
+                toast(err.message, true);
+            });
+        };
+        const clearRadioSearch = () => {
+            radioQuery = '';
+            radioResults = null;
+            radioSaid = '';
+            if (tab === 'radio' && view === 'browse') { drawGrid(); restoreFocus('radio:search'); }
+        };
+
         const isCurAlbum = (a) => { const s = player().state(); return !!(s.track && s.track.albumId === a.id); };
         const cardSub = (it) => {
             if (it.kind === 'album') return it.artist || '';
@@ -604,7 +785,9 @@
             const box = viewEl('browse');
             if (!box.querySelector('.mu-hero')) return;
             const t = TABS.find((x) => x.id === tab) || TABS[0];
-            const it = heroItem && (t.list() || []).includes(heroItem) ? heroItem : (t.list() || [])[0];
+            const it = t.radio
+                ? (heroItem && heroItem.kind === 'station' ? heroItem : (t.list() || [])[0] || null)
+                : (heroItem && (t.list() || []).includes(heroItem) ? heroItem : (t.list() || [])[0]);
             heroItem = it || null;
             const q = (sel) => box.querySelector(sel);
             setWash(it);
@@ -625,6 +808,14 @@
                 ? (it.kind === 'track' ? it.artists.join(', ') : it.artist || '') : '';
             q('.mu-meta').innerHTML = metaOf(it).map((x) => `<span>${esc(x)}</span>`).join('');
             q('.mu-desc').textContent = (it && it.overview) || '';
+            if (it && it.kind === 'station' && RM()) {
+                const p = RM().playUrl(it);
+                const note = p.pending ? ''
+                    : !p.url ? p.why
+                        : p.proxied ? 'Plain http, so HOMER plays it through the NAS helper.'
+                            : '';
+                if (note) q('.mu-desc').textContent = [q('.mu-desc').textContent, note].filter(Boolean).join(' — ');
+            }
             const acts = q('.mu-acts');
             const had = focused && acts.contains(focused) ? keyOf(focused) : null;
             acts.innerHTML = '';
@@ -635,7 +826,15 @@
             };
             // three, stacked: ▲▼ runs down them, ▶ crosses to the wall. Opening
             // the thing itself is what OK on its cover already does.
-            if (it) {
+            if (it && it.kind === 'station') {
+                const R = RM();
+                const can = R ? R.playable(it) : false;
+                if (can) btn('a:play', 'play_arrow', 'Play', () => playStation(it), true);
+                // when it can't play here, the speaker is the main way to hear it
+                btn('a:on', 'speaker', 'Play on…', () => playOnStation(it), !can);
+                btn('a:fav', R && R.isFavorite(it) ? 'star' : 'star_border',
+                    R && R.isFavorite(it) ? 'Starred' : 'Star it', () => { toggleFav(it); drawHero(); });
+            } else if (it) {
                 btn('a:play', 'play_arrow', 'Play', () => playItem(it, false), true);
                 btn('a:shuffle', 'shuffle', 'Shuffle', () => playItem(it, true));
                 if (canPlayOn()) btn('a:on', 'speaker', 'Play on…', () => playOn(it));
@@ -839,8 +1038,8 @@
                 </div>
                 <div class="mu-pl-side">
                     <div class="mu-panes">
-                        <div class="mu-pane-tab" data-k="pane:lyrics">Lyrics</div>
-                        <div class="mu-pane-tab" data-k="pane:queue">Up next</div>
+                        <div class="mu-pane-tab" data-k="pane:lyrics">${s.track.live ? 'On now' : 'Lyrics'}</div>
+                        <div class="mu-pane-tab" data-k="pane:queue">${s.track.live ? 'Station' : 'Up next'}</div>
                     </div>
                     <div class="mu-pane-body mu-scroll-y"></div>
                 </div>`;
@@ -878,8 +1077,40 @@
             };
             drawPane();
             paintPlaying();
-            M().lyrics(s.track.id);
+            if (s.track.live) pollLive();
+            else M().lyrics(s.track.id);
         };
+        // What a live station is playing right now, where it can be known at
+        // all. SomaFM publishes it outright; for everyone else the NAS helper
+        // reads one ICY block, which is the only way a web page gets it.
+        const liveNow = {};
+        let liveTimer = null;
+        const liveNote = (t, np) => {
+            if (!RM()) return '';
+            const st = RM().station(t.stationId);
+            const where = t.proxied ? 'Through the NAS helper' : 'Live';
+            if (np && (np.title || np.artist)) {
+                return `${where} · ${np.from === 'SomaFM' ? 'SomaFM says what\u2019s on' : 'from the stream\u2019s own metadata'}`;
+            }
+            if (st && st.source === 'soma') return `${where} · SomaFM`;
+            return `${where} · this station sends no track information`;
+        };
+        const pollLive = () => {
+            const s = player().state();
+            const t = s.track;
+            if (!t || !t.live || !RM()) return;
+            const st = RM().station(t.stationId);
+            if (!st) return;
+            RM().nowPlaying(st).then((np) => {
+                const was = liveNow[t.stationId];
+                const same = (was && np && was.title === np.title && was.artist === np.artist) || (!was && !np);
+                liveNow[t.stationId] = np;
+                if (!same && view === 'playing') { paintPlaying(); drawPane(); }
+                else if (!same) syncPill();
+            });
+        };
+        liveTimer = setInterval(pollLive, 20000);
+
         let paneFor = '';
         let paneAt = -1; // the queue position the Up next pane was drawn for
         const drawPane = () => {
@@ -894,6 +1125,12 @@
             body.classList.toggle('lyrics', rightPane === 'lyrics');
             if (rightPane === 'queue') {
                 const f = M().fmt;
+                if (s.track && s.track.live) {
+                    const st = RM() && RM().station(s.track.stationId);
+                    body.innerHTML = `<div class="mu-empty-row">Radio has no queue — it plays until you stop it.${
+                        st && st.homepage ? `<span class="mu-q-link">${esc(st.homepage.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</span>` : ''}</div>`;
+                    return;
+                }
                 if (!s.queue.length) { body.innerHTML = `<div class="mu-empty-row">The queue is empty.</div>`; return; }
                 s.queue.forEach((t, i) => {
                     const row = el('div', `mu-q${i === s.index ? ' here' : ''}${i < s.index ? ' done' : ''}`, `
@@ -911,6 +1148,16 @@
                 return;
             }
             // lyrics
+            if (s.track && s.track.live) {
+                const st = RM() && RM().station(s.track.stationId);
+                const np = liveNow[s.track.stationId];
+                body.innerHTML = `<div class="mu-lyr-none">${np && (np.title || np.artist)
+                    ? `<b>${esc(np.title || '')}</b>${np.artist ? `<span>${esc(np.artist)}</span>` : ''}${np.album ? `<span>${esc(np.album)}</span>` : ''}`
+                    : 'No track information from this station.'}<span>${esc(st && st.source === 'soma'
+                        ? 'SomaFM publishes what it\u2019s playing, and HOMER asks it every 20 seconds.'
+                        : 'A browser can\u2019t read the metadata inside a stream, so HOMER asks the NAS helper for it. Talk and sports stations usually send nothing but their own name.')}</span></div>`;
+                return;
+            }
             body.innerHTML = `<div class="mu-lyr-none">Looking for lyrics…</div>`;
             if (!s.track) return;
             M().lyrics(s.track.id).then((ly) => {
@@ -968,20 +1215,30 @@
                 artBox.classList.add('in');
             }
             q('.mu-eyebrow').innerHTML = s.playing
-                ? `<span class="mu-chip live"><span class="mu-eq"><i></i><i></i><i></i></span>${s.buffering ? 'Loading' : 'Now playing'}</span>`
-                : `<span class="mu-chip amber">${icon('pause')}Paused</span>`;
+                ? `<span class="mu-chip live"><span class="mu-eq"><i></i><i></i><i></i></span>${s.buffering ? 'Loading' : t.live ? 'On the air' : 'Now playing'}</span>`
+                : `<span class="mu-chip amber">${icon('pause')}${t.live ? 'Stopped' : 'Paused'}</span>`;
             const title = q('.mu-title');
             title.textContent = t.name;
             title.classList.toggle('long', t.name.length > 26);
-            q('.mu-pl-artist').textContent = t.artists.join(', ') || t.artist || '';
-            q('.mu-pl-album').textContent = [t.album, t.year].filter(Boolean).join(' · ');
-            q('.mu-pl-from').textContent = s.source ? `From ${s.source.name} · ${s.index + 1} of ${s.count}` : '';
-            const dur = s.duration || t.duration || 0;
+            if (t.live) {
+                // the track first, the artist under it: the station's name is
+                // already the title above
+                const np = liveNow[t.stationId] || null;
+                q('.mu-pl-artist').textContent = np && np.title ? np.title : (t.artist || '');
+                q('.mu-pl-album').textContent = np ? [np.artist, np.album].filter(Boolean).join(' · ') : '';
+                q('.mu-pl-from').textContent = liveNote(t, np);
+            } else {
+                q('.mu-pl-artist').textContent = t.artists.join(', ') || t.artist || '';
+                q('.mu-pl-album').textContent = [t.album, t.year].filter(Boolean).join(' · ');
+                q('.mu-pl-from').textContent = s.source ? `From ${s.source.name} · ${s.index + 1} of ${s.count}` : '';
+            }
+            const dur = s.duration || (t.live ? 0 : t.duration) || 0;
             const pc = dur ? Math.max(0, Math.min(1, s.position / dur)) : 0;
-            q('.mu-pl-track b').style.width = (pc * 100).toFixed(2) + '%';
-            q('.mu-pl-knob').style.left = (pc * 100).toFixed(2) + '%';
-            q('.mu-pl-at').textContent = f.clock(s.position);
-            q('.mu-pl-left').textContent = '−' + f.clock(Math.max(0, dur - s.position));
+            box.classList.toggle('mu-pl-live', !!t.live);
+            q('.mu-pl-track b').style.width = (t.live ? 100 : pc * 100).toFixed(2) + '%';
+            q('.mu-pl-knob').style.left = (t.live ? 100 : pc * 100).toFixed(2) + '%';
+            q('.mu-pl-at').textContent = t.live ? 'Live' : f.clock(s.position);
+            q('.mu-pl-left').textContent = t.live ? f.clock(s.position) + ' in' : '−' + f.clock(Math.max(0, dur - s.position));
             const play = q('[data-k="play"]');
             play.innerHTML = icon(s.playing ? 'pause' : 'play_arrow');
             play.dataset.okLabel = s.playing ? 'Pause' : 'Play';
@@ -1000,9 +1257,12 @@
             vol.querySelector('.mu-vol-bar b').style.width = ((s.muted ? 0 : s.volume) * 100).toFixed(0) + '%';
             vol.querySelector('.mu-vol-n').textContent = s.muted ? 'Muted' : Math.round(s.volume * 100) + '%';
             vol.querySelector('.material-icons').textContent = s.muted || !s.volume ? 'volume_off' : s.volume < 0.5 ? 'volume_down' : 'volume_up';
-            q('.mu-pl-next').innerHTML = s.next
-                ? `<span class="mu-pl-next-k">Next</span><b>${esc(s.next.name)}</b><span>${esc(s.next.artist || '')}</span>`
-                : (s.repeat === 'off' ? `<span class="mu-pl-next-k">Next</span><span>End of the queue</span>` : '');
+            q('.mu-pl-next').innerHTML = t.live
+                ? `<span class="mu-pl-next-k">Station</span><span>${esc(subOf(t.live && RM() ? RM().station(t.stationId) || t : t))}${
+                    t.proxied ? ' · through the NAS helper' : ''}</span>`
+                : s.next
+                    ? `<span class="mu-pl-next-k">Next</span><b>${esc(s.next.name)}</b><span>${esc(s.next.artist || '')}</span>`
+                    : (s.repeat === 'off' ? `<span class="mu-pl-next-k">Next</span><span>End of the queue</span>` : '');
             q('.mu-pl-err').textContent = s.error || '';
             // the queue only needs redrawing when the track changes, not four
             // times a second: redrawing it would eat the focus mid-press
@@ -1018,7 +1278,11 @@
             const show = !!s.track && view !== 'playing';
             np.classList.toggle('on', show);
             if (!show) return;
-            np.innerHTML = `${s.playing ? '<span class="mu-eq"><i></i><i></i><i></i></span>' : icon('pause')}<span class="mu-np-t">${esc(s.track.name)}</span><span class="mu-np-a">${esc(s.track.artist || '')}</span>`;
+            const live = s.track.live ? liveNow[s.track.stationId] : null;
+            const sub = live && (live.title || live.artist)
+                ? [live.artist, live.title].filter(Boolean).join(' — ')
+                : (s.track.artist || '');
+            np.innerHTML = `${s.playing ? '<span class="mu-eq"><i></i><i></i><i></i></span>' : icon('pause')}<span class="mu-np-t">${esc(s.track.name)}</span><span class="mu-np-a">${esc(sub)}</span>`;
         };
 
         // ----- model changes -----
@@ -1067,6 +1331,18 @@
             } else if (view === 'artist') drawArtistAlbums();
         };
         const offModel = M().onChange(onModel);
+        // Radio is its own model, loaded beside the library
+        const offRadio = RM() ? RM().onChange(() => {
+            if (view !== 'browse') return;
+            drawTabs();
+            if (tab !== 'radio') return;
+            const k = focused ? keyOf(focused) : null;
+            drawGrid();
+            const e = k && focusables().find((x) => keyOf(x) === k);
+            if (e) setFocus(e, { instant: true });
+            drawHero();
+        }) : () => {};
+        if (RM()) RM().load().catch(() => {});
 
         // ----- loading / empty -----
         const setState = (kind) => {
@@ -1088,7 +1364,8 @@
         };
         const render = () => {
             if (!M().loaded()) { setState(M().error() ? 'error' : 'loading'); return; }
-            const any = M().albums().length || M().songs().length || M().playlists().length;
+            const any = M().albums().length || M().songs().length || M().playlists().length
+                || (RM() && (RM().soma().length || RM().local().length));
             if (!any) {
                 stage.querySelectorAll('.mu-view').forEach((x) => { x.innerHTML = ''; });
                 setState('empty');
@@ -1141,8 +1418,13 @@
             if (favIt && favIt.id) {
                 items.push({ key: 'F', label: M().isFavorite(favIt) ? 'Unfavorite' : 'Favorite', action: 'fav' });
             }
-            if (view === 'playing') items.push({ key: 'S', label: 'Shuffle', action: 'shuffle' }, { key: 'R', label: 'Repeat', action: 'repeat' });
-            else items.push({ key: 'I', label: 'Instant Mix', action: 'mix' });
+            const onRadio = view === 'browse' && tab === 'radio';
+            if (view === 'playing' && !s.live) items.push({ key: 'S', label: 'Shuffle', action: 'shuffle' }, { key: 'R', label: 'Repeat', action: 'repeat' });
+            else if (onRadio || (view === 'playing' && s.live)) {
+                const st = onRadio ? heroItem : null;
+                if (st && st.kind === 'station') items.push({ key: 'O', label: 'Play on…', action: 'radio-on' });
+                else if (view === 'playing' && s.live && s.track) items.push({ key: 'O', label: 'Play on…', action: 'radio-on' });
+            } else items.push({ key: 'I', label: 'Instant Mix', action: 'mix' });
             items.push('spacer',
                 { key: 'H', label: 'Home', action: 'home' },
                 { key: 'ESC', label: view !== 'browse' && s.playing ? 'Back (keeps playing)' : 'Back', action: 'back' });
@@ -1176,6 +1458,13 @@
 
         // ----- input -----
         // what the focus is "on" for I (Instant Mix) and P with nothing loaded
+        // the station the focus is on, if it is on one at all
+        const radioSubject = () => {
+            if (view === 'browse' && tab === 'radio' && heroItem && heroItem.kind === 'station') return heroItem;
+            const s = player().state();
+            if (view === 'playing' && s.track && s.track.live && RM()) return RM().station(s.track.stationId);
+            return null;
+        };
         const subject = () => {
             if (view === 'browse') return heroItem;
             if (view === 'album' || view === 'artist') return pageItem;
@@ -1191,6 +1480,25 @@
             wake();
             if (document.getElementById('cg-root')) return; // the guide is on top
             if (PO() && PO().isOpen()) return; // Play on… is on top, and has its own keys
+            // Typing in the Radio tab's search box: the letters are the search,
+            // not HOMER's shortcuts. Enter searches, Esc or ▼ gives the keys back.
+            if (ev.target && ev.target.classList && ev.target.classList.contains('mu-radio-input')) {
+                const key = ev.key;
+                if (key === 'Enter') { eat(ev); ev.target.blur(); runRadioSearch(); return; }
+                if (key === 'Escape') {
+                    eat(ev);
+                    ev.target.blur();
+                    if (radioQuery || radioResults) clearRadioSearch();
+                    return;
+                }
+                if (key === 'ArrowDown' || key === 'ArrowUp') {
+                    eat(ev);
+                    ev.target.blur();
+                    move(key === 'ArrowDown' ? 'down' : 'up');
+                    return;
+                }
+                return; // everything else is a letter
+            }
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
             const k = ev.key;
@@ -1213,7 +1521,24 @@
                 if (!ev.repeat) { P.cycleRepeat(); const r = P.state().repeat; toast(r === 'off' ? 'Repeat off' : r === 'all' ? 'Repeat all' : 'Repeat one'); }
                 return;
             }
-            if (k === 'i' || k === 'I') { eat(ev); if (!ev.repeat) instantMix(subject()); return; }
+            if (k === 'o' || k === 'O') {
+                eat(ev);
+                if (!ev.repeat) {
+                    const st = radioSubject();
+                    if (st) playOnStation(st);
+                    else if (canPlayOn()) playOn(subject());
+                }
+                return;
+            }
+            if (k === 'i' || k === 'I') {
+                eat(ev);
+                if (!ev.repeat) {
+                    const st = radioSubject();
+                    if (st) playOnStation(st); // a station has no mix; the speaker picker is the useful thing
+                    else instantMix(subject());
+                }
+                return;
+            }
             // F stars the track the focus is on, or — with a button focused —
             // the album, artist or playlist the page is about
             if (k === 'f' || k === 'F') { eat(ev); if (!ev.repeat) toggleFav(favOf(focused) || subject()); return; }
@@ -1258,6 +1583,7 @@
                 else if (a === 'toggle') togglePlay();
                 else if (a === 'np') showView('playing');
                 else if (a === 'mix') instantMix(subject());
+                else if (a === 'radio-on') { const st = radioSubject(); if (st) playOnStation(st); }
                 else if (a === 'fav') toggleFav(favOf(focused) || subject());
                 else if (a === 'shuffle') { player().toggleShuffle(); toast(player().state().shuffle ? 'Shuffle on' : 'Shuffle off'); }
                 else if (a === 'repeat') player().cycleRepeat();
@@ -1363,6 +1689,8 @@
                 window.removeEventListener('resize', fit);
                 clearInterval(clockTimer);
                 clearInterval(idleTimer);
+            clearInterval(liveTimer);
+            offRadio();
                 clearTimeout(toastTimer);
                 wxDetach();
                 root.remove();

@@ -36,7 +36,7 @@
  *                    setMode, scene, snapshotUrl, playCamera, browseMedia,
  *                    resolveMedia, history, rings, onRing,
  *                    color, setColor, supports, playPause, mediaCommand,
- *                    playMedia, players,
+ *                    playMedia, massPlayer, massPlay, players,
  *                    setVolume, stepVolume, mute, setSource, power,
  *                    setFanSpeed, setPreset, setOption, setNumber, run,
  *                    extras, device, siblings, pictureUrl, pictureUrls,
@@ -1232,6 +1232,17 @@
     // integrations that take it: { enqueue: 'replace' | 'add' | 'next' }.
     const playMedia = (id, contentId, contentType, extra) => call('media_player', 'play_media',
         Object.assign({ media_content_id: contentId, media_content_type: contentType || 'music' }, extra || {}), id);
+    // Music Assistant's own play_media, for the one thing media_player's can't
+    // do: internet radio. Handed a plain stream address it makes a
+    // `builtin://radio/<url>` item, reads the station's ICY metadata itself
+    // (which a browser can't) and reports the track in the entity's state.
+    // `massPlayer(id)` says whether an entity is one of its players.
+    const massPlayer = (id) => {
+        const s = entity(id);
+        return !!(s && s.attributes && s.attributes.mass_player_type);
+    };
+    const massPlay = (id, mediaId, mediaType, extra) => call('music_assistant', 'play_media',
+        Object.assign({ media_id: mediaId, media_type: mediaType || 'radio' }, extra || {}), id);
     // 0–1; the remote's presses are sent as one
     const setVolume = (id, v) => {
         v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
@@ -2166,6 +2177,8 @@
         playPause,
         mediaCommand,
         playMedia,
+        massPlayer,
+        massPlay,
         players: () => [...players()],
         setVolume,
         stepVolume,

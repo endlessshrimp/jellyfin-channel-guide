@@ -74,6 +74,7 @@
     css('music/music-strip.css', 'homer-music-strip-css'); // the music's now-playing strip, on every screen
     css('shared/alerts.css', 'homer-alerts-css'); // the alert crawl, over every screen
     css('music/playon.css', 'homer-playon-css'); // "Play on…", the Music screens' device picker
+    css('music/radio.css', 'homer-radio-css'); // the Music screens' Radio tab
     js('shared/loading.js'); // first of all: HOMER's loading screen, over Jellyfin's 404
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/menu.js'); // before the screens: Home and Now Playing draw its menu
@@ -117,7 +118,8 @@
     js('books/books-model.js'); // the audiobooks (Jellyfin's Books library) and their player
     js('books/books.js'); // Books (#/books)
     js('books/books-phone.js'); // Books' phone layout
-    js('music/playon.js'); // before the Music screens: "Play on…", the album on a speaker
+    js('music/radio-model.js'); // before the Music screens: internet radio (SomaFM, Radio Browser)
+    js('music/playon.js'); // before the Music screens: "Play on…", the album (or a station) on a speaker
     js('music/music-model.js'); // the music (Jellyfin's Music library) and its player
     js('music/music-strip.js'); // the music's now-playing strip on every other screen
     js('music/music.js'); // Music (#/music)

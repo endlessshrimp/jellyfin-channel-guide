@@ -37,6 +37,12 @@
  * one row. Arrows and OK, mouse, or a thumb. The device last used is
  * remembered per HOMER device and starts focused.
  *
+ * Radio uses the same picker in a second mode (`opts.station`). A station is
+ * not an album and needs none of the M3U machinery: Music Assistant takes a
+ * stream address as a station and fetches it itself, so the list there is
+ * Music Assistant's own players (music/radio-model.js speakers()) and the row
+ * says which room is already playing something.
+ *
  * window.HomerPlayOn = { ready, devices, last, setLast, send, sent, forget,
  *                        open, close, isOpen, destroy, version }
  */
@@ -333,17 +339,21 @@
 
     let openPicker = null;
 
+    const RADIO = () => window.HomerRadioModel || null;
+
     // open(host, opts) — opts: { item, tracks, tv, onHere, onPick, onNowPlaying,
     //                            onDone, onClose, toast }
+    //                    or, for a radio station: { station, tv, onHere, … }
     const open = (host, opts = {}) => {
         close();
-        const root = el('div', `po-root${opts.tv ? ' po-tv' : ' po-phone'}`);
+        const station = opts.station || null;
+        const root = el('div', `po-root${opts.tv ? ' po-tv' : ' po-phone'}${station ? ' po-radio' : ''}`);
         root.innerHTML = `
             <div class="po-scrim"></div>
             <div class="po-sheet" role="dialog" aria-label="Play on">
                 <div class="po-head">
                     <div class="po-title">Play on…</div>
-                    <div class="po-sub">${esc(opts.item ? opts.item.name : '')}</div>
+                    <div class="po-sub">${esc(station ? station.name : opts.item ? opts.item.name : '')}</div>
                 </div>
                 <div class="po-list"></div>
                 <div class="po-foot"></div>
@@ -404,8 +414,55 @@
             if (typeof opts.onHere === 'function') opts.onHere();
         }, { chip: last() === HERE ? 'Last used' : '' });
 
-        const all = devices();
-        if (!HA() || !HA().isSetUp || !HA().isSetUp()) {
+        if (station) {
+            const R = RADIO();
+            const here = R ? R.playUrl(station) : { url: '' };
+            const hereRow = rows[0];
+            if (!here.url && !here.pending) {
+                hereRow._pick = false;
+                hereRow.classList.add('off', 'dim');
+                hereRow.querySelector('.po-text i').textContent = 'This browser can\u2019t play it \u2014 a speaker still can';
+            } else if (here.proxied) {
+                hereRow.querySelector('.po-text i').textContent = 'HOMER, relayed through the NAS helper';
+            }
+            const spk = R ? R.speakers() : [];
+            if (!HA() || !HA().isSetUp || !HA().isSetUp()) {
+                addRow('none', 'home', 'No speakers yet', 'Connect Home Assistant in Settings', null, { off: true, dim: true });
+            } else if (!spk.length) {
+                addRow('none', 'speaker', 'No Music Assistant players',
+                    'Radio goes out through Music Assistant, and it has none here', null, { off: true, dim: true });
+            }
+            spk.forEach((d) => {
+                const bits = [];
+                if (d.group) bits.push(d.members.length ? `a group of ${d.members.length + 1}` : 'a group');
+                else if (d.withNames && d.withNames.length) bits.push(`with ${d.withNames.join(' and ')}`);
+                if (d.away) bits.push('not reachable');
+                else if (d.busy) bits.push(d.playing ? `playing ${d.playing}` : d.state === 'playing' ? 'playing now' : 'paused mid-something');
+                else bits.push('ready');
+                addRow(d.id, d.icon, d.name, bits.join(' · '), (row) => {
+                    busy = true;
+                    row.classList.add('busy');
+                    say(`Tuning ${d.name} to ${station.name}…`);
+                    RADIO().sendTo(d, station)
+                        .then(() => {
+                            busy = false;
+                            row.classList.remove('busy');
+                            setLast(d.id);
+                            say(`${station.name} on ${d.name}`);
+                            if (typeof opts.onDone === 'function') opts.onDone(d, { how: 'radio' });
+                            setTimeout(() => close(), 1100);
+                        })
+                        .catch((err) => {
+                            busy = false;
+                            row.classList.remove('busy');
+                            say(`${d.name} refused it: ${err.message}`, true);
+                        });
+                }, { off: d.away, dim: d.away, chip: last() === d.id ? 'Last used' : '' });
+            });
+        }
+        const all = station ? [] : devices();
+        if (station) { /* handled above */ }
+        else if (!HA() || !HA().isSetUp || !HA().isSetUp()) {
             addRow('none', 'home', 'No speakers yet', 'Connect Home Assistant in Settings', null, { off: true, dim: true });
         } else if (!all.length) {
             addRow('none', 'speaker', 'No speakers', 'Nothing here takes music', null, { off: true, dim: true });
@@ -442,7 +499,9 @@
         const np = el('div', 'po-foot-btn', `${icon('graphic_eq')}<span>Now Playing</span>`);
         np.onclick = () => { close(); if (typeof opts.onNowPlaying === 'function') opts.onNowPlaying(); };
         foot.appendChild(np);
-        const hint = el('div', 'po-hint', 'What each one can do is on its line.');
+        const hint = el('div', 'po-hint', station
+            ? 'Music Assistant fetches the station itself, so http and https both work out there.'
+            : 'What each one can do is on its line.');
         foot.appendChild(hint);
 
         // start on the one used last, or the first that can be picked
