@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.19
+
+- **The alert crawl only shows weather worth reacting to**: severe watches,
+  warnings and emergencies. Air quality alerts, heat advisories and the like
+  are dropped rather than shown quietly. House alerts are unchanged.
+
 ## v0.4.18
 
 - **The alert crawl (`shared/alerts.js`).** One strip, over any HOMER screen

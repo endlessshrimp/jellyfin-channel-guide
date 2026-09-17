@@ -122,13 +122,21 @@
     // Immediate or Expected ("it's happening"). That one pair of fields is
     // the whole difference between the two, and it's why the crawl can tell a
     // flood watch from a flash flood warning without knowing either name.
+    // Jason's rule (2026-09-17): the crawl is for weather worth reacting to —
+    // severe watches and warnings. An air quality alert or a heat advisory is
+    // not worth a strip across the screen, so those are dropped, not quieted.
+    const WEATHER_WATCH = /\b(watch|warning|emergency)\b/i;
     const levelOf = (p) => {
         if (p.status && p.status !== 'Actual') return null; // Test, Exercise, Draft, System
         if (p.messageType === 'Cancel') return null;
         const soon = p.urgency === 'Immediate' || p.urgency === 'Expected';
         if (p.severity === 'Extreme' && soon) return 'extreme';
         if ((p.severity === 'Extreme' || p.severity === 'Severe') && soon) return 'warning';
-        return 'notice';
+        // Everything else only shows if it is a severe-or-worse watch: the
+        // "get ready" half of the pair. Advisories and statements never show.
+        const bad = p.severity === 'Extreme' || p.severity === 'Severe';
+        if (bad && WEATHER_WATCH.test(p.event || '')) return 'notice';
+        return null;
     };
 
     const timeText = (iso) => {
