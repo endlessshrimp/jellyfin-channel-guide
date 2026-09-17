@@ -734,8 +734,35 @@
             const r = await get(`${SITE}${L.path}/scoreboard`, ttl);
             events = (r && r.events) || [];
         } else {
-            const r = await get(`${SITE}${L.path}/scoreboard?dates=${ymd(dayOffset(-4))}-${ymd(dayOffset(10))}`, ttl);
-            events = (r && r.events) || [];
+            // Soccer is the one ESPN scoreboard that refuses a day range: a
+            // `dates=YYYYMMDD-YYYYMMDD` query answers 400, which had quietly
+            // emptied the Soccer tab. A whole month is fine, so ask for the
+            // months our window touches and keep the games inside it.
+            const from = dayOffset(-4);
+            const to = dayOffset(10);
+            const months = [];
+            for (const d = new Date(from.getFullYear(), from.getMonth(), 1); d <= to; d.setMonth(d.getMonth() + 1)) {
+                months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
+            }
+            const rs = await Promise.all(months.map(
+                (m) => get(`${SITE}${L.path}/scoreboard?dates=${m}`, ttl).catch(() => null)
+            ));
+            const lo = from.getTime();
+            const hi = to.getTime();
+            const seen = new Set();
+            rs.forEach((r) => ((r && r.events) || []).forEach((e) => {
+                const t = new Date(e.date).getTime();
+                if (seen.has(e.id) || !(t >= lo && t <= hi)) return;
+                seen.add(e.id);
+                events.push(e);
+            }));
+            // a competition between matchdays (the Champions League is dark
+            // for weeks at a time): show whatever ESPN has next rather than
+            // an empty tab
+            if (!events.length) {
+                const n = await get(`${SITE}${L.path}/scoreboard`, 10 * MIN);
+                events = (n && n.events) || [];
+            }
         }
         const games = events.map((e) => {
             const g = game(e, league);

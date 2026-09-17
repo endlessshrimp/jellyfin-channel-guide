@@ -1,43 +1,14 @@
 # Changelog
 
-## v0.4.20
-
-- **Who's home moved out of Home's top bar and into Rooms.** On a TV it lived
-  beside the clock, which a remote can't reach: there is no way to put the
-  focus on Home's top bar, so the one thing on that screen HOMER couldn't
-  drive was the one thing it had just added. It's now the first band of
-  **Rooms**, above the rooms themselves.
-  - **A card a person**, at a size that reads from the couch: their picture
-    where Home Assistant has one and their initials where it doesn't (68px on
-    a TV, 44px on a phone), their name, where they are and how long they've
-    been there. Whoever's in reads lit and in color, whoever's out flat, grey
-    and greyscale.
-  - **Where** is Home Assistant's own state: **Home**, **Away**, or the zone
-    it has them in (**Work**, **School**), and the room too where it knows one
-    ("Home · Office"). **How long** is minutes while it's fresh ("12 min"),
-    the clock time for the rest of today ("since 4:12 PM"), then a round
-    number of hours or days.
-  - **A focus zone of its own**, in Rooms' existing pattern: ▲ from the first
-    room goes up to the band, ▼ comes back down, Esc goes back. There is no
-    per-person cursor and **OK** does nothing there, because everything a
-    person has to say is already on their card — a focusable thing that
-    answers no button is worse than one that doesn't take the focus at all.
-  - **Reachable from any screen**: `HomerActions.provide` registers **Who's
-    home** as a global action (`HomerRooms.openPeople()`), so holding **OK**
-    on an Apple TV remote opens Rooms with the band focused, from wherever you
-    are. The strip's line says who's in ("Jason and Ellie home", "Nobody
-    home").
-  - **The phone** gets the same band at the top of Rooms, above the room
-    chips, scrolling sideways when the house has more people than fit. Both
-    layouts draw it from the same helpers in `rooms/rooms.js` (`PHONE_CTX`).
-  - **Nothing to show, nothing drawn**: no Home Assistant, or a house with no
-    people, and the band isn't there and the rooms keep the top of the screen.
-  - The per-room presence chips are unchanged — that's still whoever Home
-    Assistant *places in a room*, which needs their tracker in an area. The
-    band needs nothing of the sort, so it says something in every house.
-  - Still read only: HOMER asks Home Assistant where people are and calls no
-    service.
 ## Unreleased
+
+- **Soccer scores are back.** ESPN's soccer scoreboard is the one that
+  refuses a day range — `dates=YYYYMMDD-YYYYMMDD` answers HTTP 400 — so the
+  Soccer tab had quietly been showing nothing at all. It now asks for the
+  months its window touches, which ESPN does accept, and keeps the matches
+  inside the window. A competition that's between matchdays (the Champions
+  League goes dark for weeks) shows its next fixtures instead of an empty tab.
+
 
 - **Baseball on the Sports screen comes from MLB now, not ESPN.** ESPN's
   scoreboard gave a baseball game a score and an inning, which is about a
@@ -89,7 +60,7 @@
     that change once a decade don't need fetching.
   - Standings, the wild card races and the headlines on the MLB tab are still
     ESPN's, and so is every other league.
-## Unreleased
+
 
 - **Radio on the Music screen** (`music/radio-model.js`, `music/radio.css`, and
   a Radio tab in `music/music.js` and `music/music-phone.js`). Internet radio,
@@ -154,7 +125,7 @@
     letter keys back from the screen's shortcuts while it's focused.
   - **NAS helper** (`homerfeeds.py`) gains `/radio/rb`, `/radio/icy` and
     `/radio/stream`.
-## Unreleased
+
 
 - **Planes: what's flying over the house, on a map (`#/planes`).** A new
   screen in Home's menu after Cameras, with a phone layout of its own.
@@ -216,6 +187,44 @@
     (adsbdb, which carries airport-data.com URLs) means hotlinking someone
     else's images under licensing HOMER can't vouch for, so the screen goes
     without.
+
+## v0.4.20
+
+- **Who's home moved out of Home's top bar and into Rooms.** On a TV it lived
+  beside the clock, which a remote can't reach: there is no way to put the
+  focus on Home's top bar, so the one thing on that screen HOMER couldn't
+  drive was the one thing it had just added. It's now the first band of
+  **Rooms**, above the rooms themselves.
+  - **A card a person**, at a size that reads from the couch: their picture
+    where Home Assistant has one and their initials where it doesn't (68px on
+    a TV, 44px on a phone), their name, where they are and how long they've
+    been there. Whoever's in reads lit and in color, whoever's out flat, grey
+    and greyscale.
+  - **Where** is Home Assistant's own state: **Home**, **Away**, or the zone
+    it has them in (**Work**, **School**), and the room too where it knows one
+    ("Home · Office"). **How long** is minutes while it's fresh ("12 min"),
+    the clock time for the rest of today ("since 4:12 PM"), then a round
+    number of hours or days.
+  - **A focus zone of its own**, in Rooms' existing pattern: ▲ from the first
+    room goes up to the band, ▼ comes back down, Esc goes back. There is no
+    per-person cursor and **OK** does nothing there, because everything a
+    person has to say is already on their card — a focusable thing that
+    answers no button is worse than one that doesn't take the focus at all.
+  - **Reachable from any screen**: `HomerActions.provide` registers **Who's
+    home** as a global action (`HomerRooms.openPeople()`), so holding **OK**
+    on an Apple TV remote opens Rooms with the band focused, from wherever you
+    are. The strip's line says who's in ("Jason and Ellie home", "Nobody
+    home").
+  - **The phone** gets the same band at the top of Rooms, above the room
+    chips, scrolling sideways when the house has more people than fit. Both
+    layouts draw it from the same helpers in `rooms/rooms.js` (`PHONE_CTX`).
+  - **Nothing to show, nothing drawn**: no Home Assistant, or a house with no
+    people, and the band isn't there and the rooms keep the top of the screen.
+  - The per-room presence chips are unchanged — that's still whoever Home
+    Assistant *places in a room*, which needs their tracker in an area. The
+    band needs nothing of the sort, so it says something in every house.
+  - Still read only: HOMER asks Home Assistant where people are and calls no
+    service.
 
 ## v0.4.19
 
@@ -379,6 +388,7 @@
     `HomerLibraryModel.makeFilters` / `sortsFor` / `sortCompare`, so they can't
     drift apart. Filtering is one pass over the titles the screen already has —
     178 movies and 18 shows here — not another round trip.
+
 ## v0.4.16
 
 - **The phone's top bar is two buttons, not one.** The HOMER mark still opens
@@ -486,12 +496,14 @@
     both rooms, the way Now Playing already folds them.
   - New: `music/playon.js`, `music/playon.css`. `HomerHA` gains `playMedia()`
     and `players()`, and `mediaCommand()` now takes service data.
+
 ## v0.4.13
 
 - **Music on a phone:** the album wall is two even columns again. An `fr`
   track floors at its content's minimum width, so one wide cover stretched
   the first column and squashed the second to a sliver; the same guard went
   into the other phone grids that split in two.
+
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.
@@ -582,6 +594,7 @@
     yet and it simply fills the window.
   - An address that was never HOMER's is left alone, so Jellyfin's real 404
     still answers for it.
+
 ## v0.4.10
 
 - **Now Playing on a phone:** "Nothing is playing" no longer sits under the
@@ -808,6 +821,7 @@ rings and clips where you can see them.
 - Also: `shared/player.js` and `shared/layout.js` know `#/cameras` is HOMER's
   own page; `shared/shell.css` grew the `hc-` prefix; Home's menu has an
   eleven-item size.
+
 ## v0.4.4
 
 - **The hubs' channel lists follow Guide size.** The list of channels under
@@ -821,6 +835,7 @@ rings and clips where you can see them.
   again on its own tick). Nothing else on the screen moves: the TV window, the
   tabs, the legend and the ticker keep their places at 1920x1080 and at
   1600x900, and a phone is unaffected.
+
 ## v0.4.3
 
 Two things a Siri Remote couldn't do, and one it couldn't reach.
@@ -1051,6 +1066,7 @@ Two things a Siri Remote couldn't do, and one it couldn't reach.
   rooms/quick.js the panel and the doorbell. HomerPlayer counts #/rooms as a
   HOMER page. Home Assistant needs no configuration change on the local
   network; see the README for reaching it over Tailscale.
+
 ## v0.3.15
 
 - Weather: a device's own location is named by its nearest town ("Plano,
