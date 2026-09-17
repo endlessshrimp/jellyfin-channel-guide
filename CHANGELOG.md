@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **No more ‹ beside the screen's name** in the phone top bar. Sitting next to
+  the wordmark's own caret it read as clutter. The name still goes to the top
+  of its screen; it just says so by reading brighter, with the hairline
+  divider kept.
+
 ## v0.4.25
 
 - **The album page's "Play on…" comes back when Home Assistant is slow.**

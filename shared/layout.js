@@ -360,7 +360,7 @@
         top.id = 'homer-phone-top';
         top.innerHTML = `
             <div class="hp-brand" role="button" tabindex="0" aria-label="Menu" aria-haspopup="dialog" aria-expanded="false"><span class="hp-mark"></span>HOMER<span class="material-icons hp-brand-caret" aria-hidden="true">expand_more</span></div>
-            <button type="button" class="hp-here" hidden><span class="material-icons hp-here-back" aria-hidden="true">chevron_left</span><span class="hp-sub"></span></button>
+            <button type="button" class="hp-here" hidden><span class="hp-sub"></span></button>
             <span class="hp-spacer"></span>
             <div class="hp-wx"><div class="hp-clock"></div></div>
             <button type="button" class="hp-icon hp-search" aria-label="Search"><span class="material-icons" aria-hidden="true">search</span></button>`;

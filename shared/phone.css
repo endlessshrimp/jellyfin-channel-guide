@@ -126,21 +126,6 @@ html.homer-chrome #homer-phone-tabs {
 #homer-phone-top .hp-here.can { cursor: pointer; }
 #homer-phone-top .hp-here.can:active { background: rgba(255, 255, 255, 0.12); }
 
-#homer-phone-top .hp-here-back {
-    flex: none;
-    width: 0;
-    overflow: hidden;
-    font-size: 20px !important;
-    color: var(--homer-accent-2);
-    transition: width 140ms ease, opacity 140ms ease;
-    opacity: 0;
-}
-
-#homer-phone-top .hp-here.can .hp-here-back {
-    width: 20px;
-    opacity: 1;
-}
-
 #homer-phone-top .hp-sub {
     color: var(--homer-dim);
     font-weight: 600;
@@ -154,11 +139,10 @@ html.homer-chrome #homer-phone-tabs {
     text-overflow: ellipsis;
 }
 
-/* the ‹ takes the hairline's place when the name is a button */
+/* a name that is a button just reads brighter — no caret beside the
+   wordmark's own, which looked cluttered */
 #homer-phone-top .hp-here.can .hp-sub {
     color: var(--homer-text);
-    padding-left: 4px;
-    border-left: 0;
 }
 
 /* the mark and the wordmark open the menu sheet (shared/menu.js), so they
