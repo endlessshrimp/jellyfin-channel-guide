@@ -16,6 +16,10 @@
  *   rankings(league)        the AP Top 25 (college football and basketball)
  *   news(league, { team })  articles with pictures
  *   teamGames(fav)          a favorite team's last game and next game
+ *   resolveChannels(games)  fills in g.channel for the games actually on
+ *                           screen, by asking the guide which of a network's
+ *                           candidate channels is really showing each one —
+ *                           see "Regional channel resolution" below
  *
  * Every call goes through HomerHub.data (a cache per URL, one request at a
  * time, timeouts), so the ticker and the tabs share what's been fetched.
@@ -28,11 +32,12 @@
  * list and the ticker's MY TEAMS segment.
  *
  * window.HomerSportsData = { LEAGUES, FAVS, scores, standings, rankings, news,
- *                            teamGames, game, isFav, anyLive, version,
- *                            mlbLive, mlbLivePace, mlbStanding, mlbTeams }
+ *                            teamGames, resolveChannels, game, isFav,
+ *                            anyLive, version, mlbLive, mlbLivePace,
+ *                            mlbStanding, mlbTeams }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     const SITE = 'https://site.api.espn.com/apis/site/v2/sports/';
     const V2 = 'https://site.api.espn.com/apis/v2/sports/';
@@ -123,6 +128,10 @@
         return { national, local, all };
     };
     const STREAMING = /^(MLB\.TV|ESPN\+|ESPN Unlmtd|Peacock|Paramount\+|Prime Video|Netflix|Apple TV|DAZN|Fubo|NBA League Pass|NHL Power Play|YouTube|Max|SECN\+|ACCNX|B1G\+|Victory\+)$/i;
+    // every lineup channel that could carry one of `names` (plural: a
+    // network can have more than one regional feed), and the name that hit —
+    // see resolveChannels below for how a game picks the right one of them
+    const chanLookup = (names) => (H() ? H().channels.forNetworkAllNow(names) : null);
 
     // An ESPN event -> a HomerHub game (see HomerHub.ui.scoreCard)
     const game = (e, league) => {
@@ -166,11 +175,13 @@
         else status = /postponed|canceled|cancelled/i.test(st.name || '') ? (st.shortDetail || 'Postponed') : (st.shortDetail || 'Final');
         const nets = networksOf(c);
         const isTv = (n) => !STREAMING.test(n);
-        // our channel for it, if one of its networks is in the lineup
-        const hit = H() ? H().channels.forNetworkNow(nets.all.filter(isTv).concat(nets.all)) : null;
+        // every lineup channel that could be carrying it (a network can have
+        // several regional feeds); resolveChannels below asks the guide which
+        // one actually is, before this game is ever tunable
+        const match = chanLookup(nets.all.filter(isTv).concat(nets.all));
         const favGame = away.fav || home.fav;
         // the network to name: ours, else national TV, else (for a favorite) the local one
-        const network = hit ? hit.name : (nets.national.filter(isTv)[0] || (favGame ? nets.local.filter(isTv)[0] || nets.all[0] : '') || '');
+        const network = match ? match.name : (nets.national.filter(isTv)[0] || (favGame ? nets.local.filter(isTv)[0] || nets.all[0] : '') || '');
         const short = state === 'pre' && F && !/TBD|postponed|canceled|cancelled|delayed/i.test(status)
             ? (F.day(start) === 'Today' ? F.time(start) : `${start.toLocaleDateString([], { weekday: 'short' })} ${F.time(start)}`)
             : status;
@@ -187,7 +198,10 @@
             networks: nets.all,
             homeFirst: /^soccer\//.test((LEAGUES[league] || {}).path || ''),
             short,
-            channel: hit ? { number: hit.ch.Number, name: hit.ch.Name, ch: hit.ch } : null,
+            // filled in by resolveChannels(), once the guide confirms which
+            // of _chanCandidates (if any) is really showing this game
+            channel: null,
+            _chanCandidates: match ? match.chans : [],
             note,
             name: e.shortName || e.name || '',
             priority: away.fav || home.fav,
@@ -195,6 +209,79 @@
             competition: (e.league && e.league.abbreviation) || (e.seasonType && e.seasonType.name) || ''
         };
     };
+
+    // ---------- Regional channel resolution ----------
+    //
+    // A network name doesn't pin down a channel: "FOX" can be FOX 4 Dallas
+    // and a "FOX 4 Plus" subchannel both, and — the case that actually bit
+    // Jason — FOX regionalizes, so two different games can both legitimately
+    // say "FOX" while his one FOX 4 affiliate only carries one of them.
+    // chanLookup (above) already finds every lineup channel a game's network
+    // could mean; resolveChannels asks Jellyfin's guide what each of those
+    // channels is really showing during the game's window and keeps the one
+    // whose listing actually names both teams — never a guess between
+    // several plausible channels, and never a channel whose listing is a
+    // replay (Jellyfin's IsRepeat, or a title that says so).
+    const REPLAY_RE = /\b(replay|encore|re-?air(?:ed|ing)?)\b/i;
+    const isReplay = (p) => !!p.IsRepeat || REPLAY_RE.test(`${p.Name || ''} ${p.EpisodeTitle || ''}`);
+    const normText = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    // a side's full name and nickname ("Kansas City Royals", "Royals") — not
+    // the abbreviation, too short to be a reliable signal on its own
+    const sideNames = (side) => [side && side.name, side && side.short].map(normText).filter((s) => s.length >= 4);
+    // both teams named somewhere in the programme's title, episode title or
+    // synopsis (Jason's guide source puts the matchup in the synopsis for a
+    // lot of channels — "Live: MLB Baseball" tells you nothing by itself)
+    const programIsGame = (p, g) => {
+        const text = normText(`${p.Name || ''} ${p.EpisodeTitle || ''} ${p.Overview || ''}`);
+        const has = (side) => sideNames(side).some((n) => text.includes(n));
+        return has(g.away) && has(g.home);
+    };
+    const COVER_TOL = 20 * MIN; // EPG block boundaries wobble against a game's actual start
+    const covers = (p, t) => p._s - COVER_TOL <= t && p._e + COVER_TOL >= t;
+    // Resolve g.channel for every game in `games` that's worth it (not
+    // final, and has at least one candidate channel), with one batched guide
+    // query covering all of them — not one fetch per game, and not one for
+    // games nobody's looking at (call this on what's actually on screen).
+    // Mutates and returns the same games. programsFor caches per
+    // channel-set-and-window, so calling this again for the same games (a
+    // poll redraw) re-asks Jellyfin nothing.
+    const resolveChannels = async (games) => {
+        const H_ = H();
+        const list = (games || []).filter((g) => g && g.state !== 'post' && g._chanCandidates && g._chanCandidates.length);
+        if (!H_ || !list.length) return games;
+        const ids = new Set();
+        let lo = Infinity;
+        let hi = -Infinity;
+        list.forEach((g) => {
+            g._chanCandidates.forEach((c) => ids.add(c.Id));
+            const t = g.start.getTime();
+            lo = Math.min(lo, t - 45 * MIN);
+            hi = Math.max(hi, t + 4 * 3600000); // most games are done inside 4h
+        });
+        const items = await H_.channels.programsFor([...ids], { from: lo, to: hi }).catch(() => []);
+        const byChan = new Map();
+        items.forEach((p) => {
+            p._s = Date.parse(p.StartDate);
+            p._e = Date.parse(p.EndDate);
+            if (!byChan.has(p.ChannelId)) byChan.set(p.ChannelId, []);
+            byChan.get(p.ChannelId).push(p);
+        });
+        list.forEach((g) => {
+            const t = g.start.getTime();
+            // more than one block can cover the window (a pregame show
+            // butts right up against tip-off) — any of them naming the game
+            // counts, not just whichever comes first
+            const named = g._chanCandidates.filter((ch) => (byChan.get(ch.Id) || [])
+                .filter((p) => covers(p, t))
+                .some((p) => !isReplay(p) && programIsGame(p, g)));
+            // exactly one channel whose listing actually names this game:
+            // resolved. Zero (no listing yet, or none of them match) or more
+            // than one (ambiguous) — leave it a named network, not tunable.
+            g.channel = named.length === 1 ? { number: named[0].Number, name: named[0].Name, ch: named[0] } : null;
+        });
+        return games;
+    };
+
     // favorites first, then live, then finals from the last 18 hours (newest
     // first), then what's coming (soonest first), then older finals
     const bucket = (g) => {
@@ -409,9 +496,9 @@
         // StatsAPI writes a simulcast as one name ("FOX / FOX ONE"); the
         // lineup is matched on each side of it as well as on the whole thing
         const lookup = nets.all.concat(nets.all.filter((n) => n.includes('/')).flatMap((n) => n.split('/').map((x) => x.trim())));
-        const hit = H() ? H().channels.forNetworkNow(lookup) : null;
+        const match = chanLookup(lookup);
         const favGame = away.fav || home.fav;
-        const network = hit ? hit.name : (nets.national[0] || (favGame ? nets.local[0] || '' : '') || '');
+        const network = match ? match.name : (nets.national[0] || (favGame ? nets.local[0] || '' : '') || '');
         const F = H() && H().fmt;
         const short = state === 'pre' && !dead && F && !st.startTimeTBD
             ? (F.day(start) === 'Today' ? F.time(start) : `${start.toLocaleDateString([], { weekday: 'short' })} ${F.time(start)}`)
@@ -429,7 +516,8 @@
             networks: nets.all,
             homeFirst: false,
             short,
-            channel: hit ? { number: hit.ch.Number, name: hit.ch.Name, ch: hit.ch } : null,
+            channel: null,
+            _chanCandidates: match ? match.chans : [],
             note,
             name: `${away.abbr} @ ${home.abbr}`,
             priority: favGame,
@@ -995,6 +1083,7 @@
         rankings,
         news,
         teamGames,
+        resolveChannels,
         game,
         isFav,
         favFor,

@@ -736,8 +736,34 @@ tabs of content on the right, and a ticker along the bottom.
 - **Sports** opens on ESPN. Tabs: My Teams (Rangers, Cowboys, Longhorns,
   Arsenal), MLB, NFL, College FB (AP Top 25, SEC, Big 12), Soccer (Premier
   League, Champions League), NBA, NHL, College Hoops. Scores, standings and
-  rankings come from ESPN's public API. A game's card shows our channel for
-  it, and OK watches it.
+  rankings come from ESPN's public API.
+  - **A game's card names its channel, and OK watches it — but only once
+    it's actually live.** Before then, or once it's over, the card still
+    names the network; OK just says so, it doesn't tune anything.
+  - **Regional networks resolve to the right feed, not the first one
+    found.** "FOX" (or a team's own regional network) can be more than one
+    channel in the lineup — a network's own subchannel, a second channel
+    with the same listings, two different games both nominally "on FOX"
+    while only one of them is what the local affiliate is actually airing.
+    `sports/sports-data.js`'s `resolveChannels()` asks the guide what each
+    candidate channel is showing during the game's window (one batched
+    `/LiveTv/Programs` call for what's on screen, not one per game) and
+    keeps the one whose listing actually names both teams. Exactly one match
+    resolves the channel; no guide data yet (it runs about 3 days out), a
+    mismatch, more than one plausible channel, or a listing that's a replay
+    all leave the game a named network with no channel number — shown, never
+    guessed, never tunable.
+
+    | Resolved to a channel | Network only (ambiguous / no data) |
+    | --- | --- |
+    | ![A regional channel resolved](docs/screenshots/hubs/sports-regional-resolved.jpg) | ![Network only, not tunable](docs/screenshots/hubs/sports-regional-network-only.jpg) |
+  - **Scores split into two groups**: what's live or coming up (with its
+    channel, tunable when live), and a **Final** group below of smaller,
+    secondary cards — this is a scores section for those, not a what-to-watch
+    one. A finished game's card is click/OK-ready for a future box-score
+    screen (`#/sports?game=<id>`), not tunable.
+
+    ![Live/upcoming above, Final below in smaller cards](docs/screenshots/hubs/sports-scores-final-split.jpg)
 - **Baseball comes from MLB**, not ESPN: `statsapi.mlb.com`, which answers a
   browser directly and knows what a scoreboard knows.
 
