@@ -369,7 +369,7 @@
 @media (orientation: landscape) {
     .hm-sheet-list {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 2px 8px;
         align-content: start;
     }

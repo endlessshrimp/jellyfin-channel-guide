@@ -78,11 +78,16 @@
 
 .mup-grid.wall {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, 1fr), not 1fr: an fr track floors at its content's minimum
+       width, so one wide cover or an unbreakable title stretches the column
+       and pushes the other one to a sliver. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px 14px;
 }
 
-.mup-card { display: block; width: 100%; }
+.mup-card { display: block; width: 100%; min-width: 0; }
+.mup-card img { max-width: 100%; }
+.mup-card * { min-width: 0; overflow-wrap: anywhere; }
 
 .mup-card-art {
     display: block;
@@ -273,7 +278,7 @@
 .mup-btn.primary { background: #f4f7fb; color: #06101e; border-color: transparent; }
 .mup-btn .material-icons { font-size: 22px; }
 .mup-page-body { margin-top: 14px; }
-.mup-page-body.wall { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 14px; }
+.mup-page-body.wall { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
 
 /* ---------- Now playing ---------- */
 
