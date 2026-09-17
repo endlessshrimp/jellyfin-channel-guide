@@ -1,0 +1,536 @@
+/*
+ * HOMER Planes (#/planes), TV layout. The stage, the top bar, the legend, the
+ * state card and the toast come from shared/shell.css; this adds the map, its
+ * key and the list beside it.
+ *
+ * Drawn at 1920x1080 and scaled to the window, like every other HOMER screen,
+ * so every size here is a TV size: nothing under 18px, the callsigns at 34.
+ */
+
+/* ---------- The two halves ---------- */
+
+.hv-body {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 128px;
+    bottom: 96px;
+    display: flex;
+    gap: 28px;
+    z-index: 1;
+}
+
+.hv-mapwrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    border-radius: var(--homer-radius, 14px);
+    border: 1px solid var(--line-strong);
+    background: #04101f;
+    overflow: hidden;
+    box-shadow: var(--homer-shadow, 0 20px 60px rgba(0, 0, 0, 0.45));
+}
+
+.hv-side {
+    flex: 0 0 640px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.hv-waiting .hv-body { opacity: 0.25; filter: saturate(0.4); }
+
+/* ---------- The map ---------- */
+
+.hv-map { position: absolute; inset: 0; }
+
+.pm {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(70% 70% at 50% 50%, rgba(47, 140, 255, 0.10), transparent 70%),
+        linear-gradient(180deg, #06162c 0%, #030a15 100%);
+}
+
+/* OpenStreetMap's tiles are a light map. Inverted, turned back to the right
+   hue and dimmed, they read as terrain under HOMER's navy instead of a bright
+   rectangle pasted onto it. */
+.pm-tiles {
+    position: absolute;
+    inset: 0;
+    filter: invert(1) hue-rotate(186deg) saturate(0.45) brightness(0.88) contrast(0.95);
+    opacity: 0.72;
+}
+
+.pm-tile {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 256px;
+    height: 256px;
+    opacity: 0;
+    transition: opacity 260ms ease;
+}
+
+.pm-tile.on { opacity: 1; }
+.pm-tile.gone { opacity: 0; }
+
+/* a wash of HOMER's own blue over the tiles, so the map belongs to the screen */
+.pm-tint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(60% 60% at 50% 50%, rgba(47, 140, 255, 0.16), transparent 72%),
+        linear-gradient(180deg, rgba(7, 20, 42, 0.42), rgba(2, 5, 10, 0.58));
+}
+
+.pm-vec, .pm-labels { position: absolute; inset: 0; }
+.pm-labels { pointer-events: none; }
+
+/* range rings and the compass */
+.pm-ring { fill: none; stroke: rgba(160, 190, 230, 0.20); stroke-width: 1.5; }
+.pm-ring-edge { stroke: rgba(111, 211, 255, 0.42); stroke-dasharray: 7 9; }
+
+.pm-ring-label,
+.pm-compass {
+    fill: var(--homer-dim, #8ea3bd);
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.pm-ring-label {
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: rgba(3, 10, 20, 0.75);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+
+.pm-compass {
+    fill: rgba(111, 211, 255, 0.72);
+    font-size: 21px;
+    text-anchor: middle;
+}
+
+/* the house */
+.pm-home-halo { fill: rgba(47, 140, 255, 0.22); }
+.pm-home-mark { fill: #fff; stroke: #0b1c33; stroke-width: 1.5; }
+
+/* the pinned aircraft's track */
+.pm-trail {
+    fill: none;
+    stroke: #6fd3ff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.75;
+}
+
+/* aircraft */
+.pm-plane-body {
+    stroke: rgba(3, 10, 20, 0.85);
+    stroke-width: 1.2;
+    paint-order: stroke;
+}
+
+.pm-plane.ground .pm-plane-body { opacity: 0.45; }
+.pm-plane-halo { fill: rgba(255, 255, 255, 0.14); stroke: #fff; stroke-width: 2; }
+.pm-plane.pinned .pm-plane-halo { fill: rgba(111, 211, 255, 0.20); stroke: #6fd3ff; }
+
+.pm-label {
+    position: absolute;
+    transform: translate(18px, -34px);
+    padding: 3px 9px;
+    border-radius: 7px;
+    background: rgba(4, 12, 24, 0.82);
+    border: 1px solid var(--line-strong);
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--homer-dim, #8ea3bd);
+    white-space: nowrap;
+    line-height: 1.25;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.pm-label b { color: var(--homer-text, #f4f7fb); letter-spacing: 0.04em; }
+.pm-label i { font-style: normal; margin-left: 8px; }
+
+.pm-label.on,
+.pm-label.pinned {
+    background: rgba(12, 34, 62, 0.94);
+    border-color: rgba(111, 211, 255, 0.55);
+    font-size: 21px;
+    color: #cfe9ff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.pm-credit {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(160, 190, 230, 0.45);
+    pointer-events: none;
+}
+
+.pm-notiles .pm-credit { display: none; } /* nothing of theirs is on screen */
+
+/* ---------- Over the map ---------- */
+
+.hv-alt {
+    position: absolute;
+    left: 20px;
+    top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    max-width: 62%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(4, 12, 24, 0.7);
+    border: 1px solid var(--line);
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hv-alt span { display: inline-flex; align-items: center; gap: 8px; }
+
+.hv-alt i {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.hv-note {
+    position: absolute;
+    left: 20px;
+    bottom: 16px;
+    display: flex;
+    gap: 10px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dim);
+}
+
+.hv-note span {
+    padding: 5px 12px;
+    border-radius: 7px;
+    background: rgba(4, 12, 24, 0.7);
+    border: 1px solid var(--line);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.hv-quiet {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    pointer-events: none;
+    background: radial-gradient(50% 40% at 50% 50%, rgba(2, 5, 10, 0.72), transparent 75%);
+}
+
+.hv-quiet.show { display: flex; }
+.hv-quiet b { font-size: 34px; font-weight: 700; }
+.hv-quiet span { font-family: var(--cond); font-size: 21px; color: var(--dim); }
+
+/* ---------- The list ---------- */
+
+.hv-side-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 6px 14px;
+    border-bottom: 2px solid var(--line-strong);
+}
+
+.hv-side-title {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.hv-side-count {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* ---------- The aircraft being followed ---------- */
+
+.hv-pinned {
+    display: none;
+    margin: 14px 6px 4px;
+    padding: 14px 18px 16px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(47, 140, 255, 0.22), var(--cell) 70%);
+    border: 1px solid rgba(111, 211, 255, 0.45);
+}
+
+.hv-pinned.show { display: block; }
+
+.hv-pin-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-left: 12px;
+    border-left: 6px solid var(--band, var(--accent-2));
+}
+
+.hv-pin-icon { font-size: 22px !important; color: var(--accent-2); align-self: center; }
+.hv-pin-call { font-size: 36px; font-weight: 800; letter-spacing: 0.04em; }
+
+.hv-pin-what,
+.hv-pin-sub {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+}
+
+.hv-pin-sub {
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hv-pin-route {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--cond);
+    font-size: 21px;
+    font-weight: 700;
+    color: #cfe9ff;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hv-pin-route i { font-style: normal; font-weight: 600; color: var(--dim); }
+
+.hv-pin-facts {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 10px;
+}
+
+.hv-pin-facts span {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    min-width: 0;
+}
+
+.hv-pin-facts b {
+    font-family: var(--font);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hv-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden auto;
+    scrollbar-width: none;
+    padding: 12px 6px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hv-list::-webkit-scrollbar { width: 0; }
+
+.hv-row {
+    --band: var(--accent-2);
+    display: grid;
+    grid-template-columns: 116px 1fr auto;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 18px 12px 14px;
+    border-radius: 12px;
+    background: var(--cell);
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--band);
+    cursor: pointer;
+    transition: background 120ms ease, transform 120ms ease;
+}
+
+.hv-row.ground { opacity: 0.62; }
+
+.hv-row.on {
+    background: var(--cell-hi);
+    border-color: rgba(111, 211, 255, 0.5);
+    box-shadow: var(--focus-ring);
+    transform: translateX(-4px);
+    opacity: 1;
+}
+
+.hv-row.pinned { background: linear-gradient(90deg, rgba(47, 140, 255, 0.24), var(--cell) 60%); }
+
+.hv-row-dist { text-align: left; line-height: 1.1; }
+.hv-row-dist b { display: block; font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.hv-row-dist i {
+    font-style: normal;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+}
+
+.hv-row-who { min-width: 0; }
+
+.hv-row-call {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hv-row-pin { font-size: 22px !important; color: var(--accent-2); }
+
+.hv-row-what,
+.hv-row-route {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hv-row-what em { font-style: normal; color: var(--faint); }
+.hv-row-route { margin-top: 2px; color: #cfe9ff; display: flex; align-items: center; gap: 6px; }
+.hv-row-arrow { font-size: 20px !important; color: var(--accent-2); }
+
+.hv-row-nums { text-align: right; line-height: 1.15; }
+
+.hv-row-alt {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.hv-row-vs { font-size: 21px !important; color: var(--accent-2); }
+
+.hv-row-sub {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+}
+
+.hv-none {
+    margin: 60px auto 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    color: var(--dim);
+}
+
+.hv-none .material-icons { font-size: 62px !important; color: var(--faint); }
+.hv-none b { font-size: 27px; font-weight: 700; color: var(--text); }
+.hv-none span { font-family: var(--cond); font-size: 20px; }
+
+/* A Material Icons glyph is a <span>, and so is every bit of text in these
+   boxes. `.hv-none span` and shell.css's `.hv-state span` are both more
+   specific than Jellyfin's `.material-icons`, so without this the icon's name
+   turns up on screen as the words "flight_takeoff". */
+.hv-state span.material-icons,
+.hv-none span.material-icons,
+.hv-quiet span.material-icons {
+    font-family: "Material Icons";
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+/* ---------- The state card ---------- */
+
+.hv-state {
+    left: 72px;
+    right: 72px;
+    top: 128px;
+    bottom: 96px;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.hv-state-icon { font-size: 76px !important; color: var(--faint); }
+
+.hv-state-ok {
+    margin-top: 12px;
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 22px;
+    border-radius: 12px;
+    background: var(--cell-hi);
+    border: 1px solid var(--line-strong);
+    font-size: 22px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.hv-spinner {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: 5px solid rgba(160, 190, 230, 0.2);
+    border-top-color: var(--accent-2);
+    animation: hv-spin 900ms linear infinite;
+}
+
+@keyframes hv-spin { to { transform: rotate(360deg); } }

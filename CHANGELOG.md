@@ -1,5 +1,68 @@
 # Changelog
 
+## Unreleased
+
+- **Planes: what's flying over the house, on a map (`#/planes`).** A new
+  screen in Home's menu after Cameras, with a phone layout of its own.
+  - **The map** is centred on the house, with range rings at round distances
+    (10, 20, 30, 40, 50 inside a 50 nm range, not 12.5 and 37.5) and a
+    compass. Every aircraft is a silhouette turned to its real track and
+    coloured by altitude, with the key in the corner. The backdrop is
+    **OpenStreetMap's own tiles**, fetched through HOMER's NAS helper rather
+    than straight from the browser, which is what makes it allowed under the
+    OSMF tile policy: the helper sends a User-Agent that names HOMER (a
+    browser can't be made to), keeps each tile on the NAS for a month so it's
+    fetched once and never again, asks only for the tiles on screen, caps zoom
+    at 13, and the attribution is drawn on the map. That also puts the tiles
+    on `media.nel.sn` over https, through the same Caddy route as the news
+    feeds. The tiles are inverted and dimmed into HOMER's navy; if none
+    arrive, the map is still a working scope, because the rings, the compass,
+    the house and the aircraft are all drawn locally.
+  - **The list beside it**: callsign, type and registration, altitude with a
+    climb or descent arrow, speed, heading, distance and bearing from the
+    house, and **where it's going** when that's known (`DFW → LHR`). Nearest
+    first — except aircraft *on the ground*, which come last, because DFW is
+    40-odd miles away and a plain distance sort buries everything actually
+    overhead under a hundred airliners sitting at their gates.
+  - **OK follows one**: the map recentres on it and keeps it centred as it
+    moves, its track draws behind it, and a card above the list fills in with
+    the aircraft, its operator, the route in words, altitude, speed, heading,
+    climb rate, distance and bearing, and its squawk. OK again, or Esc, lets
+    it go. Arrows move between aircraft; `[` and `]` change the range (10, 25,
+    50, 100, 150 nm, remembered per device); R asks again. The Apple TV's
+    remote gets *Follow it*, *Wider*, *Closer in* and *Refresh* through
+    `HomerActions.provide`.
+  - **The data**: two donated, keyless ADS-B feeds, **adsb.fi** first (its
+    answers carry the aircraft description and the operator) and **adsb.lol**
+    as the reserve. Neither sends CORS headers, so the browser can't call them
+    — the NAS helper (`homerfeeds.py`, `/homer-feeds/planes`) does, and it is
+    a window onto those two hosts, not a proxy for anything else. A
+    destination isn't in an ADS-B message at all, so callsigns are looked up
+    once in **adsbdb.com** (free, keyless) by one background worker doing a
+    couple a second, kept for a day.
+  - **Polite to feeds someone else pays for**: one request every 7 seconds
+    while the screen is open and **none when it isn't** — nothing has a timer
+    until a Planes screen asks for one; nothing at all while the page is
+    hidden; one cached answer per place on the helper, so a second TV in the
+    house costs the feeds nothing; the last good answer served (marked old)
+    when the feed is down rather than asking again and again; and a failed
+    request backing off to a minute.
+  - **Where the house is** comes from Home Assistant's own config
+    (`HomerHA.location()`, added in v0.4.18), then HOMER's weather location.
+  - **The boring states are real states**: *Nothing overhead right now* over
+    the rings with *Quiet sky* in the list; *Can't reach the plane feed* with
+    what went wrong and OK to try again (a list already up stays up, marked
+    *feed quiet*); *HOMER doesn't know where the house is* with OK to
+    Settings.
+  - **On a phone**: the map on top, the list under it as one card an aircraft
+    with range chips between them. A tap opens a card out, a tap on the open
+    one follows it, and **‹ Planes** in the top bar lets it go. In landscape
+    the map takes the left half instead.
+  - **No aircraft photos.** The one free, keyless source found for them
+    (adsbdb, which carries airport-data.com URLs) means hotlinking someone
+    else's images under licensing HOMER can't vouch for, so the screen goes
+    without.
+
 ## v0.4.19
 
 - **The alert crawl only shows weather worth reacting to**: severe watches,

@@ -41,7 +41,7 @@
     // over that and takes both down when the screen is up; it owns the class
     // from the moment it loads, and the screen names with it. An address that
     // isn't one of HOMER's is left alone, so Jellyfin's real 404 still answers.
-    const OURS = /^#\/(weather|rooms|cameras|sports|news|books|music|playing)(\?|$)/;
+    const OURS = /^#\/(weather|rooms|cameras|planes|sports|news|books|music|playing)(\?|$)/;
     if (!document.getElementById('homer-booting-css')) {
         const boot = document.createElement('style');
         boot.id = 'homer-booting-css';
@@ -108,6 +108,10 @@
     js('cameras/cameras-model.js'); // the cameras, their events and clips
     js('cameras/cameras.js'); // Cameras (#/cameras)
     js('cameras/cameras-phone.js'); // Cameras' phone layout
+    js('planes/planes-model.js'); // the ADS-B feeds, through the NAS helper
+    js('planes/planes-map.js'); // the Planes map, shared by both layouts
+    js('planes/planes.js'); // Planes (#/planes)
+    js('planes/planes-phone.js'); // Planes' phone layout
     js('shared/ticker.js'); // the hubs' BottomLine-style ticker
     js('shared/hub.js'); // the hubs' screen: TV window, channel guide, tabs, ticker
     js('sports/sports-data.js'); // ESPN's scores, standings, rankings and news
