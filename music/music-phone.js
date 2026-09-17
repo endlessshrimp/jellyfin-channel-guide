@@ -5,7 +5,8 @@
  *
  *   Browse     chips for Recently Added / Artists / Albums / Songs /
  *              Playlists / Genres, and the art two across under them
- *   A page     (tap a cover) a sheet: the art, Play / Shuffle / Instant Mix,
+ *   A page     (tap a cover) a sheet: the art, Play / Shuffle / Play on… /
+ *              Instant Mix,
  *              and the tracks — or, for an artist or a genre, their albums
  *   Playing    (tap the bar) the big cover, the controls, and the lyrics,
  *              the line you're on lit
@@ -162,6 +163,30 @@
                 syncSheets();
             });
         };
+        // Play on…: the same picker the TV screen uses (music/playon.js), as a
+        // sheet from the bottom. Only there when Home Assistant is connected.
+        const PO = () => window.HomerPlayOn || null;
+        const canPlayOn = () => {
+            const p = PO();
+            const h = window.HomerHA;
+            if (!p || !h || !h.isSetUp || !h.isSetUp()) return false;
+            try { return p.devices().length > 0; } catch { return false; }
+        };
+        const playOnPage = () => {
+            const it = pageItem;
+            const p = PO();
+            if (!it || !p) return;
+            tracksOf(it).then((list) => {
+                if (!list.length) return;
+                p.open(document.body, {
+                    tv: false,
+                    item: it,
+                    tracks: list,
+                    onHere: () => playPage(false),
+                    onNowPlaying: () => { push('playing'); drawPlaying(); syncSheets(); },
+                });
+            });
+        };
         const mixPage = () => {
             const it = pageItem;
             if (!it) return;
@@ -190,6 +215,7 @@
                         <div class="mup-page-acts">
                             <button type="button" class="mup-btn primary" data-a="play">${icon('play_arrow')}Play</button>
                             <button type="button" class="mup-btn" data-a="shuffle">${icon('shuffle')}Shuffle</button>
+                            ${canPlayOn() ? `<button type="button" class="mup-btn" data-a="on">${icon('speaker')}Play on…</button>` : ''}
                             <button type="button" class="mup-btn" data-a="mix">${icon('radio')}Mix</button>
                         </div>
                     </div>
@@ -199,6 +225,8 @@
             box.querySelector('[data-a="play"]').onclick = () => playPage(false);
             box.querySelector('[data-a="shuffle"]').onclick = () => playPage(true);
             box.querySelector('[data-a="mix"]').onclick = mixPage;
+            const onBtn = box.querySelector('[data-a="on"]');
+            if (onBtn) onBtn.onclick = playOnPage;
             const body = box.querySelector('.mup-page-body');
             if (pageAlbums) {
                 body.className = 'mup-page-body wall';
@@ -440,6 +468,7 @@
             state() { return { tab }; },
             teardown() {
                 // the music keeps playing; only the screen goes
+                if (PO()) PO().close();
                 off();
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();

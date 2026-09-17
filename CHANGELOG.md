@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+- **Play on… — an album on a speaker, not in the browser.** A fourth button
+  beside Play / Shuffle / Instant Mix on an album, a playlist, an artist or a
+  genre (and the same one on a phone) opens a list: **This screen** first, then
+  every Home Assistant player that can take music, the one you used last marked
+  and focused. Arrows and OK, a mouse, or a thumb; **Now Playing** at the foot
+  goes to see it. Only there when Home Assistant is connected.
+  - **Every row says what that speaker will really do**, because they don't all
+    do the same thing, and the message after the send says what actually
+    happened rather than what was hoped for. A player that can only take one
+    track gets one track **and says so** — it never quietly plays one song and
+    lets you think the record is on.
+  - Home Assistant's `media_player.play_media` takes one item and an album is
+    eleven, so HOMER's helper on the NAS (`homerfeeds`) mints a short-lived
+    **M3U** of the album's Jellyfin streams and HOMER hands over that one
+    address. What each family then did, tested on the real house:
+    **WiiM/LinkPlay** plays the whole M3U (as one long stream, which is why the
+    next bullet exists); **Sonos** refuses a plain M3U outright (UPnP error
+    800) and its `MEDIA_ENQUEUE` is a lie for a plain URL — eleven `add` calls
+    left a queue of one — but prefixed `x-rincon-mp3radio://` it goes to
+    Sonos's radio player, which reads the playlist properly (queue of 11), in
+    MP3, since handed FLAC it skips the record in seconds; **Chromecast/Nest**
+    gets the first track only (Home Assistant reads the playlist itself and
+    casts the first entry, with its name); **Apple TV** gets the first track
+    only; **TVs** don't take music at all and are dimmed out.
+  - **Now Playing names what HOMER sent where.** A speaker handed one address
+    reports the address as its title and no cover, so the card uses HOMER's own
+    record of the send — the album, who it's by, and its art from Jellyfin.
+  - **Jellyfin's token never leaves the NAS.** `POST /music/playlist` hands the
+    helper the track ids and the token and gets back an opaque key, good for
+    twelve hours; `/music/p/<key>.m3u` is the album and `/music/t/<key>/<n>`
+    one track (a 302 to Jellyfin). A token in `media_content_id` would be
+    written into Home Assistant's logbook, its recorder and every debug log
+    that repeats a service call. The helper never fetches anything: the only
+    addresses it can build are Jellyfin's own, from ids that have to look like
+    Jellyfin GUIDs.
+  - Speakers playing as a group (two WiiMs, a pair of Sonos) are one row naming
+    both rooms, the way Now Playing already folds them.
+  - New: `music/playon.js`, `music/playon.css`. `HomerHA` gains `playMedia()`
+    and `players()`, and `mediaCommand()` now takes service data.
+
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.

@@ -459,6 +459,7 @@ a small now-playing strip in the corner with the cover, the track and
   playing lit. OK on a track starts there.
 - **An artist** (or a genre): their albums, with Play all / Shuffle / Instant
   Mix for the lot.
+- **Play on…** sends the album to a speaker in the house instead (below).
 - **Instant Mix** is Jellyfin's own "radio from this" (`/Items/{id}/InstantMix`)
   and works on an album, an artist, a genre or a track. **I** starts one from
   whatever the focus is on.
@@ -478,6 +479,48 @@ a small now-playing strip in the corner with the cover, the track and
 - **Starting music stops HOMER's video; starting a video pauses the music.**
 - Not gapless. The next track is preloaded while the current one finishes, so
   the join is short, but the two aren't stitched sample-accurate.
+
+### Play on… (an album on a speaker)
+
+![Play on, the device picker](docs/screenshots/music-playon.jpg)
+
+**Play on…** sits beside Play and Shuffle on an album, a playlist, an artist or
+a genre, and sends the record to a speaker in the house instead of playing it
+in this browser. It's only there when Home Assistant is connected (Settings →
+Home Assistant). The list is **This screen** — HOMER's own player, where Play
+would have put it — then every Home Assistant player that can take music, with
+the device you used last marked and focused. Speakers playing as a group (two
+WiiMs, a pair of Sonos) are one row naming both rooms. Arrows and OK, a mouse,
+or a thumb on a phone; **Now Playing** at the bottom goes to see it.
+
+**Every row says what that speaker will actually do**, because they don't all
+do the same thing. Home Assistant's `play_media` takes one item and an album is
+eleven, so HOMER's helper on the NAS mints a short-lived **M3U** of the album's
+Jellyfin streams and hands over that one address. From there it's up to the
+player:
+
+| Speaker | What it does |
+| --- | --- |
+| WiiM and other LinkPlay | The whole album, played as one long stream |
+| Sonos | The whole album — Sonos reads a playlist only through its radio player, so HOMER asks it that way, in MP3 (handed FLAC, Sonos skips the record in seconds) |
+| Chromecast, Nest, Google TV | **The first track only** — Home Assistant reads the playlist itself and casts the first entry |
+| Apple TV | **The first track only** — AirPlay takes one address |
+| TVs (Samsung, LG, Android TV) | Nothing: their `play_media` launches apps, not music |
+| Anything else | Queued track by track if it advertises it, otherwise the playlist, and one track if it refuses |
+
+A speaker that never says "the whole album" gets the first track **and says so**
+on the row and in the message after — it never quietly plays one song and lets
+you think the record is on.
+
+**Jellyfin's token never leaves the NAS.** The helper keeps it and hands back
+an opaque address (`/music/p/<key>.m3u`, good for twelve hours); the speaker
+fetches that. A token in `media_content_id` would be written into Home
+Assistant's logbook, its recorder and every debug log that repeats a service
+call.
+
+A speaker handed one address mostly reports the address as its title, so
+**Now Playing** uses what HOMER remembers sending there: the album's name, who
+it's by, and its cover.
 
 **Keys on the Music screen:** arrows move and OK selects; **Space** or **P**
 plays and pauses; **N** and **B** change track; **S** shuffles; **R** cycles

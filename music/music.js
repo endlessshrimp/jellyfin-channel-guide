@@ -9,6 +9,11 @@
  *              Playlists, Genres.
  *   Album      one album or playlist: the cover large and every track, with
  *              the one playing lit. OK on a track starts there.
+ *
+ * Play on… (music/playon.js) sits beside Play / Shuffle / Instant Mix: it
+ * sends the album to a speaker in the house through Home Assistant instead of
+ * playing it in this tab, and says on each device's row what that device can
+ * actually take. It only appears when Home Assistant is connected.
  *   Artist     one artist or genre: their albums, and Play all / Shuffle /
  *              Instant Mix for the lot.
  *   Playing    what's playing: the cover, the track, the artist and album,
@@ -403,6 +408,32 @@
                 startPlaying(list, 0, { shuffle: !!shuffle, source: { kind: it.kind, id: it.id, name: it.name } });
             }).catch((err) => toast(err.message, true));
         };
+        // Play on…: the same album, but out of a speaker. The picker owns its
+        // own keys while it is open (onKey below stands aside for it).
+        const PO = () => window.HomerPlayOn || null;
+        const canPlayOn = () => {
+            const p = PO();
+            if (!p) return false;
+            const h = window.HomerHA;
+            if (!h || !h.isSetUp || !h.isSetUp()) return false;
+            try { return p.devices().length > 0; } catch { return false; }
+        };
+        const playOn = (it) => {
+            const p = PO();
+            if (!it || !p) return;
+            tracksOf(it).then((list) => {
+                if (!list.length) { toast(`${it.name} has no tracks`, true); return; }
+                p.open(stage, {
+                    tv: true,
+                    item: it,
+                    tracks: list,
+                    toast,
+                    onHere: () => playItem(it, false),
+                    onNowPlaying: () => go('#/playing'),
+                    onClose: () => updateLegend(),
+                });
+            }).catch((err) => toast(err.message, true));
+        };
         const instantMix = (it) => {
             if (!it) return;
             toast(`Radio from ${it.name}…`);
@@ -558,6 +589,7 @@
             if (it) {
                 btn('a:play', 'play_arrow', 'Play', () => playItem(it, false), true);
                 btn('a:shuffle', 'shuffle', 'Shuffle', () => playItem(it, true));
+                if (canPlayOn()) btn('a:on', 'speaker', 'Play on…', () => playOn(it));
                 btn('a:mix', 'radio', 'Instant Mix', () => instantMix(it));
             }
             if (had) {
@@ -596,6 +628,7 @@
             };
             btn('a:play', 'play_arrow', 'Play', () => playItem(it, false), true);
             btn('a:shuffle', 'shuffle', 'Shuffle', () => playItem(it, true));
+            if (canPlayOn()) btn('a:on', 'speaker', 'Play on…', () => playOn(it));
             btn('a:mix', 'radio', 'Instant Mix', () => instantMix(it));
             drawTracks();
             if (!pageTracks) {
@@ -669,6 +702,7 @@
             };
             btn('a:play', 'play_arrow', 'Play all', () => playItem(it, false), true);
             btn('a:shuffle', 'shuffle', 'Shuffle', () => playItem(it, true));
+            if (canPlayOn()) btn('a:on', 'speaker', 'Play on…', () => playOn(it));
             btn('a:mix', 'radio', 'Instant Mix', () => instantMix(it));
             drawArtistAlbums();
             if (!pageAlbums) {
@@ -1069,6 +1103,7 @@
         const onKey = (ev) => {
             wake();
             if (document.getElementById('cg-root')) return; // the guide is on top
+            if (PO() && PO().isOpen()) return; // Play on… is on top, and has its own keys
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
             const k = ev.key;
@@ -1192,6 +1227,9 @@
                 out.push({ id: 'shuffle', key: 'S', icon: 'shuffle', label: s.shuffle ? 'Shuffle off' : 'Shuffle on', run: () => player().toggleShuffle() });
                 out.push({ id: 'repeat', key: 'R', icon: s.repeat === 'one' ? 'repeat_one' : 'repeat', label: 'Repeat', sub: s.repeat, run: () => player().cycleRepeat() });
             }
+            if (sub && sub.kind !== 'track' && canPlayOn()) {
+                out.push({ id: 'playon', icon: 'speaker', label: 'Play on…', sub: sub.name, run: () => playOn(sub) });
+            }
             if (sub) out.push({ id: 'mix', key: 'I', icon: 'radio', label: 'Instant Mix', sub: sub.name, run: () => instantMix(sub) });
             if (s.track && view !== 'playing') out.push({ id: 'np', icon: 'graphic_eq', label: 'Now playing', run: () => showView('playing') });
             return out;
@@ -1206,6 +1244,7 @@
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
+                if (PO()) PO().close();
                 offActions();
                 // leaving Music does NOT stop the music: that's the point.
                 offModel();
@@ -1246,6 +1285,13 @@
                 setTimeout(resolve, 2000);
             });
         };
+        if (!document.getElementById('homer-playon-css')) {
+            const po = document.createElement('link');
+            po.id = 'homer-playon-css';
+            po.rel = 'stylesheet';
+            po.href = BASE + 'playon.css' + QUERY;
+            document.head.appendChild(po);
+        }
         cssReady = Promise.all([link('mu-css', 'music.css'), link('mu-phone-css', 'music-phone.css')]);
         return cssReady;
     };

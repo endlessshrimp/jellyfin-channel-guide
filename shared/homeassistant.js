@@ -35,6 +35,7 @@
  *                    setMode, scene, snapshotUrl, playCamera, browseMedia,
  *                    resolveMedia, history, rings, onRing,
  *                    color, setColor, supports, playPause, mediaCommand,
+ *                    playMedia, players,
  *                    setVolume, stepVolume, mute, setSource, power,
  *                    setFanSpeed, setPreset, setOption, setNumber, run,
  *                    extras, device, siblings, pictureUrl, pictureUrls,
@@ -1162,8 +1163,12 @@
         expect(id, playing ? 'paused' : 'playing', null, (x) => x.state !== s.state);
         return call('media_player', service, {}, id).catch(failed(id));
     };
-    // 'media_next_track', 'media_previous_track'
-    const mediaCommand = (id, service) => call('media_player', service, {}, id);
+    // 'media_next_track', 'media_previous_track', 'clear_playlist'
+    const mediaCommand = (id, service, data) => call('media_player', service, data || {}, id);
+    // Hand a player something to play. `extra` is where enqueue goes, for the
+    // integrations that take it: { enqueue: 'replace' | 'add' | 'next' }.
+    const playMedia = (id, contentId, contentType, extra) => call('media_player', 'play_media',
+        Object.assign({ media_content_id: contentId, media_content_type: contentType || 'music' }, extra || {}), id);
     // 0–1; the remote's presses are sent as one
     const setVolume = (id, v) => {
         v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
@@ -2053,6 +2058,8 @@
         supports,
         playPause,
         mediaCommand,
+        playMedia,
+        players: () => [...players()],
         setVolume,
         stepVolume,
         mute,

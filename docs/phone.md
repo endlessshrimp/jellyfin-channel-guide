@@ -282,6 +282,23 @@ worth copying for anything that plays:
   drawn twice. A repaint arrives about four times a second, so anything the
   finger is on (the queue list) is only redrawn when the track actually
   changes.
+- **One picker, two sizes.** "Play on…" (`music/playon.js`) is the same list on
+  both layouts, with no layout-specific code in it: the screen passes `tv:
+  true/false` and a host element, and `music/playon.css` switches between stage
+  pixels (the TV's 1920x1080 stage, which the stage's own transform scales) and
+  a real-pixel sheet from the bottom of a phone. The TV screen appends it
+  *inside* `#mu-stage` so it scales with everything else; the phone appends it
+  to `document.body`. The row is 84 stage pixels on the TV and a 60px thumb
+  target on a phone.
+
+  ![Play on…, on a phone](screenshots/music-playon-phone.jpg)
+
+  Two things that bit while building it: an icon sized with a class loses to
+  the screen's own `#mu-root .material-icons { font-size: inherit }` (an id
+  beats any class), so the size goes on the row's icon box and the glyph
+  inherits it; and the picker's own `keydown` listener is registered later than
+  the Music screen's, so capture-phase order alone won't keep the screen's keys
+  out — `music.js` asks `HomerPlayOn.isOpen()` and stands aside.
 ## Now Playing: one model, two layouts, no menu on the phone
 
 `playing/playing-phone.js` is the shortest version of the pattern, because
