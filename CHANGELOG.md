@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+- **Who's home moved out of Home's top bar and into Rooms.** On a TV it lived
+  beside the clock, which a remote can't reach: there is no way to put the
+  focus on Home's top bar, so the one thing on that screen HOMER couldn't
+  drive was the one thing it had just added. It's now the first band of
+  **Rooms**, above the rooms themselves.
+  - **A card a person**, at a size that reads from the couch: their picture
+    where Home Assistant has one and their initials where it doesn't (68px on
+    a TV, 44px on a phone), their name, where they are and how long they've
+    been there. Whoever's in reads lit and in color, whoever's out flat, grey
+    and greyscale.
+  - **Where** is Home Assistant's own state: **Home**, **Away**, or the zone
+    it has them in (**Work**, **School**), and the room too where it knows one
+    ("Home · Office"). **How long** is minutes while it's fresh ("12 min"),
+    the clock time for the rest of today ("since 4:12 PM"), then a round
+    number of hours or days.
+  - **A focus zone of its own**, in Rooms' existing pattern: ▲ from the first
+    room goes up to the band, ▼ comes back down, Esc goes back. There is no
+    per-person cursor and **OK** does nothing there, because everything a
+    person has to say is already on their card — a focusable thing that
+    answers no button is worse than one that doesn't take the focus at all.
+  - **Reachable from any screen**: `HomerActions.provide` registers **Who's
+    home** as a global action (`HomerRooms.openPeople()`), so holding **OK**
+    on an Apple TV remote opens Rooms with the band focused, from wherever you
+    are. The strip's line says who's in ("Jason and Ellie home", "Nobody
+    home").
+  - **The phone** gets the same band at the top of Rooms, above the room
+    chips, scrolling sideways when the house has more people than fit. Both
+    layouts draw it from the same helpers in `rooms/rooms.js` (`PHONE_CTX`).
+  - **Nothing to show, nothing drawn**: no Home Assistant, or a house with no
+    people, and the band isn't there and the rooms keep the top of the screen.
+  - The per-room presence chips are unchanged — that's still whoever Home
+    Assistant *places in a room*, which needs their tracker in an area. The
+    band needs nothing of the sort, so it says something in every house.
+  - Still read only: HOMER asks Home Assistant where people are and calls no
+    service.
+
 ## v0.4.18
 
 - **The alert crawl (`shared/alerts.js`).** One strip, over any HOMER screen

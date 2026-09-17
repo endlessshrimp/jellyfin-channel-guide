@@ -9,6 +9,8 @@
  * onto a player's remote (the quick panel's Remote). The connection, the rooms and the
  * controls are shared/homeassistant.js.
  *
+ *   Who's home   a band across the top: everyone Home Assistant knows, their
+ *                picture, whether they're in, where they are and since when
  *   Rooms list   Cameras (every camera), then each room with what's on and
  *                its temperature; Home Assistant's floors order them
  *   The room     its thermostat (◀▶ sets the temperature; a row of modes
@@ -24,12 +26,15 @@
  *                held down, comes out of it
  *
  * Remote/keyboard: ▲▼ move, OK/▶ opens a room, Esc/Backspace goes back a
- * step (camera → room → rooms list → the previous screen), H goes Home.
+ * step (camera → room → rooms list → the previous screen), H goes Home. ▲
+ * from the first room goes up to who's home and ▼ comes back down; nothing on
+ * that band is a control, so OK does nothing there.
  *
  * On a phone (shared/layout.js) Rooms draws rooms/rooms-phone.js instead,
  * from the same helpers (PHONE_CTX).
  *
- * window.HomerRooms = { open, openCamera, openRemote, close, destroy, version }
+ * window.HomerRooms = { open, openCamera, openRemote, openPeople, close,
+ *                       destroy, version }
  */
 (() => {
     const VERSION = '0.1.0';
@@ -612,6 +617,90 @@
     };
     const glanceHtml = (list) => list.map((c) => `<span class="homer-glance${c.kind ? ' ' + c.kind : ''}">${icon(c.icon)}<span>${esc(c.text)}</span></span>`).join('');
 
+    // ---------- Who's home ----------
+    //
+    // HOMER drew this in Home's top bar until v0.4.18, beside the clock, where
+    // a remote could never reach it. It lives here instead: the first band of
+    // Rooms, above the rooms themselves and big enough to read from the couch.
+    //
+    // shared/homeassistant.js's people() is the list — the person entities
+    // Home Assistant keeps (its own deduplicated view of somebody across their
+    // phones), or its device trackers in a house that never set people up —
+    // with their picture where Home Assistant has one and their initials where
+    // it doesn't. Read only: HOMER asks where people are and changes nothing.
+    //
+    // The per-room presence chips are a different thing and stay where they
+    // are: glance() lists whoever Home Assistant places in *that* room, which
+    // needs their tracker put in an area. This band needs nothing of the sort,
+    // so it says something in every house.
+    const peopleList = () => {
+        const h = HA();
+        if (!h || typeof h.people !== 'function' || !h.isSetUp()) return [];
+        return safe(() => h.people(), []) || [];
+    };
+    const areaName = (id) => {
+        const h = HA();
+        if (!h || !id) return '';
+        const r = (safe(() => h.house().rooms, []) || []).find((x) => x.id === id);
+        return r ? r.name : '';
+    };
+    // "Home", or the zone Home Assistant has them in ("Work", "School"), and
+    // the room too where it knows one — which most houses never set, so most
+    // of the time this is one word.
+    const whereText = (p) => {
+        const room = p.home ? areaName(p.area) : '';
+        return [p.where, room].filter(Boolean).join(' · ');
+    };
+    // how long they've been there: minutes while it's fresh, the clock time
+    // for the rest of today, then a round number of hours or days
+    const sinceText = (t) => {
+        if (!t) return '';
+        const mins = Math.round((Date.now() - t) / 60000);
+        if (mins < 0) return '';
+        if (mins < 2) return 'just now';
+        if (mins < 60) return `${mins} min`;
+        const d = new Date(t);
+        if (mins < 12 * 60 && d.toDateString() === new Date().toDateString()) return `since ${fmtTime(d)}`;
+        const hrs = Math.round(mins / 60);
+        return hrs < 48 ? `${hrs} h` : `${Math.round(hrs / 24)} d`;
+    };
+    const personHtml = (p) => `
+        <div class="ho-person${p.home ? ' in' : ''}" data-id="${esc(p.id)}">
+            <span class="ho-person-face" data-person="${esc(p.id)}">${esc(p.initials)}</span>
+            <span class="ho-person-text">
+                <span class="ho-person-name">${esc(p.name)}</span>
+                <span class="ho-person-where">${esc(whereText(p))}<i class="ho-person-since">${esc(sinceText(p.since))}</i></span>
+            </span>
+        </div>`;
+    const peopleHtml = (list) => list.map(personHtml).join('');
+    // who is where, so a repaint only happens when that changes (the "since"
+    // text is kept up to date in place, off the clock's tick)
+    const peopleSig = (list) => list.map((p) => `${p.id}:${p.state}:${p.since}:${p.area || ''}`).join('|');
+    // Home Assistant's picture for a person needs its address and a token, and
+    // isn't always there; loadPicture is the one that checks it actually
+    // draws, so the initials stay put until a real picture turns up.
+    const paintFaces = (box) => {
+        const h = HA();
+        if (!h || typeof h.loadPicture !== 'function') return;
+        box.querySelectorAll('.ho-person-face[data-person]').forEach((face) => {
+            const id = face.dataset.person;
+            if (face.dataset.tried === id) return;
+            face.dataset.tried = id;
+            h.loadPicture(id).then((url) => {
+                if (!url || face.dataset.tried !== id) return;
+                face.style.backgroundImage = `url("${url}")`;
+                face.classList.add('ho-has-pic');
+            }, () => { /* no picture: the initials stay */ });
+        });
+    };
+    // for the Actions strip, in a few words
+    const peopleSummary = (list) => {
+        const home = list.filter((p) => p.home).map((p) => p.name.split(' ')[0]);
+        if (!home.length) return 'Nobody home';
+        if (home.length === list.length) return home.length > 2 ? 'Everyone home' : home.join(' and ') + ' home';
+        return home.join(', ') + ' home';
+    };
+
     const doorbellFor = (camId) => {
         const h = HA();
         return h ? h.house().doorbells.find((d) => d.camera === camId) || null : null;
@@ -773,6 +862,10 @@
                 <div class="ho-clock"><div class="ho-clock-time"></div><div class="ho-clock-date"></div></div>
             </div>
             <div class="ho-toast" role="status" aria-live="polite"></div>
+            <div class="ho-people" role="group" aria-label="Who's home">
+                <div class="ho-people-head">${icon('people')}Who's home</div>
+                <div class="ho-people-track"></div>
+            </div>
             <div class="ho-body">
                 <div class="ho-side">
                     <div class="ho-list"><div class="ho-items"></div></div>
@@ -881,6 +974,50 @@
         let alive = true;
 
         const room = () => rooms[sel] || null;
+
+        // ----- who's home -----
+        // The band across the top, above the rooms: one card a person, their
+        // picture or their initials, where they are and how long they've been
+        // there. It's a focus zone of its own — ▼ goes down to the rooms, ▲
+        // from the first room comes back up — but nothing on it is a control,
+        // so OK does nothing here and the legend doesn't offer one. There is
+        // no per-person cursor for the same reason: everything a person has to
+        // say is already on their card.
+        const peopleEl = $('.ho-people');
+        const peopleTrack = $('.ho-people-track');
+        let folks = [];
+        let folksSig = null; // no list drawn yet
+        const drawPeople = () => {
+            // nothing while the screen is explaining itself (not connected,
+            // offline, signing in): the band would sit over the message
+            folks = statusMessage() ? [] : peopleList();
+            const sig = peopleSig(folks);
+            if (sig !== folksSig) {
+                folksSig = sig;
+                peopleTrack.innerHTML = peopleHtml(folks);
+                paintFaces(peopleTrack);
+            }
+            // no Home Assistant, or a house with nobody to show: no band, and
+            // no gap where it would have been
+            stage.classList.toggle('ho-has-people', folks.length > 0);
+            if (!folks.length && zone === 'people') setZone('list');
+            paintPeople();
+        };
+        const paintPeople = () => {
+            peopleEl.classList.toggle('sel', zone === 'people');
+            peopleTrack.querySelectorAll('.ho-person').forEach((n, i) => {
+                const p = folks[i];
+                if (!p) return;
+                const s = n.querySelector('.ho-person-since');
+                const t = sinceText(p.since);
+                if (s.textContent !== t) s.textContent = t;
+            });
+        };
+        const focusPeople = () => {
+            drawPeople();
+            if (folks.length) setZone('people');
+        };
+        const peopleTimer = setInterval(paintPeople, 30000);
 
         // ----- the rooms list -----
         const itemsBox = $('.ho-items');
@@ -1607,6 +1744,9 @@
                 if (rowName === 'swatches') items.push({ key: '◀▶', label: 'Presets' }, { key: 'OK', label: 'Set color', action: 'ok' });
                 else items.push({ key: '◀▶', label: rowName === 'white' ? 'Warmer · cooler' : 'Color' }, { key: 'OK', label: 'Done', action: 'ok' });
                 items.push({ key: 'ESC', label: 'Close', action: 'back' });
+            } else if (!msg && zone === 'people') {
+                // nothing on this band is a control, so no OK here on purpose
+                items.push({ key: '▼', label: 'Rooms' });
             } else if (!msg && zone === 'list') items.push({ key: '▲▼', label: 'Rooms' }, { key: 'OK', label: 'Open', action: 'ok' });
             else if (!msg && zone === 'room') {
                 items.push({ key: '▲▼', label: 'Move' });
@@ -1624,7 +1764,7 @@
             }
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' });
-            if (zone === 'list' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
+            if (zone === 'list' || zone === 'people' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
             const html = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="ho-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
@@ -1634,6 +1774,7 @@
 
         const setZone = (z) => {
             zone = z;
+            stage.classList.toggle('ho-zone-people', z === 'people');
             stage.classList.toggle('ho-zone-list', z === 'list');
             stage.classList.toggle('ho-zone-room', z === 'room');
             stage.classList.toggle('ho-zone-camera', z === 'camera');
@@ -1643,6 +1784,7 @@
             $('.ho-preview').toggleAttribute('data-homer-preview', z !== 'remote');
             $('.ho-rm-preview').toggleAttribute('data-homer-preview', z === 'remote');
             paintRoom();
+            paintPeople();
             updateLegend();
             if (z === 'room') revealRow();
         };
@@ -1810,8 +1952,14 @@
             eat(ev);
             const enter = k === 'Enter' || k === ' ';
             if (statusMessage()) { if (enter && !ev.repeat) statusOk(); return; }
-            if (zone === 'list') {
-                if (k === 'ArrowUp') selectRoom(sel - 1);
+            if (zone === 'people') {
+                // ▼ (or ▶) drops into the rooms; nothing here to press
+                if (k === 'ArrowDown' || k === 'ArrowRight') setZone('list');
+            } else if (zone === 'list') {
+                // ▲ from the first room goes up to who's home, where there is one
+                const up = k === 'ArrowUp';
+                if (up && sel === 0 && folks.length) setZone('people');
+                else if (up) selectRoom(sel - 1);
                 else if (k === 'ArrowDown') selectRoom(sel + 1);
                 else if ((k === 'ArrowRight' || enter) && rows.length && !ev.repeat) setZone('room');
             } else if (zone === 'room') {
@@ -1882,6 +2030,8 @@
                 if (rk) press(rk.dataset.rk);
                 return;
             }
+            // who's home: a click puts the focus on the band, nothing more
+            if (t.closest('.ho-people')) { if (folks.length) setZone('people'); return; }
             const pick = t.closest('.ho-cam-pick');
             if (pick) { openCamera(pick.dataset.cam, camFrom); return; }
             if (zone === 'camera' && t.closest('.ho-cam-main')) { closeCamera(); return; }
@@ -1941,6 +2091,7 @@
         const sync = () => {
             if (!alive) return;
             drawStatus();
+            drawPeople();
             const next = roomList();
             const sig = next.map(roomSig).join(',');
             const was = rooms.map(roomSig).join(',');
@@ -1964,8 +2115,9 @@
                 wanted = null;
                 if (w.camera && camList().includes(w.camera)) openCamera(w.camera, 'list');
                 else if (w.remote) remoteFromRoute(w.remote);
+                else if (w.people) focusPeople();
             }
-            if (!rooms.length && zone !== 'list') setZone('list');
+            if (!rooms.length && zone !== 'list' && zone !== 'people') setZone('list');
             updateLegend();
         };
         // #/rooms?remote=… (the quick panel's Remote): the player's room, on
@@ -2024,6 +2176,8 @@
             openCamera: (id) => { if (rooms.length) openCamera(id, zone === 'camera' ? camFrom : zone); else wanted = { camera: id }; },
             // #/rooms?remote=…
             openRemote: (id) => { if (rooms.length) remoteFromRoute(id); else wanted = { remote: id }; },
+            // the Actions strip's Who's home, with Rooms already up
+            focusPeople: () => { if (rooms.length) focusPeople(); else wanted = { people: true }; },
             teardown() {
                 alive = false;
                 offHA();
@@ -2037,6 +2191,7 @@
                 window.removeEventListener('resize', fit);
                 cancelBack();
                 lit.forEach((t) => clearTimeout(t));
+                clearInterval(peopleTimer);
                 clearInterval(clockTimer);
                 clearTimeout(toastTimer);
                 wxDetach();
@@ -2071,6 +2226,7 @@
 
     let shownCamera = null;
     let shownRemote = null;
+    let wantPeople = false; // Who's home, asked for from another screen
     const sync = () => {
         if (destroyed) return;
         const ours = isOurRoute() && !/homer-ha=signin/.test(currentRoute());
@@ -2086,11 +2242,14 @@
             if (camId && camId !== shownCamera) { shownCamera = camId; screen.openCamera(camId); }
             if (remote && remote !== shownRemote) { shownRemote = remote; screen.openRemote(remote); }
             if (!remote) shownRemote = null;
+            if (wantPeople) { wantPeople = false; if (screen.focusPeople) screen.focusPeople(); }
             return;
         }
         shownCamera = camId;
         shownRemote = remote;
-        const s = draw(camId ? { camera: camId } : remote ? { remote } : null);
+        const people = wantPeople;
+        wantPeople = false;
+        const s = draw(camId ? { camera: camId } : remote ? { remote } : people ? { people: true } : null);
         screen = s;
         ensureCss().then(() => { if (screen === s) s.show(); });
     };
@@ -2108,6 +2267,8 @@
         stepMedia, mediaButton, fanInfo, fanText, optionInfo, numberInfo, numberText, glance, glanceHtml,
         // the remote (Apple TV, Samsung TV)
         REMOTE_KEYS, remoteKeyLabel, remoteKeyIcon, remoteName, remoteNowLine,
+        // v0.4.19: who's home, the band at the top of both layouts
+        peopleList, peopleHtml, peopleSig, paintFaces, sinceText,
     };
     const draw = (from) => (phoneLayout() ? window.HomerRoomsPhone.create(PHONE_CTX, from) : createScreen(from));
 
@@ -2165,6 +2326,30 @@
     if (document.body) start();
     else document.addEventListener('DOMContentLoaded', start, { once: true });
 
+    // ---------- Who's home, from anywhere (shared/actions.js) ----------
+    //
+    // The band lives on Rooms, which is a couple of moves away from wherever
+    // you are; holding OK on the Apple TV's remote reaches it in one, from any
+    // screen. It's a global action for that reason — the only thing it does is
+    // open Rooms with the band focused.
+    const openPeople = () => {
+        suppressed = false;
+        if (screen && typeof screen.focusPeople === 'function' && isOurRoute()) { screen.focusPeople(); return; }
+        wantPeople = true;
+        if (isOurRoute()) { lastSig = ''; sync(); } else go('#/rooms');
+    };
+    const offPeopleAction = window.HomerActions ? window.HomerActions.provide(() => {
+        const list = peopleList();
+        if (!list.length) return [];
+        return [{
+            id: 'people',
+            icon: 'people',
+            label: 'Who\'s home',
+            sub: peopleSummary(list),
+            run: openPeople
+        }];
+    }, { global: true, id: 'people', title: 'Who\'s home' }) : () => {};
+
     window.HomerRooms = {
         version: VERSION,
         // open(): the Rooms screen (going to #/rooms if needed)
@@ -2188,6 +2373,8 @@
             if (isOurRoute() && screen && routeRemote() === id) { screen.openRemote(id); return; }
             go('#/rooms?remote=' + encodeURIComponent(id));
         },
+        // openPeople(): Rooms, with who's home focused (the Actions strip)
+        openPeople,
         // close(): reveal what's underneath until the route changes
         close() {
             if (!screen) return;
@@ -2199,6 +2386,7 @@
         destroy() {
             destroyed = true;
             closeScreen();
+            offPeopleAction();
             offLayout();
             observer && observer.disconnect();
             if (unsubscribe) safe(unsubscribe);

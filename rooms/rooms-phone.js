@@ -3,7 +3,9 @@
  * screen when shared/layout.js says it's a phone; both draw from the same
  * helpers (rooms.js's PHONE_CTX) and shared/homeassistant.js.
  *
- * A row of room chips at the top (Cameras first) picks one room at a time;
+ * Who's home comes first: a card a person — their picture, whether they're in,
+ * where they are and since when — the same band the TV screen draws above the
+ * rooms. Under it a row of room chips (Cameras first) picks one room at a time;
  * under it what's worth a glance (the temperature, a door left open), then
  * the room's thermostat (− and + for the temperature, the modes under it),
  * its scenes (tap to run), its lights (wall switches, then the bulbs: tap
@@ -61,6 +63,10 @@
                 </div>
             </div>
             <div class="op-main">
+                <div class="op-people" aria-label="Who's home">
+                    <div class="op-people-head">${icon('people')}Who's home</div>
+                    <div class="op-people-track"></div>
+                </div>
                 <div class="op-chips"><div class="op-chips-track"></div></div>
                 <div class="op-scroll">
                     <div class="op-col">
@@ -122,6 +128,38 @@
 
         const room = () => rooms.find((r) => r.id === roomId) || rooms[0] || null;
         const stopStills = () => { stills.forEach((s) => s()); stills = []; };
+
+        // ---------- Who's home ----------
+        // The same band the TV screen puts above the rooms, at phone size and
+        // at the top of the screen: a card a person, scrolling sideways when
+        // the house has more than fit. Nothing on it is a tap target — it says
+        // where everybody is and that's the whole of it. Without Home
+        // Assistant there is nobody to show and the band isn't drawn.
+        const peopleEl = $('.op-people');
+        const peopleTrack = $('.op-people-track');
+        let folks = [];
+        let folksSig = null; // no list drawn yet
+        const drawPeople = () => {
+            folks = ctx.statusMessage() ? [] : ctx.peopleList();
+            const sig = ctx.peopleSig(folks);
+            if (sig !== folksSig) {
+                folksSig = sig;
+                peopleTrack.innerHTML = ctx.peopleHtml(folks);
+                ctx.paintFaces(peopleTrack);
+            }
+            peopleEl.classList.toggle('on', folks.length > 0);
+            paintPeople();
+        };
+        const paintPeople = () => {
+            peopleTrack.querySelectorAll('.ho-person').forEach((n, i) => {
+                const p = folks[i];
+                if (!p) return;
+                const s = n.querySelector('.ho-person-since');
+                const t = ctx.sinceText(p.since);
+                if (s.textContent !== t) s.textContent = t;
+            });
+        };
+        const peopleTimer = setInterval(paintPeople, 30000);
 
         // ---------- Room chips ----------
         const drawChips = () => {
@@ -828,6 +866,7 @@
         const sync = () => {
             if (!alive) return;
             drawStatus();
+            drawPeople();
             const next = ctx.roomList();
             const sig = (list) => list.map(ctx.roomSig).join(',');
             if (sig(next) !== sig(rooms)) {
@@ -872,6 +911,9 @@
             state: () => ({ room: room() ? room().id : null, camera: cam, remote: rmId }),
             openCamera: (id) => { if (rooms.length) openCamera(id); else wantCamera = id; },
             openRemote: (id) => { if (rooms.length) remoteFromRoute(id); else wantRemote = id; },
+            // the Actions strip's Who's home: it's already at the top here,
+            // so all this has to do is put it back in view
+            focusPeople: () => { $('.op-scroll').scrollTop = 0; },
             teardown() {
                 alive = false;
                 offHome();
@@ -881,6 +923,7 @@
                 stopRepeat();
                 lit.forEach((t) => clearTimeout(t));
                 clearTimeout(toastTimer);
+                clearInterval(peopleTimer);
                 clearInterval(dockTimer);
                 offPlayer();
                 document.removeEventListener('keydown', onKey, true);

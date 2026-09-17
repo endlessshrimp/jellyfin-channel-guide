@@ -280,7 +280,8 @@ that's just a column:
 of room chips at the top (one room at a time) instead of a list you open.
 Its data is `shared/homeassistant.js`, and its helpers (a room's summary, a
 light's or thermostat's state, camera stills) come from `rooms/rooms.js`
-through `ctx`, as Weather's do. Two things worth copying:
+through `ctx`, as Weather's do. **Who's home** sits above the chips — see
+[Who's home](#whos-home) below. Two things worth copying:
 
 - **Dimming with a finger**: the bar is a 26px-tall touch target around an
   8px track (`touch-action: none`), and the new brightness is sent once, when
@@ -440,10 +441,20 @@ changes shape.
   The ✕ is a 38px control inside a 44px-tall strip; the rest of the strip is
   a tap that opens Weather for a weather alert.
 
-`home/home-phone.js` draws the same **who's home** row TV Home draws — it's
-`home/home.js`'s `peopleRow(box)`, handed over in the phone context — under
-the date, above the hub buttons, scrolling sideways rather than wrapping so it
-stays one line however many people the house has.
+## Who's home
+
+`rooms/rooms-phone.js` draws the same **who's home** band the TV Rooms screen
+draws — `rooms/rooms.js`'s `peopleList()`, `peopleHtml()`, `peopleSig()`,
+`paintFaces()` and `sinceText()`, handed over in `PHONE_CTX` — at the very
+top of Rooms, above the room chips. A card a person: their picture or their
+initials at 44px, their name, where they are and how long they've been there.
+It scrolls sideways rather than wrapping, so it stays one line however many
+people the house has, and it isn't drawn at all when there's nobody to show.
+Nothing on it is a tap target: it says where everybody is and that's all it
+does, on a phone as on a TV. (Until v0.4.18 this was a row in Home's top bar
+beside the clock, where a TV remote could never reach it.)
+
+![Who's home at the top of Rooms, on a phone](screenshots/rooms-people-phone.jpg)
 
 ## The shared TV shell: `shared/shell.css`
 
