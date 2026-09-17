@@ -706,6 +706,20 @@ img.hb-broken { visibility: hidden; }
     text-overflow: ellipsis;
 }
 
+/* a finished game, shown for the score rather than as a watch pick — no
+   channel badge (scoreCard already leaves it out), everything smaller */
+.hb-score.small { padding: 8px 12px; border-radius: 12px; }
+.hb-score.small .hb-score-top { height: 20px; font-size: 14px; margin-bottom: 3px; }
+.hb-score.small .hb-score-team { height: 32px; gap: 8px; padding-left: 10px; }
+.hb-score.small .hb-score-team::before { top: 6px; bottom: 6px; width: 4px; }
+.hb-score.small .hb-score-logo,
+.hb-score.small .hb-score-logo img { width: 24px; height: 24px; max-width: 24px; max-height: 24px; }
+.hb-score.small .hb-score-rank { font-size: 13px; }
+.hb-score.small .hb-score-name { font-size: 16px; }
+.hb-score.small .hb-score-rec { font-size: 12px; }
+.hb-score.small .hb-score-pts { font-size: 22px; }
+.hb-score.small .hb-score-note { font-size: 13px; margin-top: 3px; }
+
 /* ---------- Story (image) card ---------- */
 
 .hb-story {
@@ -1293,6 +1307,13 @@ img.hb-broken { visibility: hidden; }
 .hb-phone .hb-score-rank { font-size: 13px; }
 .hb-phone .hb-score-pts { font-size: 24px; }
 .hb-phone .hb-score-note { font-size: 13px; }
+.hb-phone .hb-score.small { padding: 6px 10px; }
+.hb-phone .hb-score.small .hb-score-top { height: 16px; font-size: 11px; }
+.hb-phone .hb-score.small .hb-score-team { height: 26px; gap: 6px; }
+.hb-phone .hb-score.small .hb-score-logo,
+.hb-phone .hb-score.small .hb-score-logo img { width: 20px; height: 20px; max-width: 20px; max-height: 20px; }
+.hb-phone .hb-score.small .hb-score-name { font-size: 14px; }
+.hb-phone .hb-score.small .hb-score-pts { font-size: 18px; }
 
 .hb-phone .hb-story.wide { flex-direction: column; }
 .hb-phone .hb-story.wide .hb-story-pic { width: auto; aspect-ratio: 16 / 9; }

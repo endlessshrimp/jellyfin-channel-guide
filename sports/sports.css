@@ -305,8 +305,24 @@
 .hb-sports .sp-grid { gap: 16px; }
 .hb-sports .sp-two { gap: 16px; }
 
+/* the light label between a scores section's upcoming/live grid and its
+   finished games below — a boundary, not another heading */
+.hb-sports .sp-fin-head {
+    margin: 4px 2px 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.hb-sports .sp-fin-head:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
 /* ---------- Phone ---------- */
 
+.hb-phone.hb-sports .sp-fin-head { font-size: 12px; margin: 2px 2px 8px; padding-top: 10px; }
 .hb-phone.hb-sports .sp-match { height: 196px; padding: 10px 12px; border-radius: 14px; }
 .hb-phone.hb-sports .sp-match-top { height: 26px; gap: 8px; }
 .hb-phone.hb-sports .sp-fav { font-size: 12px; padding: 2px 7px; }

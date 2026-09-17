@@ -37,6 +37,39 @@
   the album wall around — its box keeps its slot in the flow; only what's
   drawn inside it gets smaller. Respects `prefers-reduced-motion`. Replaces
   the old fixed `.mup-mini` bar entirely.
+## Unreleased
+
+- **Sports: a game's channel is now the guide's answer, not a guess.**
+  `shared/hub.js`'s `forNetworkNow(names)` returned the *first* lineup
+  channel whose name matched a network — one channel per network, no notion
+  of which regional feed carries which game. Two MLB games both on "FOX"
+  tonight both showed FOX 4 Dallas (1004), even though only one of them was
+  actually the game airing there. Fixed with a new resolver
+  (`sports/sports-data.js` `resolveChannels()`): it collects *every* lineup
+  channel a network could mean (`HomerHub.channels.forNetworkAllNow`), asks
+  Jellyfin's guide (`channels.programsFor`, one batched `/LiveTv/Programs`
+  call per screen, not one per game or per channel) what each candidate is
+  showing during the game's window, and keeps the one whose listing actually
+  names both teams — in the title, episode title, or (where Jason's guide
+  source puts the matchup) the synopsis. Exactly one match resolves the
+  channel; no listing yet (his EPG runs about 3 days out), a mismatch, or
+  more than one plausible channel all leave the game a named network with no
+  channel number — shown, never guessed, never tunable. A channel whose
+  listing is a repeat (Jellyfin's `IsRepeat`, or a title saying so) is
+  treated the same as no data: named, not tunable, even if it's the right
+  game. Also tightened the Rangers' own channel alias (`sports/sports.js`),
+  which matched a second "Texas Rangers (MLB feed)" channel with identical
+  listings and made every Rangers game look ambiguous once candidates
+  stopped being deduped down to one.
+- **A game only tunes when it's actually live.** Clicking an upcoming game's
+  card (which still names its channel) or a finished one's used to start a
+  stream anyway; now only `state === 'in'` does (`sports/sports.js`, the
+  score grid, the MLB live view, My Teams, and the ticker).
+- **Scores are two sections now: what's on or coming up, and what's already
+  over.** Finished games move to a smaller "Final" group below, read as
+  scores rather than a watch pick — no channel badge, no tune affordance.
+  Their cards are clickable and route-ready for a box-score page
+  (`#/sports?game=<id>`, not built yet) rather than doing nothing.
 
 ## v0.4.23
 

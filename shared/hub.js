@@ -50,7 +50,7 @@
  *                     channels, autoplay, base, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     if (window.HomerHub && typeof window.HomerHub.destroy === 'function') {
         window.HomerHub.destroy();
@@ -415,11 +415,59 @@
         const chans = await lineup();
         return chans.find((c) => String(c.Number) === String(n)) || null;
     };
+    // Every lineup channel that could plausibly carry a network (not just the
+    // first): the first of `names` for which any alias matches, and every
+    // channel any of that name's alias rows point at, plus an exact-name
+    // fallback. Sync, off the cached lineup — for callers (sports) that then
+    // ask the guide which of these is actually showing a given game.
+    const forNetworkAllNow = (names) => {
+        if (!lineupCache) return null;
+        for (const raw of [].concat(names || [])) {
+            const name = String(raw || '').trim();
+            if (!name) continue;
+            const seen = new Set();
+            const chans = [];
+            const add = (c) => { if (!seen.has(c.Id)) { seen.add(c.Id); chans.push(c); } };
+            for (const [np, cp] of ALIASES) {
+                if (!np.test(name)) continue;
+                lineupCache.filter((c) => cp.test(String(c.Name || ''))).forEach(add);
+            }
+            if (!chans.length) {
+                lineupCache.filter((c) => String(c.Name || '').toLowerCase() === name.toLowerCase()).forEach(add);
+            }
+            if (chans.length) return { name, chans };
+        }
+        return null;
+    };
+    // What a set of lineup channels are showing across a time window, in one
+    // batched (and cached) call: /LiveTv/Programs, chunked at 60 channel ids
+    // so the address stays sane. Used to tell apart regional feeds of the
+    // same network (they're different channels showing different games) and
+    // to catch a channel that's airing a replay rather than the real thing.
+    const programsFor = (chanIds, { from, to, ttl = 10 * MIN } = {}) => {
+        const server = getServer();
+        const ids = [...new Set([].concat(chanIds || []))].sort();
+        if (!server || !ids.length || !(from < to)) return Promise.resolve([]);
+        // rounded to a 15-minute grid so repeated polls for the same game
+        // reuse the same URL (and so the same fetchSoft cache entry)
+        const round = (t, up) => Math.round(t / (15 * MIN) + (up ? 0.5 : -0.5)) * (15 * MIN);
+        const min = new Date(round(from, false)).toISOString();
+        const max = new Date(round(to, true)).toISOString();
+        const headers = { Authorization: authHeader(server) };
+        const batches = [];
+        for (let k = 0; k < ids.length; k += 60) batches.push(ids.slice(k, k + 60));
+        return Promise.all(batches.map((b) => fetchSoft(
+            `/LiveTv/Programs?UserId=${server.UserId}&ChannelIds=${b.join(',')}&MinEndDate=${min}&MaxStartDate=${max}&SortBy=StartDate&EnableImages=false&EnableUserData=false&Fields=Overview,ChannelInfo&limit=1000`,
+            { ttl, timeout: 15000, headers }
+        ).catch(() => ({ Items: [] })))).then((rs) => rs.flatMap((r) => (r && r.Items) || []));
+    };
     const channels = {
         lineup: () => lineup().then((l) => { lineupCache = l; return l; }),
         byNumber,
         forNetwork,
         forNetworkNow,
+        forNetworkAllNow,
+        programsFor,
         alias,
         logoUrl,
         infoOf,
@@ -462,8 +510,10 @@
         //     start (Date), network, channel ({ number, name, ch }), note, priority,
         //     homeFirst (soccer: the home side on top), short (a shorter status),
         //     away / home: { abbr, name, short, logo, logoFb, score, rank, record, winner, color } }
-        scoreCard(g, { ok, big = false, league = '' } = {}) {
-            const card = el('div', 'hb-score hb-focusable' + (big ? ' big' : '') + (g.state === 'in' ? ' live' : '') + (g.priority ? ' fav' : ''));
+        // small: a finished game shown for the score, not as a watch pick —
+        // no channel/network badge, no "tune" affordance
+        scoreCard(g, { ok, big = false, small = false, league = '' } = {}) {
+            const card = el('div', 'hb-score hb-focusable' + (big ? ' big' : '') + (small ? ' small' : '') + (g.state === 'in' ? ' live' : '') + (g.priority ? ' fav' : ''));
             const pre = g.state === 'pre';
             const row = (t, other) => {
                 const lose = g.state === 'post' && other.winner && !t.winner;
@@ -477,7 +527,7 @@
             };
             const a = g.away || {};
             const h = g.home || {};
-            const net = g.channel
+            const net = small ? '' : g.channel
                 ? `<span class="hb-score-ch" title="Channel ${esc(g.channel.number)}">${icon('live_tv')}<b>${esc(g.channel.number)}</b><span>${esc(g.network || g.channel.name)}</span></span>`
                 : g.network ? `<span class="hb-score-net">${esc(g.network)}</span>` : '';
             card.innerHTML = `

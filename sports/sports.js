@@ -41,7 +41,7 @@
  * window.HomerSports = { version }
  */
 (() => {
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
     const MIN = 60000;
 
     const define = () => {
@@ -75,13 +75,43 @@
             ]
         };
 
-        // the Rangers' own channel, when the lineup has it
-        HUB.channels.alias(/^Rangers Sports Network$/i, /Rangers Sports Network|^Texas Rangers/i);
+        // the Rangers' own channel, when the lineup has it. Not `^Texas
+        // Rangers` alone — his lineup also carries a "Texas Rangers (MLB
+        // feed)" channel with identical listings (down to the same "Next
+        // game" placeholder), which the plural regional lookup below would
+        // otherwise treat as a second, equally-plausible candidate and call
+        // every Rangers game ambiguous.
+        HUB.channels.alias(/^Rangers Sports Network$/i, /Rangers Sports Network/i);
         HUB.channels.alias(/^(CW33|CW 33)$/i, /\(KDAF\)|^CW 33\b/i);
 
         // ---------- Pieces ----------
 
-        const tuneGame = (hub, g) => (g && g.channel ? () => hub.watch(g.channel.ch) : null);
+        // Only a *live* game tunes on click — an upcoming one just names its
+        // channel (when the guide's confirmed one), a finished one routes to
+        // its box score instead (see gameRoute). g.channel only ever exists
+        // when resolveChannels() found exactly one guide-confirmed match.
+        const tuneGame = (hub, g) => (g && g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null);
+        // A finished game's card routes to a box-score page (box scores,
+        // stats) that doesn't exist yet — Jason's building it separately.
+        // gameRoute is the address it'll read (?game=<id>) once it does.
+        // Tried actually setting location.hash to it first: harmless-looking,
+        // but shared/hub.js's route watcher and shared/loading.js's "moving
+        // between screens" splash both fire on any hash change, and since a
+        // query-string-only change never tears down or recreates this hub's
+        // screen, loading.js's splash never sees a new screen "settle" —
+        // after LATE_MS it gives up and shows "Couldn't open Sports" over a
+        // perfectly fine, already-open screen. So this stays off
+        // location.hash for now: it calls a future detail view's own hook if
+        // one's registered, and otherwise is a genuine no-op but for a toast
+        // (consistent with every other "OK, nothing to do yet" card here).
+        const gameRoute = (g) => `#/sports?game=${encodeURIComponent(g.id)}`;
+        const openGame = (ctx, g) => {
+            const detail = window.HomerSportsGameDetail;
+            if (detail && typeof detail.open === 'function') { detail.open(g, gameRoute(g)); return; }
+            ctx.toast('Box score isn’t built yet');
+        };
+        // what OK says when there's nothing to tune
+        const offMsg = (g) => (g.network ? `${g.network} · not tunable` : 'Not on TV here');
         const grid = (min = 330) => {
             const g = el('div', 'hb-grid sp-grid');
             g.style.gridTemplateColumns = `repeat(auto-fill, minmax(${min}px, 1fr))`;
@@ -89,14 +119,18 @@
         };
         const mlbSig = (g) => (g.mlb && g.state === 'in' ? [g.mlb.outs, g.mlb.balls, g.mlb.strikes, g.mlb.bases.join('')].join(',') : '');
         const sig = (games) => games.map((g) => [g.id, g.state, g.status, g.away.score, g.home.score, g.channel && g.channel.number, mlbSig(g)].join(':')).join('|');
+        // small: a finished game — its card routes to the box score instead
+        // of tuning anything
         const scoreCard = (ctx, g, opts = {}) => {
-            const act = tuneGame(ctx.hub, g);
-            const c = ui.scoreCard(g, Object.assign({ ok: act || (() => ctx.toast(g.network ? `On ${g.network}: not a channel we have` : 'Not on TV here')) }, opts));
+            const finished = g.state === 'post';
+            const act = finished ? () => openGame(ctx, g) : tuneGame(ctx.hub, g);
+            const c = ui.scoreCard(g, Object.assign({ ok: act || (() => ctx.toast(offMsg(g))), small: finished }, opts));
             c.dataset.key = 'g' + g.id;
-            if (!act) c.dataset.okLabel = '';
+            if (finished) c.dataset.okLabel = 'Box score';
+            else if (!act) c.dataset.okLabel = '';
             // baseball: who's on and how many out, which is the half of a
             // score ESPN never gave us (mlbCardLine is below)
-            if (g.mlb) mlbCardLine(c, g);
+            if (g.mlb && !finished) mlbCardLine(c, g);
             return c;
         };
         const newsGrid = (ctx, items, { cols = 3, tagFor } = {}) => {
@@ -142,7 +176,10 @@
 
         // ---------- Scores ----------
 
-        // a league's games: live and today first, then the rest of the window
+        // a league's games: live and today first, then the rest of the window.
+        // Split into what's on or coming up (the pick) and what's already
+        // over (smaller cards, below — this is a scores section for those,
+        // not a what-to-watch one).
         const scoresSection = (ctx, league, { title = 'Scores', limit = 18, filter = null, note = '' } = {}) => {
             let last = '';
             return liveSection(ctx, title, async (body, s) => {
@@ -151,6 +188,7 @@
                 const live = D.anyLive(games);
                 if (live) liveAny = true;
                 const shown = games.slice(0, limit);
+                await D.resolveChannels(shown.filter((g) => g.state !== 'post')).catch(() => null);
                 const nlive = games.filter((g) => g.state === 'in').length;
                 setNote(s, [nlive ? `${nlive} live` : '', note || (games.length ? `${games.length} game${games.length === 1 ? '' : 's'}` : '')].filter(Boolean).join(' · '));
                 const k = sig(shown);
@@ -158,9 +196,19 @@
                 last = k;
                 body.innerHTML = '';
                 if (!shown.length) { body.appendChild(ui.empty('No games right now', `${L[league].name}: nothing on the schedule around today`)); return; }
-                const g = grid();
-                shown.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
-                body.appendChild(g);
+                const upcoming = shown.filter((g) => g.state !== 'post');
+                const finished = shown.filter((g) => g.state === 'post');
+                if (upcoming.length) {
+                    const g = grid();
+                    upcoming.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
+                    body.appendChild(g);
+                }
+                if (finished.length) {
+                    body.appendChild(el('div', 'sp-fin-head', `Final${upcoming.length ? '' : ` · ${L[league].name}`}`));
+                    const g = grid(220);
+                    finished.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
+                    body.appendChild(g);
+                }
             }, { every: pace });
         };
 
@@ -326,8 +374,8 @@
                     </div>`).join('');
                 box.appendChild(p);
             }
-            const act = g && g.channel && g.state !== 'post' ? () => ctx.hub.watch(g.channel.ch) : null;
-            ctx.focusable(box, act || (() => ctx.toast(g && g.network ? `On ${g.network}: not a channel we have` : 'Not on TV here')),
+            const act = g && g.channel && g.state === 'in' ? () => ctx.hub.watch(g.channel.ch) : null;
+            ctx.focusable(box, act || (() => ctx.toast(g ? offMsg(g) : 'Not on TV here')),
                 act ? `Watch ${(g.network || g.channel.name)}` : '');
             box.dataset.key = 'live' + lv.pk;
             return box;
@@ -387,6 +435,7 @@
                     first = false;
                     return;
                 }
+                if (g.state !== 'post') await D.resolveChannels([g]).catch(() => null);
                 s.style.display = '';
                 s.querySelector('h2').textContent = g.state === 'in' ? 'Live now' : g.state === 'pre' ? 'Coming up' : 'Last time out';
                 setNote(s, live.length ? `${live.length} game${live.length === 1 ? '' : 's'} live` : `${games.filter((x) => x.state === 'pre').length} to come`);
@@ -615,8 +664,9 @@
                 <div class="sp-match-foot">${lastLine}${tv}</div>`;
             if (mlbRow) card.classList.add('has-mlb');
             void mine;
-            const act = g.channel && g.state !== 'post' ? () => ctx.hub.watch(g.channel.ch) : () => ctx.hub.showTab(f.league === 'epl' ? 'soccer' : f.league);
-            ctx.focusable(card, act, g.channel && g.state !== 'post' ? `Watch ${g.network || g.channel.name}` : `${L0 ? L0.label : ''}`);
+            const live = g.channel && g.state === 'in';
+            const act = live ? () => ctx.hub.watch(g.channel.ch) : () => ctx.hub.showTab(f.league === 'epl' ? 'soccer' : f.league);
+            ctx.focusable(card, act, live ? `Watch ${g.network || g.channel.name}` : `${L0 ? L0.label : ''}`);
             return card;
         };
         // most relevant first: live, then the soonest game, then the rest
@@ -635,6 +685,8 @@
                 const all = await Promise.all(D.FAVS.map((f) => D.teamGames(f).catch(() => ({ fav: f, last: null, next: null, live: null, team: {} }))));
                 all.sort(favOrder);
                 if (all.some((t) => t.live)) liveAny = true;
+                // just the four cards' games, not a favorite's whole schedule
+                await D.resolveChannels(all.map((t) => t.live || t.next || t.last).filter(Boolean)).catch(() => null);
                 // one extra request, for one game: the Rangers'
                 const tex = all.find((t) => t.fav.league === 'mlb');
                 const texGame = tex ? (tex.live || tex.next || tex.last) : null;
@@ -841,10 +893,12 @@
             const leagues = ['mlb', 'nfl', 'cfb', 'epl', 'ucl', 'nba', 'nhl'];
             const res = await Promise.all(leagues.map((k) => D.scores(k).catch(() => [])));
             const now = Date.now();
-            const segs = [];
             let live = false;
-            res.forEach((games, i) => {
-                const k = leagues[i];
+            // narrow to what the ticker actually shows *before* asking the
+            // guide about any of it — one batched resolve for everything on
+            // the ticker, not a fetch for the whole slate of every league
+            const picks = leagues.map((k, i) => {
+                const games = res[i];
                 if (D.anyLive(games)) live = true;
                 // what's worth a ticker: live, finals from the last day and a half,
                 // and games in the next two days (soccer: the next four)
@@ -853,28 +907,35 @@
                     || (g.state === 'post' && now - g.start < 36 * 3600000)
                     || (g.state === 'pre' && g.start - now < ahead * 86400000));
                 // NBA and NHL only when they're playing
-                if ((k === 'nba' || k === 'nhl') && !pick.some((g) => g.start - now < 86400000)) return;
-                if (!pick.length) return;
+                if ((k === 'nba' || k === 'nhl') && !pick.some((g) => g.start - now < 86400000)) return null;
+                return pick.length ? { k, pick: pick.slice(0, 40) } : null;
+            }).filter(Boolean);
+            await D.resolveChannels(picks.flatMap((p) => p.pick)).catch(() => null);
+            const segs = picks.map(({ k, pick }) => {
                 const Lg = L[k];
-                segs.push({
+                return {
                     label: Lg.label === 'College FB' ? 'NCAAF' : Lg.label === 'Premier League' ? 'Prem' : Lg.label === 'Champions League' ? 'UCL' : Lg.label,
                     logo: Lg.logo,
-                    items: pick.slice(0, 40).map((g) => HomerTicker.score(tickerGame(g), { act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }))
-                });
+                    items: pick.map((g) => HomerTicker.score(tickerGame(g), { act: g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null }))
+                };
             });
             // the favorites' own next (or live) game and last result, wherever
             // they are (a cup game, next week's NFL game): into My Teams
             const seen = new Set(segs.flatMap((sg) => sg.items.map((i) => i.key)));
             const tgs = await Promise.all(D.FAVS.map((f) => D.teamGames(f).catch(() => null)));
-            const extra = [];
+            const extraGames = [];
             tgs.filter(Boolean).forEach((tg) => {
                 [tg.live, tg.next, tg.last].filter(Boolean).forEach((g) => {
                     if (seen.has(g.id)) return;
                     if (g === tg.last && now - g.start > 4 * 86400000) return; // an old result
                     seen.add(g.id);
-                    if (g.state === 'in') live = true;
-                    extra.push(HomerTicker.score(tickerGame(g), { priority: true, act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }));
+                    extraGames.push(g);
                 });
+            });
+            await D.resolveChannels(extraGames).catch(() => null);
+            const extra = extraGames.map((g) => {
+                if (g.state === 'in') live = true;
+                return HomerTicker.score(tickerGame(g), { priority: true, act: g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null });
             });
             if (extra.length) segs.push({ label: 'My Teams', hidden: true, items: extra });
             D.noteLive(live);
