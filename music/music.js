@@ -69,7 +69,12 @@
     const M = () => window.HomerMusicModel;
     const RM = () => window.HomerRadioModel || null;
 
-    const TABS = [
+    // Every tab the screen can draw. Which of them it actually shows depends
+    // on the address: #/music is the library (everything but Radio) and
+    // #/radio is Radio on its own screen. One screen, two faces — the radio
+    // model, its favourites, "Play on…" and the now-playing strip are the same
+    // code either way.
+    const ALL_TABS = [
         { id: 'radio', label: 'Radio', radio: true, list: () => (RM() ? RM().soma().concat(RM().local()) : []) },
         { id: 'recent', label: 'Recently Added', list: () => M().recent() },
         { id: 'artists', label: 'Artists', list: () => M().artists() },
@@ -195,7 +200,11 @@
     // ---------- The screen ----------
 
     const createScreen = () => {
-        const root = el('div', 'homer-screen');
+        // Radio is the same screen at its own address: one tab, no tab row,
+        // and its own name in the corner.
+        const onRadio = radioRoute();
+        const TABS = ALL_TABS.filter((t) => !!t.radio === onRadio);
+        const root = el('div', 'homer-screen' + (onRadio ? ' mu-radio-only' : ''));
         root.id = 'mu-root';
         root.style.visibility = 'hidden'; // until music.css has loaded
         root.style.zIndex = Z;
@@ -205,7 +214,7 @@
         stage.innerHTML = `
             <div class="mu-wash"><div class="mu-wash-layer"></div><div class="mu-wash-layer"></div></div>
             <div class="mu-topbar">
-                <div class="mu-brand homer-home" role="button" title="Home (H)"><span class="mu-brand-mark">${icon('home')}</span>HOMER<span class="mu-brand-sub">Music</span></div>
+                <div class="mu-brand homer-home" role="button" title="Home (H)"><span class="mu-brand-mark">${icon('home')}</span>HOMER<span class="mu-brand-sub">${onRadio ? 'Radio' : 'Music'}</span></div>
                 <div class="mu-np-pill" role="button"></div>
                 <div class="mu-clock"><div class="mu-clock-time"></div><div class="mu-clock-date"></div></div>
             </div>
@@ -245,7 +254,7 @@
         // ----- state -----
         let view = 'browse'; // browse | album | artist | playing
         let viewFrom = [];
-        let tab = 'recent';
+        let tab = onRadio ? 'radio' : 'recent';
         let heroItem = null; // what the hero shows
         let pageItem = null; // the album/playlist/artist/genre a page is about
         let pageTracks = null; // its tracks (album, playlist)
@@ -439,11 +448,44 @@
             }).catch((err) => toast(err.message, true));
         };
         // ----- favorites -----
-        // Jellyfin's star, drawn wherever a track is. The model flips it at
-        // once and puts it back if the server disagrees, so nothing here waits.
+        // Two stars that look the same and are not the same thing. A Jellyfin
+        // track's star is Jellyfin's, the same one in every client; a radio
+        // station's is HOMER's own, per device (music/radio-model.js, in
+        // localStorage homer-radio-favorites), because Jellyfin has never
+        // heard of the station and answers 404 for it.
+        //
+        // What's in hand decides which, and this is the only place that
+        // decides: a station object from the radio model (kind 'station'), the
+        // live track the player made from one (live, with a stationId), or an
+        // id the radio model knows, are all the radio model's. Everything else
+        // is Jellyfin's, unchanged.
+        const stationOf = (it) => {
+            const R = RM();
+            if (!it) return null;
+            if (typeof it === 'string') return R ? R.station(it) : null; // radio ids only
+            if (typeof it !== 'object') return null;
+            if (it.kind === 'station') return it;
+            if (it.live) return (R && R.station(it.stationId || it.id)) || it;
+            return null;
+        };
+        const isFav = (it) => {
+            const st = stationOf(it);
+            if (st) return !!(RM() && RM().isFavorite(st));
+            return M().isFavorite(it);
+        };
+        const setFav = (it, on) => {
+            const st = stationOf(it);
+            if (!st) return M().setFavorite(it, on);
+            const R = RM();
+            if (!R) return Promise.reject(new Error('Radio isn\u2019t loaded yet'));
+            R.setFavorite(st, on);
+            return Promise.resolve(!!on);
+        };
+        // The star itself, drawn wherever a track or a station is. Both models
+        // flip it at once, so nothing here waits on a network.
         const starHtml = (it) => {
             if (!it || !it.id) return '';
-            const on = M().isFavorite(it);
+            const on = isFav(it);
             return `<span class="mu-star${on ? ' on' : ''}" data-fav="${esc(it.id)}" role="button"
                 aria-label="${on ? 'Remove from Favorites' : 'Add to Favorites'}">${icon(on ? 'star' : 'star_border')}</span>`;
         };
@@ -457,7 +499,7 @@
         // where the finger or the remote left it
         const paintStars = () => {
             stage.querySelectorAll('.mu-star').forEach((e) => {
-                const on = M().isFavorite(e._item || e.dataset.fav);
+                const on = isFav(e._item || e.dataset.fav);
                 e.classList.toggle('on', on);
                 e.innerHTML = icon(on ? 'star' : 'star_border');
                 e.setAttribute('aria-label', on ? 'Remove from Favorites' : 'Add to Favorites');
@@ -466,9 +508,12 @@
         const favOf = (e) => (e && e._fav) || null;
         const toggleFav = (it) => {
             if (!it || !it.id) return;
-            const want = !M().isFavorite(it);
+            const want = !isFav(it);
             toast(want ? `${it.name} — a favorite` : `${it.name} — no longer a favorite`);
-            M().setFavorite(it, want).catch((err) => toast(err.message, true));
+            setFav(it, want).catch((err) => toast(err.message, true));
+            // a station's star lives outside both the lists and Jellyfin's
+            // events, so repaint the ones on screen now
+            if (stationOf(it)) { paintStars(); updateLegend(); }
         };
 
         // Play on…: the same album, but out of a speaker. The picker owns its
@@ -547,6 +592,12 @@
         };
         const drawTabs = () => {
             const box = viewEl('browse').querySelector('.mu-tabs');
+            // Radio's stations (or a favourite) can land before the browse
+            // view has ever been drawn once — Jellyfin's own library load
+            // gates the first drawBrowse(), and nothing here should race
+            // ahead of it. render() draws everything, tabs included, once
+            // M().loaded() is true, so there is nothing to catch up on here.
+            if (!box) return;
             box.innerHTML = '';
             TABS.forEach((t) => {
                 const n = (t.list() || []).length;
@@ -571,6 +622,7 @@
         };
         const drawGrid = () => {
             const box = viewEl('browse').querySelector('.mu-content');
+            if (!box) return; // same race as drawTabs(): nothing to draw into yet
             const t = TABS.find((x) => x.id === tab) || TABS[0];
             if (t.radio) {
                 const keepTop = box.scrollTop;
@@ -832,8 +884,8 @@
                 if (can) btn('a:play', 'play_arrow', 'Play', () => playStation(it), true);
                 // when it can't play here, the speaker is the main way to hear it
                 btn('a:on', 'speaker', 'Play on…', () => playOnStation(it), !can);
-                btn('a:fav', R && R.isFavorite(it) ? 'star' : 'star_border',
-                    R && R.isFavorite(it) ? 'Starred' : 'Star it', () => { toggleFav(it); drawHero(); });
+                btn('a:fav', isFav(it) ? 'star' : 'star_border',
+                    isFav(it) ? 'Starred' : 'Star it', () => { toggleFav(it); drawHero(); });
             } else if (it) {
                 btn('a:play', 'play_arrow', 'Play', () => playItem(it, false), true);
                 btn('a:shuffle', 'shuffle', 'Shuffle', () => playItem(it, true));
@@ -1244,7 +1296,7 @@
             play.dataset.okLabel = s.playing ? 'Pause' : 'Play';
             const fav = q('[data-k="fav"]');
             if (fav) {
-                const on = M().isFavorite(t);
+                const on = isFav(t);
                 fav.innerHTML = icon(on ? 'star' : 'star_border');
                 fav.classList.toggle('star-set', on);
                 fav.dataset.okLabel = on ? 'Unfavorite' : 'Favorite';
@@ -1332,7 +1384,10 @@
         };
         const offModel = M().onChange(onModel);
         // Radio is its own model, loaded beside the library
-        const offRadio = RM() ? RM().onChange(() => {
+        const offRadio = RM() ? RM().onChange((what) => {
+            // a station's star changed: the stars on screen, not the lists
+            if (what === 'favorites') { paintStars(); updateLegend(); }
+            if (view === 'playing') { paintPlaying(); return; }
             if (view !== 'browse') return;
             drawTabs();
             if (tab !== 'radio') return;
@@ -1416,7 +1471,7 @@
             if (s.track && view !== 'playing') items.push({ key: '▶', label: 'Now playing', action: 'np' });
             const favIt = favOf(focused) || subject();
             if (favIt && favIt.id) {
-                items.push({ key: 'F', label: M().isFavorite(favIt) ? 'Unfavorite' : 'Favorite', action: 'fav' });
+                items.push({ key: 'F', label: isFav(favIt) ? 'Unfavorite' : 'Favorite', action: 'fav' });
             }
             const onRadio = view === 'browse' && tab === 'radio';
             if (view === 'playing' && !s.live) items.push({ key: 'S', label: 'Shuffle', action: 'shuffle' }, { key: 'R', label: 'Repeat', action: 'repeat' });
@@ -1571,6 +1626,14 @@
                 toggleFav(st._item || M().find(st.dataset.fav));
                 return;
             }
+            // the mark and HOMER wordmark go Home; the screen's own name next
+            // to it (Music or Radio) is the desktop's equivalent of the
+            // phone's screen-home button — back to the browse wall, not Home
+            if (ev.target.closest('.mu-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.mu-brand')) { goHome(); return; }
             if (ev.target.closest('.mu-np-pill')) { showView('playing'); return; }
             if (ev.target.closest('.mu-preview')) { const p = HP(); if (p && p.fullscreen) p.fullscreen(); return; }
@@ -1656,7 +1719,7 @@
             }
             const favIt = favOf(focused) || sub;
             if (favIt && favIt.id) {
-                const on = M().isFavorite(favIt);
+                const on = isFav(favIt);
                 out.push({
                     id: 'fav',
                     key: 'F',
@@ -1669,7 +1732,23 @@
             if (sub) out.push({ id: 'mix', key: 'I', icon: 'radio', label: 'Instant Mix', sub: sub.name, run: () => instantMix(sub) });
             if (s.track && view !== 'playing') out.push({ id: 'np', icon: 'graphic_eq', label: 'Now playing', run: () => showView('playing') });
             return out;
-        }, { id: 'music', title: 'Music' }) : () => {};
+        }, { id: 'music', title: onRadio ? 'Radio' : 'Music' }) : () => {};
+
+        // The top of this screen (HomerLayout.setScreenHome): the phone's top
+        // bar name and the menu's own Music (or Radio) item both come back
+        // here. An open picker goes first, then an album, artist or Now
+        // playing; the browse wall is the top and says so, so nothing claims a
+        // press that has nowhere to go.
+        const atTop = () => view === 'browse' && !(PO() && PO().isOpen());
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (PO() && PO().isOpen()) { PO().close(); return true; }
+                if (view === 'browse') return false;
+                viewFrom = [];
+                showView('browse', { back: true });
+                return true;
+            }, { atTop })
+            : () => {};
 
         startView();
         syncDocked();
@@ -1677,10 +1756,12 @@
 
         return {
             phone: false,
+            radio: onRadio,
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
                 if (PO()) PO().close();
+                offScreenHome();
                 offActions();
                 // leaving Music does NOT stop the music: that's the point.
                 offModel();
@@ -1740,7 +1821,9 @@
     let suppressed = false;
     let destroyed = false;
 
-    const isOurRoute = () => /^#!?\/music(\?|$)/i.test(currentRoute());
+    const isOurRoute = () => /^#!?\/(music|radio)(\?|$)/i.test(currentRoute());
+    // #/radio: the same screen, drawn as Radio
+    const radioRoute = () => /^#!?\/radio(\?|$)/i.test(currentRoute());
 
     const closeScreen = () => {
         if (!screen) return;
@@ -1751,7 +1834,9 @@
 
     const phoneLayout = () => !!(window.HomerLayout && window.HomerMusicPhone && window.HomerLayout.usePhone('music'));
     const PHONE_CTX = { goHome, goBack, go, docked, esc, icon, artImg, metaOf, subOf };
-    const draw = () => (phoneLayout() ? window.HomerMusicPhone.create(PHONE_CTX) : createScreen());
+    const draw = () => (phoneLayout()
+        ? window.HomerMusicPhone.create(Object.assign({ radio: radioRoute() }, PHONE_CTX))
+        : createScreen());
 
     const sync = () => {
         if (destroyed) return;
@@ -1761,6 +1846,8 @@
             closeScreen();
             return;
         }
+        // #/music <-> #/radio is a different face of the same screen: redraw
+        if (screen && screen.radio !== undefined && screen.radio !== radioRoute()) closeScreen();
         if (screen) { screen.sync(); return; }
         const s = draw();
         screen = s;

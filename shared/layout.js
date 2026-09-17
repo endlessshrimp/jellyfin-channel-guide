@@ -222,7 +222,7 @@
     // (#/music?album=…, #/rooms?remote=…, #/books?id=…), so dropping it is
     // the top of that screen. Jellyfin's own routes carry what they need in
     // the query (#/movies?topParentId=…), so they're not in here.
-    const OWN_SCREEN = /^#!?\/(weather|rooms|cameras|planes|sports|news|books|music|playing)(\?|$)/i;
+    const OWN_SCREEN = /^#!?\/(weather|rooms|cameras|planes|sports|news|books|music|radio|playing)(\?|$)/i;
     // The last resort, for a screen that keeps its sub-views to itself (they're
     // in no route, so there's nothing to strip) and hasn't registered a
     // setScreenHome: rebuild its module, which opens it at its top. It costs a
@@ -232,7 +232,7 @@
     // reach it; flat screens (Weather, Now Playing, Home) have no sub-views,
     // so they're not in here and their name stays a plain label.
     const SCREEN_MODULES = [
-        [/^#!?\/music(\?|$)/i, 'HomerMusic']
+        [/^#!?\/(music|radio)(\?|$)/i, 'HomerMusic']
     ];
     const moduleFor = (h) => {
         const hit = SCREEN_MODULES.find(([re]) => re.test(h));
@@ -335,6 +335,7 @@
         if (/^#\/weather(\?|$)/.test(h)) return { tab: null, name: 'Weather' };
         if (/^#\/rooms(\?|$)/.test(h)) return { tab: null, name: 'Rooms' };
         if (/^#\/cameras(\?|$)/.test(h)) return { tab: null, name: 'Cameras' };
+        if (/^#\/radio(\?|$)/.test(h)) return { tab: null, name: 'Radio' };
         if (/^#\/planes(\?|$)/.test(h)) return { tab: null, name: 'Planes' };
         if (/^#\/sports(\?|$)/.test(h)) return { tab: null, name: 'Sports' };
         if (/^#\/news(\?|$)/.test(h)) return { tab: null, name: 'News' };

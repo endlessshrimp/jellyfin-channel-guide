@@ -263,6 +263,18 @@
         tick();
         const clockTimer = setInterval(tick, 1000);
         const wxDetach = window.HomerWeather ? HomerWeather.attach($('.hm-clock')) : () => {};
+        // Weather isn't in the menu any more — the list only has so much room
+        // a sofa can read — so the bug in the top bar is the way to the
+        // forecast, and the top bar had no focus path at all. It has one now:
+        // the bug is one of Home's focusables, ▶ out of the Search box lands
+        // on it and ◀ goes back. (Who's home was moved off this bar for
+        // exactly the want of this; the Actions strip carries Weather too, for
+        // a remote that never touches Search.)
+        const wxEl = $('.homer-wx');
+        if (wxEl) {
+            wxEl.classList.add('hm-focusable');
+            wxEl.dataset.focus = 'weather';
+        }
 
         // ---------- Focus (spatial, like a remote) ----------
         // Every selectable thing carries a .hm-focusable class; arrows pick the
@@ -406,7 +418,13 @@
 
         // ---------- Search ----------
         const searchInput = $('.hm-search input');
-        const focusSearch = () => { searchInput.focus(); searchInput.select(); };
+        // the caret is in the box now, so nothing on the stage is the focus:
+        // drop the ring rather than leaving two things looking focused
+        const focusSearch = () => {
+            if (focused) { focused.classList.remove('hm-focus'); focused = null; }
+            searchInput.focus();
+            searchInput.select();
+        };
         const runSearch = () => {
             const q = searchInput.value.trim();
             if (q) route(`#/search?query=${encodeURIComponent(q)}`);
@@ -574,7 +592,24 @@
             if (ev.target === searchInput) {
                 if (k === 'Enter') { ev.preventDefault(); runSearch(); }
                 else if (k === 'Escape' || k === 'ArrowDown') { ev.preventDefault(); searchInput.blur(); setFocus(menuFirst()); }
+                // ▶ from the end of what you've typed (or from an empty box)
+                // crosses to the weather; anywhere else it's still the caret
+                else if (k === 'ArrowRight' && wxEl
+                    && searchInput.selectionStart === searchInput.value.length
+                    && searchInput.selectionStart === searchInput.selectionEnd) {
+                    ev.preventDefault();
+                    searchInput.blur();
+                    setFocus(wxEl);
+                }
                 ev.stopPropagation();
+                return;
+            }
+            // ◀ off the weather goes back to Search; ▼ drops into the menu
+            if (focused && focused === wxEl && (k === 'ArrowLeft' || k === 'ArrowDown')) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (k === 'ArrowLeft') focusSearch();
+                else setFocus(menuFirst());
                 return;
             }
             const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
@@ -633,6 +668,7 @@
         // the remote should open the Guide, which is what it does without one.
         const offActions = window.HomerActions ? window.HomerActions.provide(() => {
             const out = [{ id: 'search', key: '/', icon: 'search', label: 'Search', run: focusSearch }];
+            // (Weather is a global entry of its own: forecast/forecast.js)
             if (previewing()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: goFullscreen });
             return out;
         }, { id: 'home', title: 'Home' }) : () => {};

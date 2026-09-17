@@ -3,7 +3,7 @@
  *
  * Jellyfin Web routes before HOMER does, and it knows none of HOMER's own
  * pages (#/weather, #/rooms, #/cameras, #/planes, #/sports, #/news, #/books,
- * #/music, #/playing). So it answers every one of them with its own "Page not
+ * #/music, #/radio, #/playing). So it answers every one of them with its own "Page not
  * found", and titles the tab that, for as long as HOMER's files take to
  * arrive: a second or two warm, longer on a cold load, and every single
  * launch in the Apple TV app, where the web view starts empty.
@@ -50,6 +50,7 @@
         [/^#\/news(\?|$)/, 'News'],
         [/^#\/books(\?|$)/, 'Books'],
         [/^#\/music(\?|$)/, 'Music'],
+        [/^#\/radio(\?|$)/, 'Radio'],
         [/^#\/playing(\?|$)/, 'Now Playing']
     ];
     const nameFor = (hash) => {

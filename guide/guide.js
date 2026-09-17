@@ -52,6 +52,15 @@
     const CHAN_COL = 300;
     const PLACEHOLDER = /\(\w+\. \d\d:\d\d - \d\d:\d\d\)$/;
     const BTN_CLASS = 'headerChannelGuideButton';
+    // Live TV is one menu item over the guide and the DVR. The guide is the
+    // first of its tabs; the other three are recordings/recordings.js, which
+    // draws the same strip, so the two halves read as one screen.
+    const LIVE_TABS = [
+        { id: 'guide', label: 'Guide' },
+        { id: 'recorded', label: 'Recorded' },
+        { id: 'scheduled', label: 'Scheduled' },
+        { id: 'series', label: 'Series' }
+    ];
 
     // ---------- Guide size ----------
     // Standard is the guide as it has always been: five channels and three
@@ -383,7 +392,10 @@
 
         stage.innerHTML = `
             <div class="cg-topbar">
-                <div class="cg-brand homer-home" role="button" title="Home (H)"><span class="cg-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="cg-brand-sub">GUIDE</span></div>
+                <div class="cg-brand homer-home" role="button" title="Home (H)"><span class="cg-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER</div>
+                <div class="homer-screen-tabs cg-lt" role="tablist" aria-label="Live TV">${LIVE_TABS.map((t) => `
+                    <button type="button" class="homer-screen-tab${t.id === 'guide' ? ' on' : ''}" role="tab"
+                        aria-selected="${t.id === 'guide'}" data-lt="${t.id}">${esc(t.label)}</button>`).join('')}</div>
                 <label class="cg-search">
                     <span class="material-icons cg-search-icon" aria-hidden="true">search</span>
                     <input class="cg-search-input" type="text" placeholder="Filter channels or shows" autocomplete="off" spellcheck="false" aria-label="Filter channels or shows">
@@ -425,7 +437,11 @@
                 <span data-action="country-next" class="cg-legend-grid"><span class="cg-key">C</span>Country</span>
                 <span class="cg-legend-cats" hidden><span class="cg-key">◀▶</span>Filters</span>
                 <span class="cg-legend-cats" hidden><span class="cg-key">OK</span>Choose</span>
+                <span class="cg-legend-cats" hidden><span class="cg-key">▲</span>Live TV tabs</span>
                 <span class="cg-legend-cats" hidden><span class="cg-key">▼</span>Channels</span>
+                <span class="cg-legend-lt" hidden><span class="cg-key">◀▶</span>Guide · Recorded · Scheduled · Series</span>
+                <span class="cg-legend-lt" hidden><span class="cg-key">OK</span>Open</span>
+                <span class="cg-legend-lt" hidden><span class="cg-key">▼</span>Back down</span>
                 <span class="spacer"></span>
                 <span data-action="actions"><span class="cg-key">M</span>Actions</span>
                 <span data-action="home"><span class="cg-key">H</span>Home</span>
@@ -547,7 +563,8 @@
         // above it. ▲ off the top channel goes up into the chips, ▼ comes back
         // to the same program. (The keyboard's [ ] and C still work from
         // either zone, so nothing changes for a keyboard.)
-        let zone = 'grid'; // grid | cats
+        let zone = 'grid'; // grid | cats | tabs
+        let ltFocus = 0; // which Live TV tab the remote is on, in the 'tabs' zone
         let catFocus = 0;
         const vpos = (r) => order.indexOf(r);
         fit(); // after `rows` exists: fit() relayouts the grid when the width changes
@@ -891,12 +908,15 @@
         // the grid's hints and the filter row's swap places with the zone
         const legendGrid = [...stage.querySelectorAll('.cg-legend .cg-legend-grid')];
         const legendCats = [...stage.querySelectorAll('.cg-legend .cg-legend-cats')];
+        const legendLt = [...stage.querySelectorAll('.cg-legend .cg-legend-lt')];
         const recVerb = (c) => (!isSet(c) ? 'Record' : recordingNow(c) ? 'Stop recording' : 'Cancel recording');
         const updateLegend = () => {
             const inCats = zone === 'cats';
-            legendGrid.forEach((x) => { x.hidden = inCats; });
+            const inTabs = zone === 'tabs';
+            legendGrid.forEach((x) => { x.hidden = inCats || inTabs; });
             legendCats.forEach((x) => { x.hidden = !inCats; });
-            if (inCats) return;
+            legendLt.forEach((x) => { x.hidden = !inTabs; });
+            if (inCats || inTabs) return;
             nowItem.hidden = nowInView();
             const cur = current();
             const c = cur && cur.cell;
@@ -1419,6 +1439,7 @@
             if (!chips.length || zone === 'cats') return;
             zone = 'cats';
             catFocus = Math.max(0, chips.findIndex((b) => b.classList.contains('on'))); // start on what's applied
+            markLt();
             markChips();
             updateLegend();
         };
@@ -1441,6 +1462,43 @@
             if (b.dataset.cat) setCategory(b.dataset.cat);
             else if (b.dataset.country) setCountry(b.dataset.country); // rebuilds the row
             markChips();
+        };
+
+        // ----- the Live TV tabs (Guide · Recorded · Scheduled · Series) -----
+        // The guide is the first of them; the other three are the DVR screen,
+        // which draws the same strip. ▲ out of the filter row reaches them,
+        // ▼ comes back, OK opens one.
+        const ltChips = () => [...stage.querySelectorAll('.cg-lt .homer-screen-tab')];
+        const markLt = () => ltChips().forEach((b, i) => b.classList.toggle('foc', zone === 'tabs' && i === ltFocus));
+        const enterLt = () => {
+            if (zone === 'tabs' || !ltChips().length) return;
+            zone = 'tabs';
+            ltFocus = 0; // the tab you're on
+            markLt();
+            markChips();
+            updateLegend();
+        };
+        const leaveLt = () => {
+            if (zone !== 'tabs') return;
+            zone = 'cats';
+            markLt();
+            markChips();
+            updateLegend();
+        };
+        const moveLt = (d) => {
+            ltFocus = Math.max(0, Math.min(ltChips().length - 1, ltFocus + d));
+            markLt();
+        };
+        const openDvr = (tab) => {
+            const R = window.HomerRecordings;
+            close({ returnToLiveTv: false });
+            if (R && typeof R.open === 'function') R.open(tab);
+            else go('#/livetv?tab=3');
+        };
+        const runLt = () => {
+            const t = LIVE_TABS[ltFocus];
+            if (!t || t.id === 'guide') { leaveLt(); return; } // already here
+            openDvr(t.id);
         };
 
         const clearFilter = () => {
@@ -1475,6 +1533,17 @@
                 }
                 return;
             }
+            // up in the Live TV tabs: the arrows and OK belong to the strip
+            if (zone === 'tabs' && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(k)) {
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                if (ev.repeat && (k === 'Enter' || k === ' ')) return;
+                if (k === 'ArrowLeft') moveLt(-1);
+                else if (k === 'ArrowRight') moveLt(1);
+                else if (k === 'Enter' || k === ' ') runLt();
+                else if (k !== 'ArrowUp') leaveLt(); // nothing above the tabs
+                return;
+            }
             // up in the filter row: the arrows and OK belong to the chips
             if (zone === 'cats' && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(k)) {
                 ev.preventDefault();
@@ -1483,7 +1552,8 @@
                 if (k === 'ArrowLeft') moveChip(-1);
                 else if (k === 'ArrowRight') moveChip(1);
                 else if (k === 'Enter' || k === ' ') runChip();
-                else if (k !== 'ArrowUp') leaveCats(); // nothing above the filters
+                else if (k === 'ArrowUp') enterLt(); // above the filters: the Live TV tabs
+                else leaveCats();
                 return;
             }
             if (k === '[' || k === ']') {
@@ -1629,6 +1699,12 @@
         root.addEventListener('mousemove', onPointerMove, { passive: true });
         $('.cg-legend').addEventListener('click', onLegendClick);
         $('.cg-brand').addEventListener('click', () => goHome());
+        $('.cg-lt').addEventListener('click', (ev) => {
+            const b = ev.target.closest('.homer-screen-tab');
+            if (!b) return;
+            ltFocus = Math.max(0, ltChips().indexOf(b));
+            runLt();
+        });
 
         // ---------- Live preview ----------
         // While something is playing (full screen underneath, or in the browser's

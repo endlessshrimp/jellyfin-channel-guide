@@ -327,11 +327,24 @@
         return fullInflight;
     };
 
+    const openScreen = () => {
+        const hp = window.HomerPlayer;
+        if (window.HomerForecast && typeof window.HomerForecast.open === 'function') window.HomerForecast.open();
+        else if (hp && typeof hp.go === 'function') hp.go('#/weather');
+        else location.hash = '#/weather';
+    };
+
     const build = (clockEl) => {
         const group = document.createElement('div');
         group.className = 'homer-wx-group';
+        // The bug is the way into the Weather screen now that Weather has come
+        // off the main menu, so it is a real button: a click opens the
+        // forecast, Tab reaches it in a browser, and Enter or Space works it.
+        // A screen that drives a remote adds the bug to its own focus order as
+        // well (home/home.js does), and shared/actions.js carries a global
+        // Weather entry for a remote with no pointer at all.
         group.innerHTML = `
-            <div class="homer-wx">
+            <div class="homer-wx" role="button" tabindex="0" aria-label="Weather">
                 <img class="homer-wx-icon" alt="" draggable="false">
                 <div class="homer-wx-text">
                     <div class="homer-wx-temp"></div>
@@ -342,15 +355,21 @@
         clockEl.parentNode.insertBefore(group, clockEl);
         group.appendChild(clockEl);
         const q = (s) => group.querySelector(s);
+        const wx = q('.homer-wx');
         // the bug opens the Weather screen
-        q('.homer-wx').addEventListener('click', (ev) => {
+        wx.addEventListener('click', (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
-            const hp = window.HomerPlayer;
-            if (window.HomerForecast && typeof window.HomerForecast.open === 'function') window.HomerForecast.open();
-            else if (hp && typeof hp.go === 'function') hp.go('#/weather');
-            else location.hash = '#/weather';
+            openScreen();
         });
+        wx.addEventListener('keydown', (ev) => {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            openScreen();
+        });
+        // a screen's own focus system (home/home.js) presses it through this
+        wx._act = openScreen;
         return {
             group, clockEl,
             wx: q('.homer-wx'), img: q('.homer-wx-icon'), temp: q('.homer-wx-temp'),
@@ -372,6 +391,11 @@
             };
         },
         refresh: load,
+        // open the Weather screen, from wherever
+        open: openScreen,
+        // what the bugs are showing right now, for anything that wants to say
+        // it in words (the Actions strip's Weather entry)
+        reading: () => (data ? Object.assign({}, data, describe(data.code, data.isDay)) : null),
         // the Weather screen's full forecast (see shape() for what's in it)
         forecast,
         // WMO weather code -> { label, icon }, and an icon's URL (shared/wx/<name>.svg)

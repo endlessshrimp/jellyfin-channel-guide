@@ -457,3 +457,7 @@
     font-size: 15px;
     color: var(--dim, #8ea3bd);
 }
+
+/* #/radio: the same screen with one tab, so the chip row goes (shared with the
+   TV layout's rule in music.css) */
+#mu-root.mu-radio-only .mup-chips { display: none; }

@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **The menu goes from 14 items to 12.** Live TV absorbs the old Live TV
+  Guide and Recordings as tabs (Guide · Recorded · Scheduled · Series);
+  House absorbs Rooms and Cameras as tabs (Who's Home stays above the rooms,
+  the doorbell is a tab away); Radio becomes its own item at `#/radio` — the
+  Music screen in radio mode (`music/music.js` `radioRoute()`), not a fork.
+  Weather comes off the menu entirely: the weather bug in every screen's top
+  bar opens the forecast, now reachable by remote as well as mouse (Home
+  wires it into its spatial focus order, and `W` / the Actions strip open it
+  from anywhere). Old routes (`#/cameras`, `#/rooms?remote=…`,
+  `#/livetv?tab=3`, `#/weather`) all keep working.
+- **Radio favourites fixed.** Unfavouriting from a station's playing page,
+  and the star on a hovered station card, now both work — the star
+  everywhere a station appears asks `HomerRadioModel` for the station's own
+  favourite (`localStorage homer-radio-favourites`) instead of routing
+  through Jellyfin's favourite path, which 404s for a station that isn't a
+  Jellyfin item. Jellyfin track favourites are unchanged.
+- **Clicking the menu item for the screen you're already on now goes to the
+  top of that screen on desktop, not Home** — Music's album wall from inside
+  an album, Radio's station list, the Movies/TV Shows grid from a details
+  page, House's room list, Books' shelf, Live TV's guide. This was already
+  correct on a phone (`.hp-here`); on desktop, every screen's own top-bar
+  brand block went straight to `goHome()` regardless of what was clicked,
+  mark or screen name alike. The mark still goes Home; the screen's own name
+  now calls `HomerLayout.canScreenHome()` / `screenHome()`, same as the
+  phone's `.hp-here` and the persistent menu's own "already there" handling.
+  Music, Movies/TV Shows, House (Rooms and Cameras), Books, Planes, Live TV
+  (Recordings) all got this split; at the top of a flat screen it does
+  nothing, on purpose.
+
 ## v0.4.22
 
 - **Movies and TV Shows stop being a list of only what you own.** Under your

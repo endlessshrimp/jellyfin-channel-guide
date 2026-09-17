@@ -77,3 +77,21 @@
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: none; }
 }
+
+/* Weather is off the main menu, so the bug is the way in: a real button, and
+   it has to look like one when the focus lands on it — a browser's Tab, a
+   screen's own remote focus (home/home.js gives it .hm-focus), or a finger. */
+.homer-wx-ready .homer-wx {
+    padding: 4px 10px;
+    margin: -4px -10px;
+    border-radius: 12px;
+    outline: none;
+}
+
+.homer-wx-ready .homer-wx:hover { background: rgba(255, 255, 255, 0.08); }
+
+.homer-wx-ready .homer-wx:focus-visible,
+.homer-wx-ready .homer-wx.hm-focus {
+    background: var(--homer-focus-fill);
+    box-shadow: var(--homer-focus-ring);
+}

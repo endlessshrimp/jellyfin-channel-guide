@@ -918,6 +918,13 @@
             ev.stopImmediatePropagation();
         };
         const onClick = (ev) => {
+            // the mark and HOMER wordmark go Home; Books (the screen's own
+            // name) is the desktop's screen-home button — back to the shelf
+            if (ev.target.closest('.bk-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.bk-brand')) { goHome(); return; }
             if (ev.target.closest('.bk-np')) { showView('listen'); return; }
             if (ev.target.closest('.bk-preview')) { const p = HP(); if (p && p.fullscreen) p.fullscreen(); return; }
@@ -995,6 +1002,17 @@
             return out;
         }, { id: 'books', title: 'Books' }) : () => {};
 
+        // The top of this screen (the phone top bar's name, and the menu's own
+        // Books item on a desktop): back out to the shelf.
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (view === 'shelf') return false;
+                viewFrom = [];
+                showView('shelf', { back: true });
+                return true;
+            }, { atTop: () => view === 'shelf' })
+            : () => {};
+
         startView();
         syncDocked();
         reload();
@@ -1004,6 +1022,7 @@
             show() { root.style.visibility = ''; },
             sync: syncDocked,
             teardown() {
+                offScreenHome();
                 offActions();
                 // leaving Books pauses the book (Jellyfin gets told where you are)
                 safe(() => player().pause());

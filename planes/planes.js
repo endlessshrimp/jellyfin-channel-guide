@@ -547,6 +547,14 @@
         };
 
         const onClick = (ev) => {
+            // the mark and HOMER wordmark go Home; the screen's own name
+            // (Planes) is the desktop's screen-home button — off a pinned
+            // plane, back to the map
+            if (ev.target.closest('.hv-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.homer-home')) { goHome(); return; }
             const row = ev.target.closest('.hv-row');
             if (row) {

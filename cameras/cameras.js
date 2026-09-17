@@ -49,6 +49,12 @@
     const LIVE_DELAY_MS = 700; // how long a tile has to keep focus before it streams
     const EVENTS_MS = 90000; // a quiet refresh of the events strip
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
+    // House is one menu item over two screens: the rooms at #/rooms
+    // (rooms/rooms.js) and this camera wall. Both draw the same strip.
+    const HOUSE_TABS = [
+        { id: 'rooms', label: 'Rooms', icon: 'lightbulb', hash: '#/rooms' },
+        { id: 'cameras', label: 'Cameras', icon: 'videocam', hash: '#/cameras' }
+    ];
 
     // ---------- Jellyfin session ----------
 
@@ -260,7 +266,10 @@
         root.appendChild(stage);
         stage.innerHTML = `
             <div class="hc-topbar">
-                <div class="hc-brand homer-home" role="button" title="Home (H)"><span class="hc-brand-mark">${icon('home')}</span>HOMER<span class="hc-brand-sub">Cameras</span></div>
+                <div class="hc-brand homer-home" role="button" title="Home (H)"><span class="hc-brand-mark">${icon('home')}</span>HOMER<span class="hc-brand-sub">House</span></div>
+                <div class="homer-screen-tabs" role="tablist" aria-label="House">${HOUSE_TABS.map((t) => `
+                    <button type="button" class="homer-screen-tab${t.id === 'cameras' ? ' on' : ''}" role="tab"
+                        aria-selected="${t.id === 'cameras'}" data-house="${t.id}">${icon(t.icon)}${t.label}</button>`).join('')}</div>
                 <div class="hc-clock"><div class="hc-clock-time"></div><div class="hc-clock-date"></div></div>
             </div>
             <div class="hc-body">
@@ -324,7 +333,8 @@
 
         let alive = true;
         let tiles = []; // from the model
-        let zone = 'wall'; // wall | view | clip
+        let zone = 'wall'; // tabs | wall | view | clip
+        let ti = 1; // which House tab the remote is on, while zone is 'tabs'
         let sel = 0; // the tile on the wall
         let cam = ''; // the camera on the view
         let part = 'live'; // in the view: live | controls | events
@@ -678,10 +688,21 @@
 
         // ----- zones -----
 
+        // ----- the House tabs (Rooms · Cameras) -----
+        const tabEls = () => [...stage.querySelectorAll('.homer-screen-tab')];
+        const paintTabs = () => tabEls().forEach((b, i) => b.classList.toggle('foc', zone === 'tabs' && i === ti));
+        const runTab = (id) => {
+            const t = HOUSE_TABS.find((x) => x.id === id);
+            if (!t || t.id === 'cameras') return; // already here
+            go(t.hash);
+        };
+
         const setZone = (z) => {
             zone = z;
+            stage.classList.toggle('hc-zone-tabs', z === 'tabs');
             stage.classList.toggle('hc-zone-wall', z === 'wall');
-            stage.classList.toggle('hc-zone-view', z !== 'wall');
+            stage.classList.toggle('hc-zone-view', z !== 'wall' && z !== 'tabs');
+            paintTabs();
             paintWall();
             paintControls();
             $$('.hc-ev').forEach((n, k) => n.classList.toggle('sel', zone === 'view' && part === 'events' && k === ei));
@@ -730,6 +751,7 @@
                 else if (msg.act === 'retry' && HA()) safe(() => HA().reconnect());
                 return;
             }
+            if (zone === 'tabs') { runTab(HOUSE_TABS[ti].id); return; }
             if (zone === 'wall') {
                 const t = tiles[sel];
                 if (!t) return;
@@ -744,6 +766,7 @@
         };
 
         const backOne = () => {
+            if (zone === 'tabs') { setZone('wall'); return; }
             if (zone === 'clip') {
                 stopClip();
                 zone = 'view';
@@ -758,16 +781,23 @@
         };
 
         const move = (dx, dy) => {
+            if (zone === 'tabs') {
+                if (dy > 0) { setZone('wall'); return; }
+                if (dx) { ti = clamp(ti + dx, 0, HOUSE_TABS.length - 1); paintTabs(); }
+                return;
+            }
             if (zone === 'clip') {
                 if (dx) clipEl.currentTime = clamp(clipEl.currentTime + dx * 5, 0, clipEl.duration || 0);
                 return;
             }
             if (zone === 'wall') {
                 const n = tiles.length;
-                if (!n) return;
+                if (!n) { if (dy < 0) setZone('tabs'); return; }
                 if (dy) {
                     // the wall is a grid: down/up move about a row at a time
                     const cols = Math.max(1, Math.round(Math.sqrt(n)));
+                    // ▲ off the top row goes up to the House tabs
+                    if (dy < 0 && sel < cols) { setZone('tabs'); return; }
                     sel = clamp(sel + dy * cols, 0, n - 1);
                 } else sel = clamp(sel + dx, 0, n - 1);
                 paintWall();
@@ -839,6 +869,14 @@
             }
         };
         const onClick = (ev) => {
+            // the mark and HOMER wordmark go Home; House (the screen's own
+            // name) is the desktop's screen-home button — out of a camera or
+            // clip, back to the wall
+            if (ev.target.closest('.hc-brand-sub')) {
+                const l = window.HomerLayout;
+                if (l && typeof l.canScreenHome === 'function' && l.canScreenHome()) l.screenHome();
+                return;
+            }
             if (ev.target.closest('.hc-brand')) { goHome(); return; }
             const leg = ev.target.closest('.hc-legend [data-action]');
             if (leg) {
@@ -847,6 +885,13 @@
                 else if (a === 'back') backOne();
                 else if (a === 'fullscreen') fullscreen();
                 else if (a === 'ok') ok();
+                return;
+            }
+            const tabEl = ev.target.closest('.homer-screen-tab');
+            if (tabEl) {
+                ti = Math.max(0, tabEls().indexOf(tabEl));
+                setZone('tabs');
+                runTab(tabEl.dataset.house);
                 return;
             }
             const tile = ev.target.closest('.hc-tile');
@@ -878,7 +923,10 @@
             const items = [];
             const msg = statusMessage();
             if (msg && msg.ok) items.push({ key: 'OK', label: msg.ok, action: 'ok' });
-            else if (zone === 'wall') {
+            else if (zone === 'tabs') {
+                items.push({ key: '◀▶', label: 'Rooms · Cameras' }, { key: 'OK', label: 'Open', action: 'ok' },
+                    { key: '▼', label: 'Back down' });
+            } else if (zone === 'wall') {
                 items.push({ key: '◀▶▲▼', label: 'Cameras' });
                 const t = tiles[sel];
                 if (t && !t.planned) items.push({ key: 'OK', label: 'Full screen', action: 'ok' });
@@ -892,7 +940,7 @@
             }
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' });
-            if (zone === 'wall' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
+            if (zone === 'wall' || zone === 'tabs' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
             const html = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="hc-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
@@ -971,7 +1019,18 @@
             }
             out.push({ id: 'refresh', icon: 'refresh', label: 'Refresh', run: () => { if (M) M.reset(); lastSig = ''; sync(); if (cam) loadEvents(true); } });
             return out;
-        }, { id: 'cameras', title: 'Cameras' }) : () => {};
+        }, { id: 'cameras', title: 'House' }) : () => {};
+
+        // The top of this screen: out of a clip, then out of a camera, back to
+        // the wall. On the wall itself there's nowhere above.
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (zone === 'clip') { backOne(); return true; }
+                if (zone === 'view') { closeCamera(); return true; }
+                if (zone === 'tabs') { setZone('wall'); return true; }
+                return false;
+            }, { atTop: () => zone === 'wall' })
+            : () => {};
 
         sync();
         setZone('wall');
@@ -987,6 +1046,7 @@
             state: () => ({ cam, sel }),
             teardown() {
                 alive = false;
+                offScreenHome();
                 offActions();
                 offHA();
                 offRing();

@@ -137,6 +137,37 @@
 
     const haUp = () => !!(window.HomerHA && window.HomerHA.isSetUp());
 
+    // ---------- The item for the screen you're already on ----------
+    //
+    // Picking Music while Music is up used to navigate to #/music again, which
+    // does nothing at all from inside an album: the album is a view the screen
+    // keeps to itself, not an address. The phone's top bar has always had this
+    // right — its screen name goes to the top of the screen you're on
+    // (HomerLayout.setScreenHome) — and this is the same thing for the menu,
+    // in both treatments and under OK as much as a click.
+    //
+    // At the top of a flat screen it does nothing on purpose. Going Home from
+    // the item for the screen you're standing on is the bug, not the feature.
+    const LO = () => window.HomerLayout || null;
+    const here = (m) => {
+        const l = LO();
+        if (!l || typeof l.screenHome !== 'function') return null;
+        if (!m.id || m.id !== currentId()) return null;
+        return l;
+    };
+    // wrap(item): the same item, with "already there" handled. A screen that
+    // has somewhere above (an album, a camera, a room, a recording's folder)
+    // goes there; one that's already at its top falls through to what the item
+    // always did, which for the screen you're on is its own address — a no-op,
+    // not a trip Home.
+    const wrap = (m) => Object.assign({}, m, {
+        act: () => {
+            const l = here(m);
+            if (l && typeof l.canScreenHome === 'function' && l.canScreenHome() && l.screenHome()) return;
+            m.act();
+        }
+    });
+
     // items(ctx): what the menu offers right now. ctx.go(hash) navigates,
     // ctx.openGuide() opens the guide over whatever is up, ctx.views() (if
     // given) is a screen's already-loaded library views.
@@ -156,30 +187,34 @@
                 : `#/tv?topParentId=${v.Id}&collectionType=tvshows`);
         };
         return [
-            { id: 'guide', icon: 'live_tv', label: 'Live TV Guide', hint: 'G', act: openGuide },
+            // Live TV: the guide, and the DVR on its tabs (guide/guide.js and
+            // recordings/recordings.js draw the same Guide · Recorded ·
+            // Scheduled · Series row, so they're one item here)
+            { id: 'livetv', icon: 'live_tv', label: 'Live TV', hint: 'G', act: openGuide },
             // everything playing anywhere in the house (playing/playing.js)
             { id: 'playing', icon: 'graphic_eq', label: 'Now Playing', act: () => go('#/playing') },
             { id: 'movies', icon: 'movie', label: 'Movies', act: () => goLibrary('movies') },
             { id: 'shows', icon: 'tv', label: 'TV Shows', act: () => goLibrary('tvshows') },
-            // the audiobooks (books/books.js)
-            { id: 'books', icon: 'auto_stories', label: 'Books', act: () => go('#/books') },
             // the music library (music/music.js); it keeps playing while you browse
             { id: 'music', icon: 'library_music', label: 'Music', act: () => go('#/music') },
-            { id: 'recordings', icon: 'fiber_smart_record', label: 'Recordings', act: () => go('#/livetv?tab=3') },
-            { id: 'weather', icon: 'wb_sunny', label: 'Weather', act: () => go('#/weather') },
+            // internet radio: the same screen as Music, drawn in radio mode
+            { id: 'radio', icon: 'radio', label: 'Radio', act: () => go('#/radio') },
+            // the audiobooks (books/books.js)
+            { id: 'books', icon: 'auto_stories', label: 'Books', act: () => go('#/books') },
             // the hubs: a TV window, their channels, scores or headlines, a ticker
             { id: 'sports', icon: 'sports_football', label: 'Sports', act: () => go('#/sports') },
             { id: 'news', icon: 'newspaper', label: 'News', act: () => go('#/news') },
-            // Home Assistant's rooms, once it's connected on this device (Settings)
-            { id: 'rooms', icon: 'lightbulb', label: 'Rooms', act: () => go('#/rooms'), when: haUp },
-            // the cameras' wall, with the doorbell's rings and clips
-            { id: 'cameras', icon: 'videocam', label: 'Cameras', act: () => go('#/cameras'), when: haUp },
+            // Home Assistant, once it's connected on this device (Settings):
+            // who's home, the rooms, and the cameras on their own tab
+            { id: 'house', icon: 'house', label: 'House', act: () => go('#/rooms'), when: haUp },
             // what's flying over the house, on a map (planes/planes.js)
             { id: 'planes', icon: 'flight', label: 'Planes', act: () => go('#/planes') },
-            // (Search isn't in the menu: its box is right above it, ▲ from the
-            // first item or / gets there)
+            // (Weather isn't in the menu: the bug in every screen's top bar
+            // opens it, and the alert crawl says when it matters. Search isn't
+            // either: its box is right above the menu, ▲ from the first item
+            // or / gets there.)
             { id: 'settings', icon: 'settings', label: 'Settings', act: () => go('#/mypreferencesmenu') }
-        ].filter((m) => !m.when || m.when());
+        ].filter((m) => !m.when || m.when()).map(wrap);
     };
 
     // ---------- A menu on a screen ----------
@@ -335,15 +370,19 @@
 
     // currentId(): which item in the list is the screen that's up, or ''
     const currentId = () => {
-        if (document.getElementById('cg-root')) return 'guide';
+        if (document.getElementById('cg-root')) return 'livetv';
         const h = routeNow();
-        if (/^#!?\/livetv(\.html)?\?(.*&)?tab=3(&|$)/.test(h)) return 'recordings';
-        if (/^#!?\/livetv(\.html)?\?(.*&)?tab=1(&|$)/.test(h)) return 'guide';
+        // the guide and the DVR are tabs of the one Live TV item
+        if (/^#!?\/livetv(\.html)?(\?|$)/.test(h)) return 'livetv';
         if (/^#!?\/movies(\.html)?\?/.test(h)) return 'movies';
         if (/^#!?\/tv(\.html)?\?/.test(h)) return 'shows';
         if (/^#!?\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return 'settings';
-        const own = h.match(/^#!?\/(weather|rooms|cameras|planes|sports|news|books|music|playing)(\?|$)/);
+        // Rooms and Cameras are tabs of the one House item
+        if (/^#!?\/(rooms|cameras)(\?|$)/.test(h)) return 'house';
+        const own = h.match(/^#!?\/(radio|planes|sports|news|books|music|playing)(\?|$)/);
         if (own) return own[1];
+        // Weather is off the menu: nothing to mark (the top bar's bug opens it)
+        if (/^#!?\/weather(\?|$)/.test(h)) return '';
         if (h === '' || h === '#/' || /^#!?\/(home(\.html)?)?(\?.*)?$/.test(h)) return 'home';
         return '';
     };

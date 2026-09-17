@@ -1323,6 +1323,45 @@
     if (document.body) start();
     else document.addEventListener('DOMContentLoaded', start, { once: true });
 
+    // ---------- Weather, from anywhere ----------
+    // Weather came off the main menu when the list grew past what a sofa can
+    // read: the bug in every screen's top bar opens it, and the alert crawl
+    // says when it matters. A bug is a small thing to hit with a mouse and
+    // nothing at all to a remote with no pointer, so Weather is a global entry
+    // in the Actions strip too (hold OK on the Apple TV, M on a keyboard),
+    // beside Guide, Home and Quick controls. The same pattern rooms/rooms.js
+    // uses for Who's home.
+    const offGlobalAction = window.HomerActions ? window.HomerActions.provide(() => {
+        const W = window.HomerWeather;
+        const now = W && typeof W.reading === 'function' ? W.reading() : null;
+        const where = W && typeof W.place === 'function' ? W.place() : null;
+        return [{
+            id: 'weather',
+            key: 'W',
+            icon: 'wb_sunny',
+            label: 'Weather',
+            sub: now
+                ? `${now.temp}° ${now.label}${where && where.name ? ' · ' + where.name : ''}`
+                : (where && where.name) || '',
+            run: () => window.HomerForecast.open()
+        }];
+    }, { global: true, id: 'weather', title: 'Weather' }) : () => {};
+
+    // W anywhere opens it, the way G opens the guide. (A screen with a text
+    // box of its own swallows the key first; the Actions strip is the way in
+    // that never has to fight for a letter.)
+    const onGlobalKey = (ev) => {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
+        if (ev.key !== 'w' && ev.key !== 'W') return;
+        const t = ev.target;
+        if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+        if (!getServer() || isOurRoute()) return;
+        if (!document.querySelector('#hm-root, #hl-root, #cg-root, .homer-screen')) return;
+        ev.preventDefault();
+        window.HomerForecast.open();
+    };
+    window.addEventListener('keydown', onGlobalKey);
+
     window.HomerForecast = {
         version: VERSION,
         // open(): the Weather screen (going to #/weather if needed)
@@ -1348,6 +1387,8 @@
         destroy() {
             destroyed = true;
             closeScreen();
+            offGlobalAction();
+            window.removeEventListener('keydown', onGlobalKey);
             offLayout();
             observer && observer.disconnect();
             if (unsubscribe) safe(unsubscribe);
