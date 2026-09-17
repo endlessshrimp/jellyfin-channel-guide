@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Live scores delay, so MLB's own data doesn't spoil the broadcast.**
+  StatsAPI's live feed and schedule/linescore data know a play happened
+  before some broadcasts show it. A new setting (Settings → **Live scores
+  delay**, `settings/settings.js`; default **25 seconds**, off through a
+  minute) holds every live MLB surface back by that much: the live game
+  panel, the scores grid on the MLB tab and My Teams, and the ticker.
+  `sports/sports-data.js` asks StatsAPI's own `?timecode=` for "the game as
+  it stood N seconds ago" on both the one-game live feed and the slate
+  (rounded to a 5-second bucket, so several pollers asking around the same
+  moment share one request, and so the real delay is always at least what's
+  configured, never less) rather than buffering snapshots — exact, and
+  independent of the poll interval. A game that's already shown as final
+  isn't held back any further, but the transition to final — the last
+  play — goes through the same delay as everything else, so a walk-off
+  isn't spoiled. Non-MLB leagues (ESPN's) are untouched.
+
 ## v0.4.31
 
 - **Signing in to Home Assistant works again.** The sign-in came back from

@@ -849,6 +849,18 @@ tabs of content on the right, and a ticker along the bottom.
     play and slower when it isn't — only for the game on screen and the
     Rangers', never one per game. Nothing is fetched while the screen is
     closed or the tab is hidden.
+  - **Live MLB is held back a few seconds so nothing here beats the
+    broadcast to a play** (Settings → **Live scores delay**, default 25,
+    off to none). StatsAPI's live feed and the slate both take a
+    `?timecode=` — the game as it stood N seconds ago — so this asks for
+    the past directly rather than buffering: exact, and independent of the
+    poll interval. That covers every live MLB surface — the live panel, the
+    scores grid, My Teams' Rangers card, and the ticker, since they all
+    draw from the same delayed calls. A game that's just gone final isn't
+    held back a further N seconds once it's shown as final — but its last
+    play is delayed exactly like everything before it, so the walk-off
+    isn't spoiled either. Changing the setting takes effect on the next
+    poll, no reload.
 - **News** opens on CNN. Tabs: Top, US, World, UK, France, Business, Local,
   Tech, from publishers' RSS feeds through HOMER's feed helper on the NAS
   (`/homer-feeds`). OK opens a story with a QR code to read it on your phone.
@@ -1295,7 +1307,8 @@ A screen registers what it offers with `shared/actions.js`
 **Settings** (Home → Settings, `#/mypreferencesmenu`) replaces Jellyfin Web's
 preference pages with a cable-box style screen. Audio language, Subtitles and
 Subtitle language are saved to your Jellyfin account; **Streaming quality**,
-**Guide size**, **Weather location** and **Home Assistant** are per device.
+**Guide size**, **Weather location**, **Live scores delay** and **Home
+Assistant** are per device.
 
 ## On a phone
 

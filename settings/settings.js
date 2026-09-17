@@ -311,6 +311,10 @@
     // Settings is used on its own
     const CG = () => (window.ChannelGuide && typeof window.ChannelGuide.setSize === 'function' ? window.ChannelGuide : null);
     const MENU = () => (window.HomerMenu && typeof window.HomerMenu.setStyle === 'function' ? window.HomerMenu : null);
+    // sports/sports-data.js, for the live scores delay; it isn't there when
+    // Settings is used on its own
+    const SD = () => (window.HomerSportsData && typeof window.HomerSportsData.setDelaySeconds === 'function' ? window.HomerSportsData : null);
+    const delayLabel = (v) => (v ? (v < 60 ? `${v} seconds` : '1 minute') : 'Off, real time');
 
     // Home Assistant: what this device's connection is, as a choice list
     const HA_STATUS = {
@@ -501,6 +505,17 @@
                 },
                 save: async (value) => { if (value === 'device') await wx().useDevice(); }
             },
+            {
+                id: 'sportsdelay', icon: 'timer', label: 'Live scores delay', scope: 'device',
+                desc: 'MLB’s own data can run ahead of a broadcast by a few seconds — long enough to see a home run coming before your TV shows it. This holds the live game, the scores and the ticker back to match. Off shows it the moment the league does, which can beat some streams to a play.',
+                options: () => (SD() ? SD().DELAY_OPTIONS.map((v) => ({ value: v, label: delayLabel(v), sub: v === SD().DELAY_DEFAULT ? 'Suggested' : '' })) : []),
+                current: () => (SD() ? SD().delaySeconds() : 25),
+                matches: (o, v) => o.value === v,
+                // sports-data.js reads this straight from localStorage on every
+                // poll, so a live panel already on screen picks it up on its
+                // next refresh — nothing to reload.
+                save: async (value) => { if (SD()) SD().setDelaySeconds(value); }
+            },
             haSetting(),
             {
                 id: 'signout', icon: 'exit_to_app', label: 'Sign out', scope: 'device', action: true,
@@ -511,7 +526,7 @@
             }
         ];
         // a setting whose screen isn't loaded doesn't show at all
-        const offered = (s) => s.id !== 'guidesize' || !!CG();
+        const offered = (s) => (s.id !== 'guidesize' || !!CG()) && (s.id !== 'sportsdelay' || !!SD());
         m.all = SETTINGS;
         m.visible = SETTINGS.filter(offered);
         m.scope = (s) => SCOPES[s.scope] || SCOPES.device;

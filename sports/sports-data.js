@@ -31,10 +31,16 @@
  * Longhorns (college football) and Arsenal (soccer). Their games lead every
  * list and the ticker's MY TEAMS segment.
  *
+ * MLB is also the one league whose live state can run ahead of Jason's
+ * broadcast, so the games it returns (and the one-game feed below) can be
+ * held back a configurable number of seconds — see "Live delay" below;
+ * settings/settings.js is the dial.
+ *
  * window.HomerSportsData = { LEAGUES, FAVS, scores, standings, rankings, news,
  *                            teamGames, resolveChannels, game, isFav,
  *                            anyLive, version, mlbLive, mlbLivePace,
- *                            mlbStanding, mlbTeams }
+ *                            mlbStanding, mlbTeams, delaySeconds,
+ *                            setDelaySeconds, DELAY_OPTIONS, DELAY_DEFAULT }
  */
 (() => {
     const VERSION = '0.3.0';
@@ -43,6 +49,8 @@
     const V2 = 'https://site.api.espn.com/apis/v2/sports/';
     const MIN = 60000;
     const H = () => window.HomerHub;
+    const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+    const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage blocked */ } };
 
     // ---------- Leagues ----------
 
@@ -295,6 +303,52 @@
         || (Math.min(a.away.rank || 99, a.home.rank || 99) - Math.min(b.away.rank || 99, b.home.rank || 99));
 
     const get = (url, ttl) => H().data.fetchSoft(url, { ttl, timeout: 15000 });
+
+    // ---------- Live delay ----------
+    //
+    // Jason's broadcast runs a bit behind StatsAPI — MLB's feed knows about a
+    // home run before his TV shows it. So every live MLB fetch below (the
+    // slate, the one-game feed, the play log that seeds it) can ask
+    // StatsAPI's own ?timecode= for "the game as it stood N seconds ago"
+    // instead of its real-time state. That's exact — unlike buffering
+    // snapshots here, it doesn't depend on how often this polls — and it
+    // covers everything StatsAPI hands back for that request in one go: the
+    // score, the count, the bases, the line score, the last play, all as of
+    // the same moment.
+    //
+    // The setting (settings/settings.js) is a plain number of seconds in
+    // localStorage; 0 is off. Every read rounds down to a 5-second bucket
+    // before turning it into a timecode: several pollers ask for the slate
+    // or a game's feed within a second or two of each other (the MLB tab,
+    // My Teams, the ticker), and landing on the same bucket means they land
+    // on the same URL and share one request instead of each minting its
+    // own. Rounding down (never up, never to the nearest) also means the
+    // real delay is always at least what's configured, never less.
+    const DELAY_KEY = 'homer-sports-mlb-delay';
+    const DELAY_DEFAULT = 25;
+    // seconds; 0 means off. Keep in step with settings/settings.js, which
+    // draws its labels from this same list.
+    const DELAY_OPTIONS = [0, 10, 15, 20, 25, 30, 45, 60];
+    const DELAY_BUCKET = 5000;
+    const delaySeconds = () => {
+        const v = parseInt(lsGet(DELAY_KEY), 10);
+        return DELAY_OPTIONS.includes(v) ? v : DELAY_DEFAULT;
+    };
+    const setDelaySeconds = (v) => lsSet(DELAY_KEY, String(DELAY_OPTIONS.includes(v) ? v : DELAY_DEFAULT));
+    const pad2 = (n) => String(n).padStart(2, '0');
+    // StatsAPI's timecode: YYYYMMDD_HHMMSS, UTC
+    const utcTimecode = (ms) => {
+        const d = new Date(ms);
+        return `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}_${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}`;
+    };
+    // undefined when the delay is off (real time, no param); else the
+    // timecode to ask StatsAPI for instead of "now"
+    const delayedTimecode = () => {
+        const sec = delaySeconds();
+        if (!sec) return undefined;
+        return utcTimecode(Math.floor((Date.now() - sec * 1000) / DELAY_BUCKET) * DELAY_BUCKET);
+    };
+    const withTimecode = (url, tc) => (tc ? `${url}&timecode=${tc}` : url);
 
     // ---------- MLB: the league's own StatsAPI ----------
     //
@@ -556,8 +610,14 @@
     const mlbSlate = async (ttl) => {
         await H().channels.lineup().catch(() => null); // so a game can name our channel
         const win = mlbWindow();
+        // the schedule/linescore call is the one that's delayed — it's what
+        // scores(), and so the scores grid, My Teams and the ticker, draw
+        // from. The broadcasts call rides on its own half-hour cache: a
+        // network assignment isn't live game state, and delaying it would
+        // only turn that cache into a fresh fetch every few seconds for
+        // nothing.
         const [sched, tv, T] = await Promise.all([
-            get(`${MLBAPI}v1/schedule?sportId=1&${win}&hydrate=linescore,probablePitcher&fields=${F_SLATE}`, ttl),
+            get(withTimecode(`${MLBAPI}v1/schedule?sportId=1&${win}&hydrate=linescore,probablePitcher&fields=${F_SLATE}`, delayedTimecode()), ttl),
             get(`${MLBAPI}v1/schedule?sportId=1&${win}&hydrate=broadcasts(all)&fields=${F_TV}`, 30 * MIN).catch(() => null),
             mlbTeams()
         ]);
@@ -587,10 +647,10 @@
         list.unshift({ key, desc: r.description, event: r.event || '', inning: a.inning, half: a.halfInning, scoring: !!a.isScoringPlay });
         plays.set(pk, list.slice(0, 5));
     };
-    const seedPlays = async (pk) => {
+    const seedPlays = async (pk, tc) => {
         if (seeded.has(pk)) return;
         seeded.add(pk);
-        const r = await get(`${MLBAPI}v1/game/${pk}/playByPlay?fields=${F_PLAYS}`, 10 * MIN).catch(() => null);
+        const r = await get(withTimecode(`${MLBAPI}v1/game/${pk}/playByPlay?fields=${F_PLAYS}`, tc), 10 * MIN).catch(() => null);
         if (!r) { seeded.delete(pk); return; } // it can try again next time round
         const all = r.allPlays || [];
         const had = plays.get(pk) || [];
@@ -615,8 +675,9 @@
     // The live feed for one game (about 3 KB), as everything the live view
     // draws. `pk` is the gamePk on a game from mlbSlate (g.mlb.pk).
     const mlbLive = async (pk, { ttl = 12000, seed = true } = {}) => {
+        const tc = delayedTimecode();
         const [r, T] = await Promise.all([
-            get(`${MLBAPI}v1.1/game/${pk}/feed/live?fields=${F_FEED}`, ttl),
+            get(withTimecode(`${MLBAPI}v1.1/game/${pk}/feed/live?fields=${F_FEED}`, tc), ttl),
             mlbTeams()
         ]);
         if (!r || !r.liveData) return null;
@@ -626,7 +687,7 @@
         const st = gd.status || {};
         const cp = (ld.plays || {}).currentPlay || {};
         remember(pk, cp);
-        if (seed && st.abstractGameState !== 'Preview') await seedPlays(pk).catch(() => null);
+        if (seed && st.abstractGameState !== 'Preview') await seedPlays(pk, tc).catch(() => null);
         const off = ls.offense || {};
         const def = ls.defense || {};
         const cnt = cp.count || {};
@@ -1095,6 +1156,11 @@
         mlbLivePace,
         mlbStanding,
         mlbTeams,
-        MLB_TEX
+        MLB_TEX,
+        // Live delay (settings/settings.js draws the "Live scores delay" choice from these)
+        delaySeconds,
+        setDelaySeconds,
+        DELAY_OPTIONS,
+        DELAY_DEFAULT
     };
 })();
