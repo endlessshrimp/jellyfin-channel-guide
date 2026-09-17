@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Signing in to Home Assistant works again.** The sign-in came back from
+  Home Assistant, HOMER tried to tidy the address bar, and threw
+  `history.replaceState is not a function` — Jellyfin's web app puts its own
+  router object on `window.history` on some pages, and that object has no
+  `replaceState`. The throw happened *before* the code was exchanged for
+  tokens, so the sign-in died every time and the screen sat on the loading
+  overlay until it gave up. HOMER now uses the real History API when it's
+  there and falls back to a plain hash change when it isn't.
+
 ## v0.4.30
 
 - **Home Assistant's sign-in survives a browser losing its storage, and

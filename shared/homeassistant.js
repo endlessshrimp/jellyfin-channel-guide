@@ -367,7 +367,24 @@
         // replaceState, not location.replace: dropping the query would reload
         // the page and cut off the token exchange below; tell the screens by hand
         const search = location.search.replace(/[?&]homer-ha=return\b/, '').replace(/^&/, '?');
-        history.replaceState(history.state, '', location.pathname + search + back);
+        // Jellyfin's web app puts its own router object on window.history on
+        // some pages, and that object has no replaceState — calling it threw
+        // "history.replaceState is not a function" right here, before the
+        // token exchange below, so signing in could never finish. Setting the
+        // hash is the fallback: it doesn't reload either, it just can't drop
+        // the query string, which is untidy rather than harmful (the code is
+        // single-use and already spent by the time anyone sees it).
+        const hist = window.history;
+        try {
+            if (hist && typeof hist.replaceState === 'function') {
+                hist.replaceState(hist.state, '', location.pathname + search + back);
+            } else if (location.hash !== back) {
+                location.hash = back;
+            }
+        } catch (err) {
+            warn('couldn\'t tidy the address after signing in', err.message);
+            try { if (location.hash !== back) location.hash = back; } catch { /* leave it */ }
+        }
         window.dispatchEvent(new HashChangeEvent('hashchange'));
         // Rooms may not be loaded yet, or Jellyfin's router may still be
         // settling on the new address: open it again once things are up
