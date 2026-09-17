@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **The album page's "Play on…" comes back when Home Assistant is slow.**
+  Whether an album page offered the button was decided once, when the page was
+  drawn — and on a phone Home Assistant usually finishes connecting *after*
+  that, so the answer was "no speakers" and the button was never drawn at all.
+  Both layouts now keep the row in step with Home Assistant instead of
+  deciding once.
+
 ## v0.4.24
 
 - **Play on… gets a visible button, on both players.** It used to exist

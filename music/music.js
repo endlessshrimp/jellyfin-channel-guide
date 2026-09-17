@@ -1447,7 +1447,14 @@
         // needs Home Assistant's own events, not just the player's.
         const offHA = window.HomerHA && window.HomerHA.onChange
             ? window.HomerHA.onChange(() => {
-                if (view !== 'playing') return;
+                // Home Assistant usually finishes connecting after a screen has
+                // already been drawn, and whether these views offer "Play on…"
+                // depends on it having speakers — so redraw the one we're on
+                // rather than leave a button that was decided when the answer
+                // was still no.
+                if (view === 'album') { drawAlbum(); return; }
+                if (view === 'artist') { drawArtist(); return; }
+                if (view === 'browse') { drawHero(); return; }
                 if (player().state().track) syncCast(true); else drawPlaying();
             })
             : () => {};

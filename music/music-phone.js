@@ -417,6 +417,25 @@
                 syncSheets();
             });
         };
+        // The device button is only offered when Home Assistant has speakers to
+        // offer, and on a phone Home Assistant usually finishes connecting
+        // AFTER this page has been drawn — so whether the row carries it is
+        // kept in step rather than decided once, when the answer was still no.
+        const syncPageActs = () => {
+            const acts = $('.mup-page-acts');
+            if (!acts) return;
+            const have = acts.querySelector('[data-a="on"]');
+            if (pageItem && canPlayOn()) {
+                if (!have) {
+                    const b = el('button', 'mup-btn', `${icon('speaker')}Play on…`);
+                    b.type = 'button';
+                    b.dataset.a = 'on';
+                    acts.insertBefore(b, acts.querySelector('[data-a="mix"]'));
+                    b.onclick = playOnPage;
+                } else if (!have.onclick) have.onclick = playOnPage;
+            } else if (have) have.remove();
+        };
+
         const drawPage = () => {
             const box = $('.mup-page');
             const it = pageItem;
@@ -446,8 +465,7 @@
             box.querySelector('[data-a="play"]').onclick = () => playPage(false);
             box.querySelector('[data-a="shuffle"]').onclick = () => playPage(true);
             box.querySelector('[data-a="mix"]').onclick = mixPage;
-            const onBtn = box.querySelector('[data-a="on"]');
-            if (onBtn) onBtn.onclick = playOnPage;
+            syncPageActs();
             const body = box.querySelector('.mup-page-body');
             if (pageAlbums) {
                 body.className = 'mup-page-body wall';
@@ -843,7 +861,7 @@
         // and the device button's highlight — independent of anything HOMER
         // itself is doing.
         const offHA = window.HomerHA && window.HomerHA.onChange
-            ? window.HomerHA.onChange(() => { syncPlayer(); if (open === 'playing') syncCastTop(); })
+            ? window.HomerHA.onChange(() => { syncPlayer(); syncPageActs(); if (open === 'playing') syncCastTop(); })
             : () => {};
 
         const onKey = (ev) => {
