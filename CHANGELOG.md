@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **Home Assistant's sign-in survives a browser losing its storage, and
+  follows you between HOMER addresses.** The refresh token
+  (`shared/homeassistant.js`) now lives server-side, in the signed-in
+  Jellyfin user's own `DisplayPreferences` (a small per-user string bag
+  Jellyfin already gives every client — not `Users/Configuration`, which
+  is a fixed-field DTO that silently drops anything it doesn't already
+  know about). `localStorage` is still read first and kept as a fast,
+  no-network cache, and is the fallback whenever Jellyfin can't be
+  reached, so a Jellyfin hiccup never takes Home Assistant down with it.
+  A sign-in from before this existed is adopted into the account on next
+  load rather than thrown away; Disconnect (`settings/settings.js`'s
+  Home Assistant row) clears both the server copy and the local cache,
+  and still works if Jellyfin is unreachable.
+
+  This moves a credential that can open locks and watch cameras into
+  Jellyfin's user data, which is a real trade — made deliberately scoped
+  to that one Jellyfin user, never server-wide. Checked against a live
+  Jellyfin 10.11 server with a second, non-admin account attached to the
+  request (not just read from source): it gets back its own, unrelated
+  bucket, never the other account's stored credential.
+
 ## v0.4.28
 
 - **Play on… for a movie or episode, not just an album.** A new picker
