@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+- **Baseball on the Sports screen comes from MLB now, not ESPN.** ESPN's
+  scoreboard gave a baseball game a score and an inning, which is about a
+  third of what's happening. MLB runs its own StatsAPI (`statsapi.mlb.com` —
+  no key, no account, and it answers a browser directly), and it knows what a
+  scoreboard knows. **MLB alone** moved to it; every other league is still on
+  ESPN, unchanged.
+  - **Live now**, a panel at the top of the MLB tab, drawn on the two clubs'
+    colours: the batting side lit and marked, **the bases** on a diamond,
+    **the count**, **the outs**, who's **pitching** and who's **at bat** (with
+    the hand each throws and hits from), who's **on deck**, the pitch
+    sequence of the at-bat, the **line score inning by inning** with R H E,
+    and **the last four plays** with the newest one large. Before first pitch
+    it's the start time and the two probable starters; afterwards it's the
+    final, the line score and the winning, losing and saving pitchers.
+  - **One game at a time.** The panel follows the Rangers when they're
+    playing, otherwise the closest game late on. When more than one game is
+    live, a chip per game across the top — logos, scores and the inning —
+    picks which one it follows. Only that game's feed is fetched, and the
+    Rangers', however many games are on.
+  - **The Rangers' card on My Teams** shows the same detail while they're
+    playing (bases, count, outs, the pitcher, the hitter, and the last play
+    in place of the last result), and **the probable starters** before they
+    play. Their standing line is MLB's own: "76-76 · 2nd in AL West", plus
+    the magic number, "clinched" or "eliminated" once one of those is true.
+  - **Every score card** for a game in progress carries the diamond, the
+    count, the outs and who's at the plate under the score, and says
+    "Middle of the inning" when that's what's happening.
+  - **The real state of a game**, which is the thing ESPN was quietest
+    about: **Warmup**, **Delayed · Rain**, **Delayed Start · Lightning**,
+    **Postponed**, **Suspended**, **Final/10**, **Mid 7th**, **End 7th**,
+    **Review**. Makeup games and doubleheaders say so.
+  - **The ticker didn't grow a second baseball strip** — the one it already
+    had just says more: "BOS 3 TEX 2 · TOP 5TH · 1 OUT, ON 3RD", and
+    "POSTPONED · RAIN" where it used to say the game was over.
+  - **Courteous polling.** The slate for yesterday and today is one trimmed
+    request of about 20 KB (StatsAPI's `fields=`), asked every 15 seconds
+    while a game is live, every minute when one starts within the half hour,
+    every 5 minutes otherwise. The TV listings ride along on a separate
+    half-hour cache. One game's live feed is about 3 KB and is asked every 12
+    seconds while the ball's in play, every minute in a warmup or a rain
+    delay, every 5 minutes once it's final. **A hidden tab or a closed screen
+    asks for nothing**, and coming back asks straight away rather than
+    leaving a frozen game on screen.
+  - The clubs' colours and logos are a table in `sports/sports-data.js`
+    rather than a request: ESPN's `/teams` endpoint is the one on that API
+    that sends no CORS header, so a browser could never read it (the old
+    `teamColors()` call had been failing quietly all along), and thirty clubs
+    that change once a decade don't need fetching.
+  - Standings, the wild card races and the headlines on the MLB tab are still
+    ESPN's, and so is every other league.
+
 ## v0.4.19
 
 - **The alert crawl only shows weather worth reacting to**: severe watches,

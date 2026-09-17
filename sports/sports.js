@@ -16,14 +16,32 @@
  *                start times with the TV network (and our channel for it),
  *                the favorites' games more often, then the headlines
  *
+ * Baseball gets more than a score and an inning, because MLB's own StatsAPI
+ * gives more (sports/sports-data.js):
+ *
+ *   Live now     at the top of the MLB tab: the club colors, who's batting,
+ *                the bases, the count, the outs, the pitcher and the hitter,
+ *                the line score inning by inning, and the last four plays.
+ *                One game's feed at a time — the one on screen (a chip per
+ *                live game picks it) and the Rangers'. 12 seconds while the
+ *                ball's in play, slower when it isn't, nothing at all while
+ *                the tab is hidden.
+ *   Score cards  a live game's card carries the diamond, the count, the outs
+ *                and who's at the plate under the score.
+ *   My Teams     the Rangers' card shows that same detail while they're
+ *                playing and the two probable starters before they are.
+ *   Ticker       the same scores it always carried, with the outs and the
+ *                runners on the line, and the real state of a game
+ *                (POSTPONED · RAIN, DELAYED, FINAL/10).
+ *
  * A game on a channel we have shows its number; OK on it watches that
- * channel. Data: ESPN's public API (sports/sports-data.js). Keys: see
- * shared/hub.js.
+ * channel. Data: ESPN's public API, and MLB's StatsAPI for baseball
+ * (sports/sports-data.js). Keys: see shared/hub.js.
  *
  * window.HomerSports = { version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
     const MIN = 60000;
 
     const define = () => {
@@ -69,12 +87,16 @@
             g.style.gridTemplateColumns = `repeat(auto-fill, minmax(${min}px, 1fr))`;
             return g;
         };
-        const sig = (games) => games.map((g) => [g.id, g.state, g.status, g.away.score, g.home.score, g.channel && g.channel.number].join(':')).join('|');
+        const mlbSig = (g) => (g.mlb && g.state === 'in' ? [g.mlb.outs, g.mlb.balls, g.mlb.strikes, g.mlb.bases.join('')].join(',') : '');
+        const sig = (games) => games.map((g) => [g.id, g.state, g.status, g.away.score, g.home.score, g.channel && g.channel.number, mlbSig(g)].join(':')).join('|');
         const scoreCard = (ctx, g, opts = {}) => {
             const act = tuneGame(ctx.hub, g);
             const c = ui.scoreCard(g, Object.assign({ ok: act || (() => ctx.toast(g.network ? `On ${g.network}: not a channel we have` : 'Not on TV here')) }, opts));
             c.dataset.key = 'g' + g.id;
             if (!act) c.dataset.okLabel = '';
+            // baseball: who's on and how many out, which is the half of a
+            // score ESPN never gave us (mlbCardLine is below)
+            if (g.mlb) mlbCardLine(c, g);
             return c;
         };
         const newsGrid = (ctx, items, { cols = 3, tagFor } = {}) => {
@@ -89,7 +111,7 @@
             return g;
         };
         const loading = (text = 'Loading…') => ui.empty(text);
-        const failed = (what) => ui.empty(`${what} didn't load`, 'ESPN didn\'t answer. It tries again by itself.');
+        const failed = (what) => ui.empty(`${what} didn't load`, 'The scores didn\'t answer. It tries again by itself.');
 
         // a section whose body is drawn (and redrawn) by fn(body) on a poll
         const liveSection = (ctx, title, fn, { every = MIN, note = '', cls = '' } = {}) => {
@@ -140,6 +162,267 @@
                 shown.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
                 body.appendChild(g);
             }, { every: pace });
+        };
+
+        // ---------- Baseball ----------
+        //
+        // What MLB's StatsAPI gives that ESPN's scoreboard didn't, drawn so
+        // it reads from the couch: the bases, the count and the outs, who's
+        // pitching to whom, the line score inning by inning, and the last
+        // few things that happened.
+
+        // The infield, with a base lit for each runner. `on` is [1st, 2nd, 3rd].
+        const diamond = (on, cls = '') => {
+            const b = (k, cx, cy) => `<rect class="sp-base${on && on[k] ? ' on' : ''}" x="${cx - 7}" y="${cy - 7}" width="14" height="14" rx="2" transform="rotate(45 ${cx} ${cy})"/>`;
+            return `<svg class="sp-diamond ${cls}" viewBox="0 0 64 64" aria-hidden="true">
+                ${b(1, 32, 15)}${b(0, 49, 32)}${b(2, 15, 32)}
+                <path class="sp-plate" d="M26 47h12l0 5-6 5-6-5z"/>
+            </svg>`;
+        };
+        const outsDots = (n) => `<span class="sp-outs">${[0, 1, 2].map((k) => `<i class="${k < (n || 0) ? 'on' : ''}"></i>`).join('')}</span>`;
+        const basesText = (on) => {
+            const [a, b, c] = on || [];
+            const n = [a, b, c].filter(Boolean).length;
+            if (!n) return 'Bases empty';
+            if (n === 3) return 'Bases loaded';
+            const names = [a && '1st', b && '2nd', c && '3rd'].filter(Boolean);
+            return names.length === 2 ? `${names[0]} and ${names[1]}` : `Runner on ${names[0]}`;
+        };
+        // A live game's score card gets a line under it: the count, the outs
+        // and who's on. Between innings there's no count, so it says so.
+        const mlbCardLine = (card, g) => {
+            const m = g.mlb;
+            if (g.state !== 'in' || m.dead) return;
+            const mid = /^(Mid|End)/i.test(m.half || '');
+            const count = mid || m.balls == null ? '' : `<b>${m.balls}-${m.strikes}</b>`;
+            const line = el('div', 'sp-cardline');
+            line.innerHTML = mid
+                ? `<span class="sp-cardline-txt">${esc(/^Mid/i.test(m.half) ? 'Middle of the inning' : 'End of the inning')}</span>`
+                : `${diamond(m.bases, 'sm')}${count}${outsDots(m.outs)}<span class="sp-cardline-txt">${esc(`${m.outs === 1 ? '1 out' : `${m.outs || 0} out`}`)}</span>${m.batter ? `<span class="sp-cardline-ab">${esc(surname(m.batter))}</span>` : ''}`;
+            card.appendChild(line);
+        };
+
+        // The line score: the innings across, R H E at the end. Innings that
+        // haven't been played are dashes; a home team that didn't bat in the
+        // ninth gets an X, the way a scoreboard writes it.
+        const lineScore = (lv) => {
+            const cols = Math.max(9, lv.innings.length, lv.inning || 0);
+            const head = [];
+            for (let i = 1; i <= cols; i++) head.push(`<span class="sp-ls-i">${i}</span>`);
+            const row = (ha, team) => {
+                const cells = [];
+                for (let i = 1; i <= cols; i++) {
+                    const inn = lv.innings[i - 1];
+                    const v = inn && inn[ha] ? inn[ha].r : undefined;
+                    const played = v != null;
+                    const skipped = !played && ha === 'home' && lv.state === 'post' && i <= (lv.inning || 0);
+                    cells.push(`<span class="sp-ls-n${played ? '' : ' off'}">${played ? v : skipped ? 'X' : '·'}</span>`);
+                }
+                const t = lv.totals[ha] || {};
+                return `<div class="sp-ls-row">
+                    <span class="sp-ls-team">${ui.img(team.logo, '', team.abbr, team.logoFb)}<b>${esc(team.abbr || team.short)}</b></span>
+                    ${cells.join('')}
+                    <span class="sp-ls-t r">${t.r ?? 0}</span><span class="sp-ls-t">${t.h ?? 0}</span><span class="sp-ls-t">${t.e ?? 0}</span>
+                </div>`;
+            };
+            const box = el('div', 'sp-ls');
+            box.style.setProperty('--innings', cols);
+            box.innerHTML = `
+                <div class="sp-ls-row head"><span class="sp-ls-team"></span>${head.join('')}<span class="sp-ls-t">R</span><span class="sp-ls-t">H</span><span class="sp-ls-t">E</span></div>
+                ${row('away', lv.away)}${row('home', lv.home)}`;
+            return box;
+        };
+
+        // The whole live view for one game: the header, the two teams, the
+        // at-bat, the line score and what just happened.
+        const liveView = (ctx, g, lv) => {
+            const box = el('div', 'sp-live');
+            const m = (g && g.mlb) || {};
+            const live = lv.live;
+            const mid = /^(Mid|End)/i.test(lv.half || '');
+            const battingHome = lv.battingTeam === 'home';
+            const c1 = hex(lv.away.color) || '#16243c';
+            const c2 = hex(lv.home.color) || '#16243c';
+            box.style.setProperty('--c1', c1);
+            box.style.setProperty('--c2', c2);
+            const tv = g && g.channel
+                ? `<span class="sp-live-tv on">${ui.icon('live_tv')}${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
+                : g && g.network ? `<span class="sp-live-tv">${esc(g.network)}</span>` : '';
+            const team = (ha) => {
+                const t = lv[ha];
+                const bat = live && !mid && ((ha === 'home') === battingHome);
+                // nobody's scored before first pitch, so don't write a nought
+                const runs = lv.state === 'pre' ? '' : (lv.totals[ha] || {}).r ?? '';
+                const won = lv.state === 'post' && (lv.totals[ha] || {}).r > (lv.totals[ha === 'home' ? 'away' : 'home'] || {}).r;
+                return `<div class="sp-live-team${bat ? ' bat' : ''}${lv.state === 'post' && !won ? ' lose' : ''}" style="--team:${hex(t.color) || 'transparent'}">
+                    <span class="sp-live-logo">${ui.img(t.logo, '', t.abbr, t.logoFb)}</span>
+                    <span class="sp-live-nm">${esc(t.short || t.abbr)}</span>
+                    ${bat ? '<span class="sp-live-atbat">at bat</span>' : ''}
+                    <span class="sp-live-runs">${esc(String(runs ?? ''))}</span>
+                </div>`;
+            };
+            // the middle: the at-bat while it's live, the probables before,
+            // the decisions after
+            let centre;
+            if (live && !mid) {
+                centre = `
+                    <div class="sp-live-state">
+                        ${diamond(lv.bases)}
+                        <div class="sp-live-count">
+                            <span class="sp-live-bs">${lv.balls}<i>-</i>${lv.strikes}</span>
+                            <span class="sp-live-lbl">count</span>
+                        </div>
+                        <div class="sp-live-count">
+                            ${outsDots(lv.outs)}
+                            <span class="sp-live-lbl">${lv.outs === 1 ? '1 out' : `${lv.outs} out`}</span>
+                        </div>
+                    </div>
+                    <div class="sp-live-matchup">
+                        <div class="sp-live-who"><span class="sp-live-lbl">Pitching</span><b>${esc(lv.pitcher.name || '—')}</b>${lv.pitcher.hand ? `<small>${esc(lv.pitcher.hand)}HP</small>` : ''}</div>
+                        <div class="sp-live-who"><span class="sp-live-lbl">At bat</span><b>${esc(lv.batter.name || '—')}</b>${lv.batter.hand ? `<small>${esc(lv.batter.hand)}HB</small>` : ''}</div>
+                        ${lv.onDeck ? `<div class="sp-live-who dim"><span class="sp-live-lbl">On deck</span><b>${esc(lv.onDeck)}</b></div>` : ''}
+                    </div>
+                    <div class="sp-live-runners">${esc(basesText(lv.bases))}${lv.pitches.length ? `<span class="sp-pitches">${lv.pitches.slice(-6).map((p) => `<i class="${p.kind}" title="${esc(p.desc)}"></i>`).join('')}</span>` : ''}</div>`;
+            } else if (live && mid) {
+                centre = `<div class="sp-live-between">${esc(/^Mid/i.test(lv.half) ? 'Middle of the ' + lv.ord : 'End of the ' + lv.ord)}</div>`;
+            } else if (lv.state === 'pre') {
+                const when = g ? fmt.when(g.start) : '';
+                centre = `<div class="sp-live-pre">
+                    <div class="sp-live-first">${esc(lv.status === 'Warmup' || /delay/i.test(lv.status) ? lv.status : when)}</div>
+                    <div class="sp-live-probs">
+                        <span><small>${esc(lv.away.abbr)}</small>${esc(lv.probables.away || 'TBD')}</span>
+                        <i>vs</i>
+                        <span><small>${esc(lv.home.abbr)}</small>${esc(lv.probables.home || 'TBD')}</span>
+                    </div>
+                </div>`;
+            } else {
+                const d = lv.decisions;
+                const bits = [d.winner ? `W ${d.winner}` : '', d.loser ? `L ${d.loser}` : '', d.save ? `S ${d.save}` : ''].filter(Boolean);
+                centre = `<div class="sp-live-pre">
+                    <div class="sp-live-first">${esc(lv.status)}</div>
+                    ${bits.length ? `<div class="sp-live-probs">${bits.map((b) => `<span>${esc(b)}</span>`).join('')}</div>` : ''}
+                </div>`;
+            }
+            const flag = lv.perfectGame ? 'Perfect game' : lv.noHitter ? 'No-hitter' : '';
+            box.innerHTML = `
+                <div class="sp-live-bg"></div>
+                <div class="sp-live-head">
+                    <span class="sp-live-status ${lv.state}">${lv.state === 'in' ? '<i></i>' : ''}${esc(lv.status)}</span>
+                    ${flag ? `<span class="sp-live-flag">${esc(flag)}</span>` : ''}
+                    ${m.description ? `<span class="sp-live-note">${esc(m.description)}</span>` : ''}
+                    ${tv}
+                </div>
+                <div class="sp-live-body">
+                    <div class="sp-live-teams">${team('away')}${team('home')}</div>
+                    <div class="sp-live-centre">${centre}</div>
+                </div>`;
+            if (lv.innings.length) box.appendChild(lineScore(lv));
+            if (lv.plays.length) {
+                const p = el('div', 'sp-plays');
+                p.innerHTML = lv.plays.map((x, i) => `
+                    <div class="sp-play${i ? '' : ' first'}${x.scoring ? ' score' : ''}">
+                        <span class="sp-play-inn">${esc(`${/^top$/i.test(x.half) ? '▲' : '▼'}${x.inning}`)}</span>
+                        <span class="sp-play-txt">${esc(x.desc)}</span>
+                    </div>`).join('');
+                box.appendChild(p);
+            }
+            const act = g && g.channel && g.state !== 'post' ? () => ctx.hub.watch(g.channel.ch) : null;
+            ctx.focusable(box, act || (() => ctx.toast(g && g.network ? `On ${g.network}: not a channel we have` : 'Not on TV here')),
+                act ? `Watch ${(g.network || g.channel.name)}` : '');
+            box.dataset.key = 'live' + lv.pk;
+            return box;
+        };
+
+        // Which game the live view shows: the one the viewer picked while
+        // it's still on, else the Rangers, else the closest game late on.
+        const pickGame = (games, want) => {
+            const live = games.filter((g) => g.state === 'in' && !g.mlb.dead);
+            const chosen = want && live.find((g) => g.id === want);
+            if (chosen) return chosen;
+            const mine = live.find((g) => g.priority);
+            if (mine) return mine;
+            const margin = (g) => Math.abs((+g.away.score || 0) - (+g.home.score || 0));
+            const worth = (g) => (g.mlb.inning >= 7 && margin(g) <= 2 ? 0 : 1);
+            const late = live.slice().sort((a, b) => worth(a) - worth(b) || b.mlb.inning - a.mlb.inning || margin(a) - margin(b));
+            if (late[0]) return late[0];
+            // nothing on: the Rangers' next game today, else the last final
+            const soon = games.filter((g) => g.state === 'pre' && !g.mlb.dead).sort((a, b) => (b.priority - a.priority) || (a.start - b.start));
+            const done = games.filter((g) => g.state === 'post' && !g.mlb.dead).sort((a, b) => (b.priority - a.priority) || (b.start - a.start));
+            return (want && games.find((g) => g.id === want)) || soon[0] || done[0] || null;
+        };
+
+        // The live view as a section of its own, with a chip per live game
+        // when there's more than one, so the viewer picks which one it shows.
+        // Only this game's feed is fetched (and the Rangers', on My Teams) —
+        // never one per game on the slate.
+        const mlbLiveSection = (ctx) => {
+            let want = null;
+            let lastKey = '';
+            // how long until the next ask: the game on screen sets it (12s
+            // while the ball's in play, slower when it isn't, 5 minutes once
+            // it's over), and a hidden tab asks for nothing at all
+            let every = 30000;
+            const s = ui.section('Live now', { cls: 'sp-livesec' });
+            s.body.appendChild(loading());
+            ctx.panel.appendChild(s);
+            const chipsEl = el('div', 'sp-chips');
+            let first = true;
+            let poller = null;
+            poller = ctx.poll(async () => {
+                if (document.hidden) return; // a hidden tab asks nothing of MLB
+                let games;
+                try {
+                    games = await D.scores('mlb');
+                } catch (err) {
+                    if (first) { s.body.innerHTML = ''; s.body.appendChild(failed('The game')); }
+                    first = false;
+                    throw err;
+                }
+                const live = games.filter((g) => g.state === 'in' && !g.mlb.dead);
+                if (live.length) liveAny = true;
+                const g = pickGame(games, want);
+                every = g ? D.mlbLivePace(g) : 5 * MIN;
+                if (!g) {
+                    s.style.display = 'none';
+                    first = false;
+                    return;
+                }
+                s.style.display = '';
+                s.querySelector('h2').textContent = g.state === 'in' ? 'Live now' : g.state === 'pre' ? 'Coming up' : 'Last time out';
+                setNote(s, live.length ? `${live.length} game${live.length === 1 ? '' : 's'} live` : `${games.filter((x) => x.state === 'pre').length} to come`);
+                const lv = await D.mlbLive(g.mlb.pk, { ttl: D.mlbLivePace(g) });
+                if (!lv) return;
+                const key = [lv.pk, lv.status, lv.balls, lv.strikes, lv.outs, lv.bases.join(''), lv.batter.name, lv.pitcher.name,
+                    lv.totals.away.r, lv.totals.home.r, lv.innings.length, (lv.plays[0] || {}).key, g.channel && g.channel.number,
+                    live.map((x) => x.id).join(',')].join('|');
+                if (key === lastKey) return;
+                lastKey = key;
+                first = false;
+                // the chips: every live game, the one on screen lit
+                chipsEl.innerHTML = '';
+                if (live.length > 1) {
+                    live.forEach((x) => {
+                        const on = x.id === g.id;
+                        const chip = el('div', 'sp-chip hb-focusable' + (on ? ' on' : ''),
+                            `${ui.img(x.away.logo, '', x.away.abbr, x.away.logoFb)}<small>${esc(x.away.abbr)}</small><b>${esc(x.away.score)}</b>
+                             <em>${esc(x.mlb.ord ? (x.mlb.isTop ? '▲' : '▼') + x.mlb.inning : '')}</em>
+                             ${ui.img(x.home.logo, '', x.home.abbr, x.home.logoFb)}<small>${esc(x.home.abbr)}</small><b>${esc(x.home.score)}</b>`);
+                        chip.dataset.key = 'chip' + x.id;
+                        ctx.focusable(chip, () => { want = x.id; lastKey = ''; poller.now(); }, 'Show this game');
+                        chipsEl.appendChild(chip);
+                    });
+                }
+                s.body.innerHTML = '';
+                if (chipsEl.childElementCount) s.body.appendChild(chipsEl);
+                s.body.appendChild(liveView(ctx, g, lv));
+                ctx.refocus();
+            }, { every: () => (document.hidden ? 30000 : every) });
+            // when the screen comes back, ask straight away rather than
+            // waiting out the interval with a frozen game on screen
+            const wake = () => { if (!document.hidden && poller) poller.now(); };
+            document.addEventListener('visibilitychange', wake);
+            ctx.onCleanup(() => document.removeEventListener('visibilitychange', wake));
+            return s;
         };
 
         // ---------- Standings ----------
@@ -229,8 +512,41 @@
         // ---------- My Teams: the favorites' matchups ----------
 
         const hex = (c) => (c ? (String(c).startsWith('#') ? c : '#' + c) : '');
+        // The Rangers' card says more than the others can, because baseball
+        // tells us more: while they're playing, the bases, the count, the
+        // outs and the matchup; before they play, who's starting for each
+        // side. `lv` is the live feed when we have it (mlbLive).
+        // a scoreboard's way with a name where there's no room for both:
+        // "Jacob deGrom" -> "deGrom", "Nacho Alvarez Jr." -> "Alvarez Jr."
+        const surname = (n) => {
+            const parts = String(n || '').trim().split(/\s+/);
+            if (parts.length < 2) return parts[0] || '';
+            const tail = /^(Jr\.?|Sr\.?|II|III|IV)$/i.test(parts[parts.length - 1]) ? parts.slice(-2) : parts.slice(-1);
+            return tail.join(' ');
+        };
+        const mlbMatchRow = (g, lv) => {
+            if (!g || !g.mlb) return '';
+            const m = g.mlb;
+            if (g.state === 'in' && !m.dead) {
+                const mid = /^(Mid|End)/i.test(m.half || '');
+                if (mid) return `<div class="sp-match-mlb"><span class="dim">${esc(/^Mid/i.test(m.half) ? 'Middle of the ' + m.ord : 'End of the ' + m.ord)}</span></div>`;
+                const p = lv && lv.pitcher.name ? `<span class="sp-match-who"><i>P</i>${esc(surname(lv.pitcher.name))}</span>` : '';
+                const b = (lv && lv.batter.name) || m.batter;
+                return `<div class="sp-match-mlb">
+                    ${diamond(m.bases, 'sm')}
+                    <b>${m.balls ?? 0}-${m.strikes ?? 0}</b>
+                    ${outsDots(m.outs)}<span class="dim">${m.outs === 1 ? '1 out' : `${m.outs || 0} out`}</span>
+                    ${p}${b ? `<span class="sp-match-who"><i>AB</i>${esc(surname(b))}</span>` : ''}
+                </div>`;
+            }
+            if (g.state === 'pre' && !m.dead && (m.probables.away || m.probables.home)) {
+                const one = (t, name) => `<span class="sp-match-who"><i>${esc(t.abbr)}</i>${esc(surname(name) || 'TBD')}</span>`;
+                return `<div class="sp-match-mlb"><span class="dim">Probables</span>${one(g.away, m.probables.away)}${one(g.home, m.probables.home)}</div>`;
+            }
+            return '';
+        };
         // one favorite's card: the live game, or the next one (the last one under it)
-        const matchupCard = (ctx, tg) => {
+        const matchupCard = (ctx, tg, lv = null) => {
             const f = tg.fav;
             const g = tg.live || tg.next || tg.last;
             const card = el('div', 'sp-match hb-focusable');
@@ -275,6 +591,12 @@
                 const res = me.winner ? 'W' : opp.winner ? 'L' : 'D';
                 lastLine = `<span class="sp-match-last"><b class="${res}">${res}</b> ${esc(me.score)}–${esc(opp.score)} ${lg.home.fav ? 'vs' : 'at'} ${esc(opp.abbr || opp.short)} <small>${esc(fmt.day(lg.start))}</small></span>`;
             }
+            // baseball says more: the bases and the count while they're on,
+            // the probables before, and the last play in place of the result
+            const mlbRow = mlbMatchRow(g, lv);
+            if (mlbRow && lv && lv.plays[0] && g.state === 'in') {
+                lastLine = `<span class="sp-match-last play">${esc(lv.plays[0].desc)}</span>`;
+            }
             // (soccer: the table position says it; the W-D-L doesn't fit)
             const standing = f.league === 'epl' ? tg.team.standing : [tg.team.record, tg.team.standing].filter(Boolean).join(' · ');
             card.innerHTML = `
@@ -289,7 +611,9 @@
                     <div class="sp-match-center">${mid}<div class="sp-match-at">${homeGame ? 'vs' : 'at'} ${esc(them.short || them.abbr)}</div></div>
                     ${side(g.homeFirst ? g.away : g.home)}
                 </div>
+                ${mlbRow}
                 <div class="sp-match-foot">${lastLine}${tv}</div>`;
+            if (mlbRow) card.classList.add('has-mlb');
             void mine;
             const act = g.channel && g.state !== 'post' ? () => ctx.hub.watch(g.channel.ch) : () => ctx.hub.showTab(f.league === 'epl' ? 'soccer' : f.league);
             ctx.focusable(card, act, g.channel && g.state !== 'post' ? `Watch ${g.network || g.channel.name}` : `${L0 ? L0.label : ''}`);
@@ -302,19 +626,30 @@
         const renderMyTeams = (ctx) => {
             // the four matchups
             let lastSig = '';
+            // the Rangers' card is the one that can show a game pitch by
+            // pitch, so this tab polls at the baseball's pace while they're
+            // playing and at the usual one when they're not
+            let every = MIN;
             liveSection(ctx, 'My teams', async (body) => {
+                if (document.hidden) return;
                 const all = await Promise.all(D.FAVS.map((f) => D.teamGames(f).catch(() => ({ fav: f, last: null, next: null, live: null, team: {} }))));
                 all.sort(favOrder);
                 if (all.some((t) => t.live)) liveAny = true;
-                const k = all.map((t) => [t.fav.key, sig([t.live, t.next, t.last].filter(Boolean))].join('=')).join('#');
+                // one extra request, for one game: the Rangers'
+                const tex = all.find((t) => t.fav.league === 'mlb');
+                const texGame = tex ? (tex.live || tex.next || tex.last) : null;
+                every = texGame && (tex.live || (texGame.state === 'pre' && /warmup|pre-?game/i.test(texGame.mlb.detailed))) ? D.mlbLivePace(texGame) : pace();
+                const lv = tex && tex.live ? await D.mlbLive(tex.live.mlb.pk, { ttl: D.mlbLivePace(tex.live) }).catch(() => null) : null;
+                const k = all.map((t) => [t.fav.key, sig([t.live, t.next, t.last].filter(Boolean))].join('=')).join('#')
+                    + (lv ? `|${lv.balls}-${lv.strikes}|${lv.outs}|${lv.bases.join('')}|${lv.batter.name}|${lv.pitcher.name}|${(lv.plays[0] || {}).key || ''}` : '');
                 if (k === lastSig) return;
                 lastSig = k;
                 body.innerHTML = '';
                 const g = el('div', 'hb-grid sp-matches');
                 g.style.setProperty('--cols', 2);
-                all.forEach((t) => g.appendChild(matchupCard(ctx, t)));
+                all.forEach((t) => g.appendChild(matchupCard(ctx, t, t === tex ? lv : null)));
                 body.appendChild(g);
-            }, { every: pace, cls: 'sp-my' });
+            }, { every: () => (document.hidden ? 30000 : every), cls: 'sp-my' });
 
             // where they stand: the AL West, the Premier League's top, the AP top 10
             liveSection(ctx, 'Where they stand', async (body) => {
@@ -385,6 +720,7 @@
         // ---------- League tabs ----------
 
         const renderMLB = (ctx) => {
+            mlbLiveSection(ctx);
             scoresSection(ctx, 'mlb', { title: 'Scores · yesterday and today', limit: 30 });
             liveSection(ctx, 'Standings', async (body) => {
                 const groups = await D.standings('mlb');
@@ -489,6 +825,18 @@
 
         // ---------- Ticker ----------
 
+        // The ticker already carries every league's scores, so baseball
+        // doesn't get a strip of its own — its line just says more than it
+        // could before: "TEX 5 BOS 3  BOT 7TH · 2 OUT, CORNERS", and
+        // "POSTPONED · RAIN" where ESPN only ever said the game was over.
+        const tickerGame = (g) => {
+            const m = g.mlb;
+            if (!m || g.state !== 'in' || m.dead || /^(Mid|End)/i.test(m.half || '')) return g;
+            const on = m.bases.filter(Boolean).length;
+            const who = on === 3 ? 'loaded' : on === 2 && m.bases[0] && m.bases[2] ? 'corners' : on ? `on ${[m.bases[0] && '1st', m.bases[1] && '2nd', m.bases[2] && '3rd'].filter(Boolean).join(' & ')}` : '';
+            const bits = [`${m.outs || 0} out`, who].filter(Boolean).join(', ');
+            return Object.assign({}, g, { status: bits ? `${g.status} · ${bits}` : g.status });
+        };
         const tickerSource = async (hub) => {
             const leagues = ['mlb', 'nfl', 'cfb', 'epl', 'ucl', 'nba', 'nhl'];
             const res = await Promise.all(leagues.map((k) => D.scores(k).catch(() => [])));
@@ -511,7 +859,7 @@
                 segs.push({
                     label: Lg.label === 'College FB' ? 'NCAAF' : Lg.label === 'Premier League' ? 'Prem' : Lg.label === 'Champions League' ? 'UCL' : Lg.label,
                     logo: Lg.logo,
-                    items: pick.slice(0, 40).map((g) => HomerTicker.score(g, { act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }))
+                    items: pick.slice(0, 40).map((g) => HomerTicker.score(tickerGame(g), { act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }))
                 });
             });
             // the favorites' own next (or live) game and last result, wherever
@@ -525,7 +873,7 @@
                     if (g === tg.last && now - g.start > 4 * 86400000) return; // an old result
                     seen.add(g.id);
                     if (g.state === 'in') live = true;
-                    extra.push(HomerTicker.score(g, { priority: true, act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }));
+                    extra.push(HomerTicker.score(tickerGame(g), { priority: true, act: g.channel && g.state !== 'post' ? () => hub.watch(g.channel.ch) : null }));
                 });
             });
             if (extra.length) segs.push({ label: 'My Teams', hidden: true, items: extra });

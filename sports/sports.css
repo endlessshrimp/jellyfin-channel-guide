@@ -332,3 +332,498 @@
 /* (a phone's card has room for the names at its size) */
 .hb-phone.hb-sports .sp-match-team .nm { display: inline; }
 .hb-phone.hb-sports .sp-match-team .ab { display: none; }
+
+/* ---------- Baseball: the live game (MLB's StatsAPI) ---------- */
+
+/* the panel: the two clubs' colors behind it, like a matchup card */
+.hb-sports .sp-live {
+    --c1: #16243c;
+    --c2: #16243c;
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #0a1426;
+    box-shadow: 0 0 0 1px var(--line-strong), 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 14px 22px 16px;
+    transition: box-shadow 120ms ease;
+}
+
+.hb-sports .sp-live.hb-focus { box-shadow: var(--focus-ring); }
+
+.hb-sports .sp-live-bg {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(4, 10, 24, 0.35) 0%, rgba(4, 10, 24, 0.78) 55%, rgba(4, 10, 24, 0.92) 100%),
+        linear-gradient(105deg, var(--c1) 0%, var(--c1) 49.6%, var(--c2) 50.4%, var(--c2) 100%);
+    opacity: 0.82;
+}
+
+.hb-sports .sp-live > :not(.sp-live-bg) { position: relative; }
+
+.hb-sports .sp-live-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 32px;
+    white-space: nowrap;
+}
+
+.hb-sports .sp-live-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--cond);
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.hb-sports .sp-live-status.in { color: #ff9a9a; }
+.hb-sports .sp-live-status.pre { color: var(--homer-accent-2, #6fd3ff); }
+.hb-sports .sp-live-status.post { color: rgba(255, 255, 255, 0.85); }
+
+.hb-sports .sp-live-status i {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 14px var(--live);
+}
+
+.hb-sports .sp-live-flag {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 11px;
+    border-radius: 7px;
+    background: var(--gold);
+    color: #1a1200;
+}
+
+.hb-sports .sp-live-note {
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-sports .sp-live-tv {
+    margin-left: auto;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: rgba(4, 10, 24, 0.55);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.hb-sports .sp-live-tv.on { background: rgba(47, 140, 255, 0.85); color: #fff; }
+.hb-sports .sp-live-tv .material-icons { font-size: 20px; }
+
+/* the two clubs on the left, the at-bat on the right */
+.hb-sports .sp-live-body {
+    display: grid;
+    grid-template-columns: minmax(0, 372px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: center;
+    padding: 10px 0 12px;
+}
+
+.hb-sports .sp-live-team {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 12px 6px 8px;
+    border-radius: 12px;
+    border-left: 5px solid var(--team, transparent);
+    background: rgba(4, 10, 24, 0.3);
+}
+
+.hb-sports .sp-live-team + .sp-live-team { margin-top: 8px; }
+.hb-sports .sp-live-team.bat { background: rgba(255, 194, 51, 0.16); }
+.hb-sports .sp-live-team.lose { opacity: 0.62; }
+
+.hb-sports .sp-live-logo { width: 54px; height: 54px; display: grid; place-items: center; flex: none; }
+.hb-sports .sp-live-logo img { max-width: 54px; max-height: 54px; object-fit: contain; }
+
+.hb-sports .sp-live-nm {
+    font-family: var(--cond);
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-sports .sp-live-atbat {
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--gold);
+    color: #1a1200;
+    flex: none;
+}
+
+.hb-sports .sp-live-runs {
+    margin-left: auto;
+    font-size: 46px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+/* the at-bat: the diamond, the count, the outs, then who's who */
+.hb-sports .sp-live-centre { min-width: 0; }
+
+.hb-sports .sp-live-state {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+}
+
+.hb-sports .sp-diamond { width: 76px; height: 76px; flex: none; }
+.hb-sports .sp-diamond.sm { width: 30px; height: 30px; }
+.hb-sports .sp-base { fill: rgba(255, 255, 255, 0.12); stroke: rgba(255, 255, 255, 0.4); stroke-width: 2; }
+.hb-sports .sp-base.on { fill: var(--gold); stroke: var(--gold); }
+.hb-sports .sp-plate { fill: rgba(255, 255, 255, 0.35); }
+
+.hb-sports .sp-live-count { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+.hb-sports .sp-live-bs {
+    font-size: 44px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.hb-sports .sp-live-bs i { font-style: normal; color: rgba(255, 255, 255, 0.45); margin: 0 2px; }
+
+.hb-sports .sp-live-lbl {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.hb-sports .sp-outs { display: inline-flex; gap: 7px; align-items: center; height: 44px; }
+.hb-sports .sp-outs i {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    box-sizing: border-box;
+}
+.hb-sports .sp-outs i.on { background: var(--live); border-color: var(--live); box-shadow: 0 0 10px rgba(255, 59, 59, 0.7); }
+
+/* a line each, the label in a column of its own, so no name is ever cut */
+.hb-sports .sp-live-matchup {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 12px;
+    min-width: 0;
+}
+
+.hb-sports .sp-live-who { display: flex; align-items: baseline; gap: 11px; min-width: 0; }
+.hb-sports .sp-live-who.dim { opacity: 0.66; }
+.hb-sports .sp-live-who .sp-live-lbl { width: 94px; flex: none; }
+.hb-sports .sp-live-who b {
+    font-size: 25px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.hb-sports .sp-live-who small { flex: none; font-family: var(--cond); font-size: 16px; color: rgba(255, 255, 255, 0.55); }
+
+.hb-sports .sp-live-runners {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+/* the pitches in this at-bat, oldest first */
+.hb-sports .sp-pitches { display: inline-flex; gap: 5px; }
+.hb-sports .sp-pitches i { width: 11px; height: 11px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); }
+.hb-sports .sp-pitches i.ball { background: #4ec06a; }
+.hb-sports .sp-pitches i.strike { background: #e8554d; }
+.hb-sports .sp-pitches i.in-play { background: var(--gold); }
+
+.hb-sports .sp-live-between,
+.hb-sports .sp-live-first {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.hb-sports .sp-live-probs {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-top: 8px;
+    font-size: 24px;
+    font-weight: 600;
+    flex-wrap: wrap;
+}
+
+.hb-sports .sp-live-probs i { font-style: normal; color: rgba(255, 255, 255, 0.5); }
+.hb-sports .sp-live-probs small {
+    font-family: var(--cond);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 7px;
+}
+
+/* ---------- The line score ---------- */
+
+.hb-sports .sp-ls {
+    margin-top: 4px;
+    padding: 10px 0 2px;
+    border-top: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+    overflow-x: auto;
+}
+
+.hb-sports .sp-ls-row {
+    display: grid;
+    grid-template-columns: 96px repeat(var(--innings), minmax(26px, 1fr)) 40px 34px 34px;
+    align-items: center;
+    height: 34px;
+    gap: 2px;
+}
+
+.hb-sports .sp-ls-row.head { height: 26px; }
+.hb-sports .sp-ls-row.head span { font-family: var(--cond); font-size: 17px; font-weight: 700; color: rgba(255, 255, 255, 0.5); }
+
+.hb-sports .sp-ls-i, .hb-sports .sp-ls-n, .hb-sports .sp-ls-t { text-align: center; font-size: 22px; font-weight: 600; }
+.hb-sports .sp-ls-n.off { color: rgba(255, 255, 255, 0.28); }
+.hb-sports .sp-ls-t { font-weight: 800; }
+.hb-sports .sp-ls-t.r { color: var(--gold); }
+
+.hb-sports .sp-ls-team { display: flex; align-items: center; gap: 8px; }
+.hb-sports .sp-ls-team img { width: 24px; height: 24px; object-fit: contain; }
+.hb-sports .sp-ls-team b { font-family: var(--cond); font-size: 21px; font-weight: 800; letter-spacing: 0.04em; }
+
+/* ---------- What just happened ---------- */
+
+.hb-sports .sp-plays { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+
+.hb-sports .sp-play {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 3px 0;
+    font-size: 21px;
+    color: rgba(255, 255, 255, 0.62);
+    min-width: 0;
+}
+
+.hb-sports .sp-play.first { font-size: 24px; font-weight: 600; color: #fff; }
+.hb-sports .sp-play.score .sp-play-txt { color: var(--gold); }
+
+.hb-sports .sp-play-inn {
+    flex: none;
+    width: 42px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.hb-sports .sp-play-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Picking which live game the panel shows ---------- */
+
+.hb-sports .sp-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+
+.hb-sports .sp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 13px;
+    border-radius: 11px;
+    background: var(--cell);
+    box-shadow: inset 0 0 0 1px var(--line);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hb-sports .sp-chip.on { background: rgba(47, 140, 255, 0.28); box-shadow: inset 0 0 0 2px var(--accent); }
+.hb-sports .sp-chip.hb-focus { box-shadow: var(--focus-ring); }
+.hb-sports .sp-chip img { width: 26px; height: 26px; object-fit: contain; }
+.hb-sports .sp-chip b { font-size: 22px; font-weight: 800; }
+.hb-sports .sp-chip small { font-family: var(--cond); font-size: 17px; font-weight: 700; color: var(--dim); margin-right: 2px; }
+.hb-sports .sp-chip em { font-style: normal; font-family: var(--cond); font-size: 17px; font-weight: 700; color: #ff9a9a; margin: 0 4px; }
+
+/* ---------- Baseball on a score card ---------- */
+
+.hb-sports .hb-score .sp-cardline {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-family: var(--cond);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.78);
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.hb-sports .sp-cardline b { font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hb-sports .sp-cardline .sp-outs { height: 20px; gap: 5px; }
+.hb-sports .sp-cardline .sp-outs i { width: 11px; height: 11px; border-width: 2px; }
+.hb-sports .sp-cardline-txt { color: rgba(255, 255, 255, 0.6); }
+.hb-sports .sp-cardline-ab {
+    margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--homer-font);
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* ---------- Baseball on the Rangers' matchup card ---------- */
+
+.hb-sports .sp-match-mlb {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    min-width: 0;
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.hb-sports .sp-match-mlb b { font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hb-sports .sp-match-mlb .dim { color: rgba(255, 255, 255, 0.65); }
+.hb-sports .sp-match-mlb .sp-outs { height: 22px; gap: 5px; }
+.hb-sports .sp-match-mlb .sp-outs i { width: 12px; height: 12px; }
+
+.hb-sports .sp-match-who {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--homer-font);
+    font-size: 19px;
+    font-weight: 600;
+}
+
+.hb-sports .sp-match-who i {
+    font-style: normal;
+    font-family: var(--cond);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* the baseball row takes its 32px from the logos, not from the card */
+.hb-sports .sp-match.has-mlb .sp-match-logo,
+.hb-sports .sp-match.has-mlb .sp-match-logo img { width: 86px; height: 86px; max-width: 86px; max-height: 86px; }
+.hb-sports .sp-match.has-mlb .sp-match-score { font-size: 54px; }
+.hb-sports .sp-match-last.play { font-weight: 500; color: rgba(255, 255, 255, 0.82); }
+
+/* ---------- Narrow and phone ---------- */
+
+/* The stage is scaled, so a viewport media query says nothing about how wide
+   the panel actually is: ask the panel (as the matchup cards do). */
+.hb-sports .sp-live { container: live / inline-size; }
+
+@container live (max-width: 720px) {
+    .hb-sports .sp-live-body { grid-template-columns: 1fr; gap: 12px; }
+    .hb-sports .sp-live-state { gap: 18px; }
+    .hb-sports .sp-live-who b { font-size: 22px; }
+    .hb-sports .sp-live-who .sp-live-lbl { width: 78px; }
+    .hb-sports .sp-live-logo, .hb-sports .sp-live-logo img { width: 42px; height: 42px; max-width: 42px; max-height: 42px; }
+    .hb-sports .sp-live-nm { font-size: 24px; }
+    .hb-sports .sp-live-runs { font-size: 36px; }
+    .hb-sports .sp-diamond { width: 62px; height: 62px; }
+}
+
+.hb-phone.hb-sports .sp-live { padding: 10px 12px 12px; border-radius: 14px; }
+.hb-phone.hb-sports .sp-live-head { height: 24px; gap: 8px; }
+.hb-phone.hb-sports .sp-live-status { font-size: 15px; }
+.hb-phone.hb-sports .sp-live-flag, .hb-phone.hb-sports .sp-live-note, .hb-phone.hb-sports .sp-live-tv { font-size: 12px; }
+.hb-phone.hb-sports .sp-live-tv .material-icons { font-size: 14px; }
+.hb-phone.hb-sports .sp-live-body { grid-template-columns: 1fr; gap: 10px; padding: 8px 0; }
+.hb-phone.hb-sports .sp-live-logo, .hb-phone.hb-sports .sp-live-logo img { width: 34px; height: 34px; max-width: 34px; max-height: 34px; }
+.hb-phone.hb-sports .sp-live-nm { font-size: 18px; }
+.hb-phone.hb-sports .sp-live-atbat { font-size: 11px; }
+.hb-phone.hb-sports .sp-live-runs { font-size: 28px; }
+.hb-phone.hb-sports .sp-diamond { width: 50px; height: 50px; }
+.hb-phone.hb-sports .sp-live-bs { font-size: 28px; }
+.hb-phone.hb-sports .sp-live-lbl { font-size: 12px; }
+.hb-phone.hb-sports .sp-outs { height: 28px; }
+.hb-phone.hb-sports .sp-outs i { width: 11px; height: 11px; }
+.hb-phone.hb-sports .sp-live-who b { font-size: 17px; }
+.hb-phone.hb-sports .sp-live-who small { font-size: 12px; }
+.hb-phone.hb-sports .sp-live-runners { font-size: 13px; }
+.hb-phone.hb-sports .sp-live-between, .hb-phone.hb-sports .sp-live-first { font-size: 20px; }
+.hb-phone.hb-sports .sp-live-probs { font-size: 15px; gap: 8px; }
+.hb-phone.hb-sports .sp-live-probs small { font-size: 12px; }
+.hb-phone.hb-sports .sp-ls-row { grid-template-columns: 62px repeat(var(--innings), minmax(18px, 1fr)) 26px 24px 24px; height: 24px; }
+.hb-phone.hb-sports .sp-ls-i, .hb-phone.hb-sports .sp-ls-n, .hb-phone.hb-sports .sp-ls-t { font-size: 14px; }
+.hb-phone.hb-sports .sp-ls-team img { width: 17px; height: 17px; }
+.hb-phone.hb-sports .sp-ls-team b { font-size: 14px; }
+.hb-phone.hb-sports .sp-play { font-size: 13px; gap: 8px; }
+.hb-phone.hb-sports .sp-play.first { font-size: 14px; }
+.hb-phone.hb-sports .sp-play-inn { width: 28px; font-size: 12px; }
+.hb-phone.hb-sports .sp-chip { padding: 4px 9px; gap: 4px; }
+.hb-phone.hb-sports .sp-chip img { width: 18px; height: 18px; }
+.hb-phone.hb-sports .sp-chip b { font-size: 15px; }
+.hb-phone.hb-sports .sp-chip small, .hb-phone.hb-sports .sp-chip em { font-size: 12px; }
+.hb-phone.hb-sports .sp-cardline { font-size: 13px; gap: 6px; margin-top: 6px; padding-top: 6px; }
+.hb-phone.hb-sports .sp-cardline b { font-size: 14px; }
+.hb-phone.hb-sports .sp-cardline-ab { font-size: 12px; }
+.hb-phone.hb-sports .sp-diamond.sm { width: 22px; height: 22px; }
+.hb-phone.hb-sports .sp-match-mlb { height: 22px; font-size: 13px; gap: 7px; }
+.hb-phone.hb-sports .sp-match-mlb b { font-size: 14px; }
+.hb-phone.hb-sports .sp-match-who { font-size: 12px; }
+.hb-phone.hb-sports .sp-match-who i { font-size: 11px; }
+.hb-phone.hb-sports .sp-match.has-mlb .sp-match-logo,
+.hb-phone.hb-sports .sp-match.has-mlb .sp-match-logo img { width: 48px; height: 48px; max-width: 48px; max-height: 48px; }
+.hb-phone.hb-sports .sp-match.has-mlb .sp-match-score { font-size: 30px; }

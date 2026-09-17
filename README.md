@@ -551,6 +551,30 @@ tabs of content on the right, and a ticker along the bottom.
   League, Champions League), NBA, NHL, College Hoops. Scores, standings and
   rankings come from ESPN's public API. A game's card shows our channel for
   it, and OK watches it.
+- **Baseball comes from MLB**, not ESPN: `statsapi.mlb.com`, which answers a
+  browser directly and knows what a scoreboard knows.
+
+  ![The live game](docs/screenshots/hubs/sports-mlb-live.jpg)
+
+  - **Live now**, at the top of the MLB tab: the two clubs on their own
+    colours with the batting side lit, **the bases**, **the count**, **the
+    outs**, who's **pitching** and who's **at bat** (and who's on deck), the
+    **line score inning by inning** with R H E, and **the last four plays**.
+    When more than one game is on, a chip per game across the top picks which
+    one the panel follows; the Rangers' is the one it opens on.
+  - **The Rangers' card on My Teams** carries the same detail while they're
+    playing — bases, count, outs, pitcher, hitter and the last play — and the
+    **two probable starters** before they play. Their line reads "76-76 · 2nd
+    in AL West", with the magic number or "clinched" once either is real.
+  - **Every score card** for a game in progress gets the bases, the count and
+    the outs under the score, and the states are the real ones: **Warmup**,
+    **Delayed · Rain**, **Postponed**, **Final/10**, **Mid 7th**.
+  - Polling is a courtesy: the slate (about 20 KB) every 15 seconds while a
+    game is live, a minute when one's about to start, 5 minutes otherwise;
+    one game's live feed (about 3 KB) every 12 seconds while the ball's in
+    play and slower when it isn't — only for the game on screen and the
+    Rangers', never one per game. Nothing is fetched while the screen is
+    closed or the tab is hidden.
 - **News** opens on CNN. Tabs: Top, US, World, UK, France, Business, Local,
   Tech, from publishers' RSS feeds through HOMER's feed helper on the NAS
   (`/homer-feeds`). OK opens a story with a QR code to read it on your phone.
