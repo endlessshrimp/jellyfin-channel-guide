@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.13
+
+- **Music on a phone:** the album wall is two even columns again. An `fr`
+  track floors at its content's minimum width, so one wide cover stretched
+  the first column and squashed the second to a sliver; the same guard went
+  into the other phone grids that split in two.
+
 ## v0.4.12
 
 - **Album art loads on Now Playing again** — and in Rooms and the quick panel.
