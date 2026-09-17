@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.1.0 (2026-09-12)
+
+First release of the full-screen guide.
+
+- Full-screen, set-top-box style guide on a 1920×1080 stage that scales to the
+  window: program info panel, preview window, three-hour channel grid with a
+  "now" marker, remote-style key legend.
+- Loads on every Jellyfin Web page without opening anything. Adds a **Guide**
+  button to the header for signed-in users and opens on the **G** key. The
+  button reattaches when Jellyfin redraws its header, and loading the script
+  twice doesn't add a second one.
+- **OK / Enter** or a click starts the channel in the same browser tab.
+- **R** schedules a one-time recording of the selected program and shows a
+  confirmation. Programs with a scheduled recording get a red dot.
+- The OK, Record and Exit hints along the bottom are clickable, so the guide can
+  be closed without a keyboard.
+- Closes when Jellyfin navigates to another page.
+- Sends Jellyfin Web's own client/device details with API requests, so using the
+  guide doesn't rename the browser in Jellyfin's device list or create an extra
+  session.
+- `window.ChannelGuide.open()` / `.close()` for scripting.
+
+`theme.css`, the earlier CSS-only restyle of Jellyfin's built-in guide page, is
+still in the repo but is no longer the main product.
+
+## v0.4.27
+
+- **Sports: a game's channel is now the guide's answer, not a guess.**
+  `shared/hub.js`'s `forNetworkNow(names)` returned the *first* lineup
+  channel whose name matched a network — one channel per network, no notion
+  of which regional feed carries which game. Two MLB games both on "FOX"
+  tonight both showed FOX 4 Dallas (1004), even though only one of them was
+  actually the game airing there. Fixed with a new resolver
+  (`sports/sports-data.js` `resolveChannels()`): it collects *every* lineup
+  channel a network could mean (`HomerHub.channels.forNetworkAllNow`), asks
+  Jellyfin's guide (`channels.programsFor`, one batched `/LiveTv/Programs`
+  call per screen, not one per game or per channel) what each candidate is
+  showing during the game's window, and keeps the one whose listing actually
+  names both teams — in the title, episode title, or (where Jason's guide
+  source puts the matchup) the synopsis. Exactly one match resolves the
+  channel; no listing yet (his EPG runs about 3 days out), a mismatch, or
+  more than one plausible channel all leave the game a named network with no
+  channel number — shown, never guessed, never tunable. A channel whose
+  listing is a repeat (Jellyfin's `IsRepeat`, or a title saying so) is
+  treated the same as no data: named, not tunable, even if it's the right
+  game. Also tightened the Rangers' own channel alias (`sports/sports.js`),
+  which matched a second "Texas Rangers (MLB feed)" channel with identical
+  listings and made every Rangers game look ambiguous once candidates
+  stopped being deduped down to one.
+- **A game only tunes when it's actually live.** Clicking an upcoming game's
+  card (which still names its channel) or a finished one's used to start a
+  stream anyway; now only `state === 'in'` does (`sports/sports.js`, the
+  score grid, the MLB live view, My Teams, and the ticker).
+- **Scores are two sections now: what's on or coming up, and what's already
+  over.** Finished games move to a smaller "Final" group below, read as
+  scores rather than a watch pick — no channel badge, no tune affordance.
+  Their cards are clickable and route-ready for a box-score page
+  (`#/sports?game=<id>`, not built yet) rather than doing nothing.
+
 ## v0.4.26
 
 - **No more ‹ beside the screen's name** in the phone top bar. Sitting next to
@@ -37,39 +96,6 @@
   the album wall around — its box keeps its slot in the flow; only what's
   drawn inside it gets smaller. Respects `prefers-reduced-motion`. Replaces
   the old fixed `.mup-mini` bar entirely.
-## v0.4.27
-
-- **Sports: a game's channel is now the guide's answer, not a guess.**
-  `shared/hub.js`'s `forNetworkNow(names)` returned the *first* lineup
-  channel whose name matched a network — one channel per network, no notion
-  of which regional feed carries which game. Two MLB games both on "FOX"
-  tonight both showed FOX 4 Dallas (1004), even though only one of them was
-  actually the game airing there. Fixed with a new resolver
-  (`sports/sports-data.js` `resolveChannels()`): it collects *every* lineup
-  channel a network could mean (`HomerHub.channels.forNetworkAllNow`), asks
-  Jellyfin's guide (`channels.programsFor`, one batched `/LiveTv/Programs`
-  call per screen, not one per game or per channel) what each candidate is
-  showing during the game's window, and keeps the one whose listing actually
-  names both teams — in the title, episode title, or (where Jason's guide
-  source puts the matchup) the synopsis. Exactly one match resolves the
-  channel; no listing yet (his EPG runs about 3 days out), a mismatch, or
-  more than one plausible channel all leave the game a named network with no
-  channel number — shown, never guessed, never tunable. A channel whose
-  listing is a repeat (Jellyfin's `IsRepeat`, or a title saying so) is
-  treated the same as no data: named, not tunable, even if it's the right
-  game. Also tightened the Rangers' own channel alias (`sports/sports.js`),
-  which matched a second "Texas Rangers (MLB feed)" channel with identical
-  listings and made every Rangers game look ambiguous once candidates
-  stopped being deduped down to one.
-- **A game only tunes when it's actually live.** Clicking an upcoming game's
-  card (which still names its channel) or a finished one's used to start a
-  stream anyway; now only `state === 'in'` does (`sports/sports.js`, the
-  score grid, the MLB live view, My Teams, and the ticker).
-- **Scores are two sections now: what's on or coming up, and what's already
-  over.** Finished games move to a smaller "Final" group below, read as
-  scores rather than a watch pick — no channel badge, no tune affordance.
-  Their cards are clickable and route-ready for a box-score page
-  (`#/sports?game=<id>`, not built yet) rather than doing nothing.
 
 ## v0.4.23
 
@@ -1656,28 +1682,3 @@ Two things a Siri Remote couldn't do, and one it couldn't reach.
   started returns to the guide.
 - Hovering with the mouse only highlights; the grid no longer scrolls under the
   pointer. Arrow keys and the wheel scroll only when the selection leaves view.
-
-## v0.1.0 (2026-09-12)
-
-First release of the full-screen guide.
-
-- Full-screen, set-top-box style guide on a 1920×1080 stage that scales to the
-  window: program info panel, preview window, three-hour channel grid with a
-  "now" marker, remote-style key legend.
-- Loads on every Jellyfin Web page without opening anything. Adds a **Guide**
-  button to the header for signed-in users and opens on the **G** key. The
-  button reattaches when Jellyfin redraws its header, and loading the script
-  twice doesn't add a second one.
-- **OK / Enter** or a click starts the channel in the same browser tab.
-- **R** schedules a one-time recording of the selected program and shows a
-  confirmation. Programs with a scheduled recording get a red dot.
-- The OK, Record and Exit hints along the bottom are clickable, so the guide can
-  be closed without a keyboard.
-- Closes when Jellyfin navigates to another page.
-- Sends Jellyfin Web's own client/device details with API requests, so using the
-  guide doesn't rename the browser in Jellyfin's device list or create an extra
-  session.
-- `window.ChannelGuide.open()` / `.close()` for scripting.
-
-`theme.css`, the earlier CSS-only restyle of Jellyfin's built-in guide page, is
-still in the repo but is no longer the main product.
