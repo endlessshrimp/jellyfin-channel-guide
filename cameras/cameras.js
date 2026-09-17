@@ -178,16 +178,26 @@
         const load = () => {
             if (stopped || loading) return;
             const h = HA();
-            // a camera Home Assistant can't reach has no still to ask for, and
-            // the one on screen is however old the outage is: clear it, say
-            // there's no picture, and stop asking until it's back
-            const ent = h && h.entity ? h.entity(id) : null;
-            if (ent && (ent.state === 'unavailable' || ent.state === 'unknown')) {
-                if (box) { box.classList.remove('has-still'); box.classList.add('no-still'); }
-                img.removeAttribute('src');
-                return;
+            // The garage and front yard cameras skip Home Assistant entirely —
+            // the NAS grabs their stills straight off the camera (see
+            // cameras-model.js's docstring) — so they're never blanked by
+            // Home Assistant being unreachable or the camera showing
+            // "unavailable" there; that's the whole point of going around it.
+            const CM = window.HomerCamerasModel;
+            const nasUrl = CM ? CM.nasStillUrl(id, true) : '';
+            if (!nasUrl) {
+                // every other camera: a camera Home Assistant can't reach has
+                // no still to ask for, and the one on screen is however old
+                // the outage is: clear it, say there's no picture, and stop
+                // asking until it's back
+                const ent = h && h.entity ? h.entity(id) : null;
+                if (ent && (ent.state === 'unavailable' || ent.state === 'unknown')) {
+                    if (box) { box.classList.remove('has-still'); box.classList.add('no-still'); }
+                    img.removeAttribute('src');
+                    return;
+                }
             }
-            const url = h ? h.snapshotUrl(id, true) : '';
+            const url = nasUrl || (h ? h.snapshotUrl(id, true) : '');
             if (!url) { box && box.classList.add('no-still'); return; }
             if (url.startsWith('data:')) {
                 img.src = url;
