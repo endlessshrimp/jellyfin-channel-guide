@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.32
 
 - **Live scores delay, so MLB's own data doesn't spoil the broadcast.**
   StatsAPI's live feed and schedule/linescore data know a play happened
@@ -51,6 +51,20 @@
   Jellyfin 10.11 server with a second, non-admin account attached to the
   request (not just read from source): it gets back its own, unrelated
   bucket, never the other account's stored credential.
+
+## v0.4.29
+
+- **Casting a movie no longer hands Home Assistant the Jellyfin token.** The
+  Home Assistant route built a stream address with `?api_key=…` in it, so the
+  real access token went through a service call and into Home Assistant's
+  logbook, its recorder and any log that repeats a call. The NAS helper now
+  mints an opaque, single-item address (`/video/cast` → `/video/c/<key>`,
+  good for 12 hours) and holds the token itself, the same way the music
+  playlists already worked. The Jellyfin-client route never carried a token
+  and is unchanged.
+- **The Home Assistant cast route works at all now.** Jellyfin's
+  `master.m3u8` needs a `MediaSourceId`, which the original code never sent —
+  so that route had been failing since it was written.
 
 ## v0.4.28
 
