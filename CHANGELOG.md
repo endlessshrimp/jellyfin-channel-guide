@@ -37,7 +37,7 @@
   the album wall around — its box keeps its slot in the flow; only what's
   drawn inside it gets smaller. Respects `prefers-reduced-motion`. Replaces
   the old fixed `.mup-mini` bar entirely.
-## Unreleased
+## v0.4.27
 
 - **Sports: a game's channel is now the guide's answer, not a guess.**
   `shared/hub.js`'s `forNetworkNow(names)` returned the *first* lineup
