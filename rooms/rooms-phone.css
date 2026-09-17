@@ -147,6 +147,117 @@
     background: rgba(4, 11, 24, 0.6);
 }
 
+/* ---------- Who's home ---------- */
+/* The band the TV screen draws above the rooms (rooms.css), at phone size and
+   above the room chips: who's in is lit and in color, who's out is flat and
+   grey. It scrolls sideways when the house has more people than fit, and it
+   isn't drawn at all without Home Assistant. Nothing here is a tap target. */
+
+.ho-phone .op-people {
+    display: none;
+    flex: none;
+    background: rgba(4, 11, 24, 0.6);
+}
+
+.ho-phone .op-people.on { display: block; }
+
+.ho-phone .op-people-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px calc(16px + var(--homer-phone-right)) 0 calc(16px + var(--homer-phone-left));
+    font-family: var(--homer-font-cond);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--homer-dim);
+}
+
+.ho-phone .op-people-head .material-icons { font-size: 16px; color: var(--homer-accent-2); }
+
+.ho-phone .op-people-track {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 8px calc(16px + var(--homer-phone-right)) 10px calc(16px + var(--homer-phone-left));
+}
+
+.ho-phone .op-people-track::-webkit-scrollbar { display: none; }
+
+.ho-phone .ho-person {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 56px;
+    padding: 0 16px 0 5px;
+    border-radius: 28px;
+    background: var(--homer-cell);
+    border: 1px solid var(--homer-line-strong);
+    box-sizing: border-box;
+}
+
+.ho-phone .ho-person-face {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #1c2940 center / cover no-repeat;
+    border: 1px solid var(--homer-line-strong);
+    font-family: var(--homer-font-cond);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--homer-dim);
+}
+
+.ho-phone .ho-person-face.ho-has-pic { color: transparent; }
+
+.ho-phone .ho-person-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.ho-phone .ho-person-name {
+    font-size: 16px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ho-phone .ho-person-where {
+    font-family: var(--homer-font-cond);
+    font-size: 13px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: var(--homer-dim);
+    white-space: nowrap;
+}
+
+.ho-phone .ho-person-since {
+    font-style: normal;
+    color: rgba(190, 208, 228, 0.6);
+}
+
+.ho-phone .ho-person-since:not(:empty)::before { content: " · "; }
+
+.ho-phone .ho-person.in {
+    background: rgba(51, 209, 122, 0.1);
+    border-color: rgba(51, 209, 122, 0.4);
+}
+
+.ho-phone .ho-person.in .ho-person-face { border-color: rgba(51, 209, 122, 0.55); }
+.ho-phone .ho-person.in .ho-person-where { color: #c9f3dd; }
+
+.ho-phone .ho-person:not(.in) { opacity: 0.62; }
+.ho-phone .ho-person:not(.in) .ho-person-face { filter: grayscale(1); }
+
 .ho-phone .op-chips-track {
     position: relative; /* the chips measure from here */
     display: flex;

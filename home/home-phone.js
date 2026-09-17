@@ -74,7 +74,6 @@
                             <button type="button" class="hmp-settings hmp-rooms"${window.HomerHA && window.HomerHA.isSetUp() ? '' : ' hidden'}><span class="hmp-settings-pill">${icon('lightbulb')}Rooms</span></button>
                             <button type="button" class="hmp-settings"><span class="hmp-settings-pill">${icon('settings')}Settings</span></button>
                         </div>
-                        <div class="hmp-people" aria-label="Who's home"></div>
                         <div class="hmp-hubs">
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/playing"><span class="hmp-settings-pill">${icon('graphic_eq')}Playing</span></button>
                             <button type="button" class="hmp-settings hmp-hub" data-go="#/sports"><span class="hmp-settings-pill">${icon('sports_football')}Sports</span></button>
@@ -332,14 +331,10 @@
             teardown() {
                 clearInterval(tickTimer);
                 clearInterval(dockTimer);
-                if (people) people.off();
                 window.removeEventListener('wheel', onWheelCapture, { capture: true });
                 root.remove();
             }
         };
-
-        // who's home, the same row TV Home draws (home.js's peopleRow)
-        const people = ctx.peopleRow ? ctx.peopleRow(root.querySelector('.hmp-people')) : null;
 
         paintDate();
         syncDock();

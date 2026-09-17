@@ -18,14 +18,6 @@ sits above the menu (▲ or `/`).
   **Full screen**, **Guide** and **Stop**.
 - **H**, or the HOMER logo at the top left of any HOMER screen, comes back to
   Home from anywhere.
-- **Who's home** sits in the top bar beside the clock, once Home Assistant is
-  connected: one small row, a person each, their picture where Home Assistant
-  has one and their initials where it doesn't. Whoever's in reads lit,
-  whoever's out reads flat and grey. It's read only — HOMER asks Home
-  Assistant where people are and changes nothing.
-
-![Who's home, in Home's top bar](docs/screenshots/home-people.jpg)
-
 ### The main menu, in one of two treatments
 
 The menu is one list (`shared/menu.js`), drawn on Home and on Now Playing, so
@@ -263,6 +255,21 @@ With [Home Assistant](https://www.home-assistant.io/) connected (Settings →
 Home Assistant), HOMER has a **Rooms** screen, quick controls over whatever's
 playing, and a doorbell picture-in-picture. Nothing about Home Assistant is in
 HOMER's code or the injector config except, if you like, its address.
+
+- **Who's home** is the first band of Rooms, above the rooms themselves: a
+  card a person, their picture where Home Assistant has one and their initials
+  where it doesn't, whether they're in, where they are — **Home**, or the
+  zone Home Assistant has them in (**Work**, **School**) — and how long
+  they've been there (**since 4:12 PM**, **2 h**). Whoever's in reads lit and
+  in color, whoever's out flat and grey. ▲ from the first room goes up to
+  it and ▼ comes back down; nothing on it is a control, so **OK** does
+  nothing there. Holding **OK** on an Apple TV remote (the
+  [Actions strip](#actions-for-a-remote-with-no-letter-keys)) has **Who's
+  home** from any screen, which opens Rooms with the band focused. It's read
+  only — HOMER asks Home Assistant where people are and changes nothing, and a
+  house with nobody to show gets no band at all.
+
+  ![Who's home, at the top of Rooms](docs/screenshots/rooms-people.jpg)
 
 - **Rooms** (Home's menu, or **Rooms** at the top of Home on a phone) lists
   Home Assistant's areas, with what's on and the temperature, plus
@@ -835,6 +842,7 @@ anywhere: **Guide**, **Home** and **Quick controls**.
 | **Weather**, **Books** | Try again when something failed; Books adds Play/Pause (**P**) |
 | **Music** | Play/Pause (**P**), Next track, Shuffle (**S**), Repeat (**R**), Instant Mix (**I**), Now playing |
 | **Anywhere, with music loaded** | Play/Pause music, Next track, and **Music** to go back to it |
+| **Anywhere, with Home Assistant connected** | **Who's home** — opens Rooms with the who's home band focused |
 | **Anywhere, with an alert showing** | Dismiss alert (**Esc**), and **Weather** for a weather alert |
 | **A recording playing full screen** | Skip 30s (**S**) |
 

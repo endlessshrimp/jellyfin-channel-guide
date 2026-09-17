@@ -13,6 +13,165 @@
     --cool: #6fd3ff;
 }
 
+/* ---------- Who's home ---------- */
+/* The first band of the screen, above the rooms: a card a person, read from
+   across the room. Who's in is lit and in color; who's out is flat, grey and
+   greyscale, which is the whole of the reading at a glance. Nothing on it is
+   a control — it takes the focus so a remote can reach it (▼ to the rooms, ▲
+   back), and that is all it does. Without Home Assistant there is nobody to
+   show, so the band isn't drawn and the rooms keep the top of the screen. */
+
+.ho-people {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 128px;
+    height: 116px;
+    display: none;
+    align-items: center;
+    gap: 22px;
+    padding: 0 26px;
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
+    overflow: hidden;
+    cursor: default;
+}
+
+.ho-has-people .ho-people { display: flex; }
+
+/* the camera and the remote take the whole stage: no band over them */
+.ho-zone-camera .ho-people,
+.ho-zone-remote .ho-people { display: none; }
+
+.ho-people.sel {
+    background: var(--focus-fill);
+    box-shadow: var(--focus-ring);
+}
+
+/* the band's name, in Rooms' own section lettering */
+.ho-people-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+}
+
+.ho-people-head .material-icons { font-size: 24px; color: var(--accent-2); }
+
+.ho-people.sel .ho-people-head,
+.ho-people.sel .ho-people-head .material-icons { color: rgba(255, 255, 255, 0.9); }
+
+.ho-people-track {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.ho-people-track::-webkit-scrollbar { display: none; }
+
+.ho-person {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 84px;
+    padding: 0 26px 0 8px;
+    border-radius: 42px;
+    background: rgba(20, 36, 60, 0.5);
+    border: 1px solid rgba(160, 190, 230, 0.06);
+    box-sizing: border-box;
+}
+
+.ho-person-face {
+    flex: none;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #1c2940 center / cover no-repeat;
+    border: 1px solid var(--line-strong);
+    font-family: var(--cond);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+}
+
+/* a real picture: the initials underneath would show through it */
+.ho-person-face.ho-has-pic { color: transparent; }
+
+.ho-person-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ho-person-name {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ho-person-where {
+    font-family: var(--cond);
+    font-size: 21px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* how long they've been there, quieter than where they are */
+.ho-person-since {
+    font-style: normal;
+    color: rgba(190, 208, 228, 0.6);
+}
+
+.ho-person-since:not(:empty)::before { content: " · "; }
+
+/* in: the green Rooms already uses for a person rather than a reading */
+.ho-person.in {
+    background: rgba(51, 209, 122, 0.1);
+    border-color: rgba(51, 209, 122, 0.4);
+}
+
+.ho-person.in .ho-person-face {
+    border-color: rgba(51, 209, 122, 0.55);
+    box-shadow: 0 0 0 3px rgba(51, 209, 122, 0.22);
+}
+
+.ho-person.in .ho-person-where { color: #c9f3dd; }
+
+/* out: flat, grey, and the picture with the color taken out of it */
+.ho-person:not(.in) { opacity: 0.62; }
+.ho-person:not(.in) .ho-person-face { filter: grayscale(1); }
+
+.ho-people.sel .ho-person-name,
+.ho-people.sel .ho-person-where { color: #fff; }
+
+.ho-people.sel .ho-person-since { color: rgba(255, 255, 255, 0.75); }
+
 /* ---------- Two columns: the rooms, and the room ---------- */
 
 .ho-body {
@@ -25,6 +184,9 @@
     grid-template-columns: 440px 1fr;
     gap: 28px;
 }
+
+/* who's home takes the top of the screen when there is somebody to show */
+.ho-has-people .ho-body { top: 268px; }
 
 .ho-side {
     display: flex;
