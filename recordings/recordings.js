@@ -50,6 +50,11 @@
         { id: 'scheduled', label: 'Scheduled' },
         { id: 'series', label: 'Series' }
     ];
+    // Live TV is one menu item over the guide and the DVR. The guide is the
+    // first tab here — it opens over this screen the way G always has — and
+    // guide/guide.js draws the same four, so the set reads as one place
+    // whichever half of it you're standing in.
+    const LIVE_TABS = [{ id: 'guide', label: 'Guide', guide: true }].concat(TABS);
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
 
     // ---------- Jellyfin session (same as the library screens) ----------
@@ -268,13 +273,13 @@
         root.appendChild(stage);
         stage.innerHTML = `
             <div class="hr-topbar">
-                <div class="hr-brand homer-home" role="button" title="Home (H)"><span class="hr-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="hr-brand-sub">RECORDINGS</span></div>
+                <div class="hr-brand homer-home" role="button" title="Home (H)"><span class="hr-brand-mark"><span class="material-icons" aria-hidden="true">home</span></span>HOMER<span class="hr-brand-sub">LIVE TV</span></div>
                 <div class="hr-clock"><div class="hr-clock-time"></div><div class="hr-clock-date"></div></div>
             </div>
             <div class="hr-toast" role="status" aria-live="polite"></div>
             <div class="hr-list">
                 <div class="hr-list-head">
-                    <div class="hr-tabs">${TABS.map((t) => `<div class="hr-tab" data-tab="${t.id}" role="tab">${t.label}<span class="hr-tab-n"></span></div>`).join('')}</div>
+                    <div class="hr-tabs">${LIVE_TABS.map((t) => `<div class="hr-tab${t.guide ? ' hr-tab-guide' : ''}" data-tab="${t.id}" role="tab">${t.label}<span class="hr-tab-n"></span></div>`).join('')}</div>
                     <div class="hr-count"></div>
                 </div>
                 <div class="hr-rows"><div class="hr-rows-inner"></div><div class="hr-state"></div></div>
@@ -341,6 +346,9 @@
         let tab = TABS.some((t) => t.id === startTab) ? startTab : memory.tab;
         let folder = null; // group key while inside a show's folder (Recorded)
         let zone = 'list'; // tabs | list | actions
+        // which chip the remote is on while zone is 'tabs'. Usually the tab
+        // that's showing; Guide is a chip you can sit on without opening it.
+        let tabFocus = '';
         let act = 0;
         let actions = [];
         let rows = []; // { e, el }
@@ -479,7 +487,8 @@
             const items = [];
             if (st === 'error') items.push({ key: 'OK', label: 'Try again', action: 'ok' });
             else if (zone === 'tabs') {
-                items.push({ key: '◀▶', label: 'Switch', action: 'next-tab' });
+                items.push({ key: '◀▶', label: 'Guide · Recorded · Scheduled · Series', action: 'next-tab' });
+                if ((tabFocus || tab) === 'guide') items.push({ key: 'OK', label: 'Open the guide', action: 'ok' });
                 if (rows.length) items.push({ key: '▼', label: 'List' });
             } else if (st === 'ready' && rows.length) {
                 const e = current();
@@ -505,12 +514,13 @@
 
         // ----- tabs -----
         const markTabs = () => {
+            const foc = tabFocus || tab;
             root.querySelectorAll('.hr-tab').forEach((t) => {
-                const on = t.dataset.tab === tab;
-                t.classList.toggle('on', on);
-                t.classList.toggle('focus', on && zone === 'tabs');
-                const d = data[t.dataset.tab];
-                t.querySelector('.hr-tab-n').textContent = d.status === 'ready' && d.items.length ? d.items.length : '';
+                const id = t.dataset.tab;
+                t.classList.toggle('on', id === tab);
+                t.classList.toggle('focus', zone === 'tabs' && id === foc);
+                const d = data[id]; // the Guide chip has no list of its own
+                t.querySelector('.hr-tab-n').textContent = d && d.status === 'ready' && d.items.length ? d.items.length : '';
             });
         };
 
@@ -525,7 +535,8 @@
         };
 
         const setTab = (id) => {
-            if (id === tab && !folder) return;
+            tabFocus = id;
+            if (id === tab && !folder) { markTabs(); return; }
             disarm();
             tab = id;
             memory.tab = id;
@@ -535,9 +546,19 @@
             // a new tab never opens with a Cancel button already under the remote
             if (rows.length) setZone(zone === 'tabs' ? 'tabs' : 'list');
         };
+        // ◀▶ along the strip. The three DVR tabs switch as you land on them,
+        // the way they always have; Guide only takes focus, because cycling
+        // past it must not tune the television.
         const switchTab = (d) => {
-            const i = TABS.findIndex((t) => t.id === tab);
-            setTab(TABS[(i + d + TABS.length) % TABS.length].id);
+            const from = LIVE_TABS.findIndex((t) => t.id === (tabFocus || tab));
+            const next = LIVE_TABS[(from + d + LIVE_TABS.length) % LIVE_TABS.length];
+            if (next.guide) { tabFocus = next.id; markTabs(); updateLegend(); return; }
+            setTab(next.id);
+        };
+        const runTab = () => {
+            const it = LIVE_TABS.find((t) => t.id === (tabFocus || tab));
+            if (it && it.guide) { openGuide(); return true; }
+            return false;
         };
 
         // ----- rows -----
@@ -908,7 +929,18 @@
             list.push({ id: 'tab', key: '[ ]', icon: 'tab', label: 'Next tab', sub: next.label, run: () => switchTab(1) });
             if (folder) list.push({ id: 'up', key: '◀', icon: 'folder', label: 'All recordings', run: closeFolder });
             return list;
-        }, { id: 'recordings', title: 'Recordings' }) : () => {};
+        }, { id: 'recordings', title: 'Live TV' }) : () => {};
+
+        // The top of this screen: out of a show's folder, then back to the
+        // first tab. Above that is the guide, and the menu's Live TV item
+        // falls through to opening it.
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (folder) { closeFolder(); return true; }
+                if (tab !== TABS[0].id) { setTab(TABS[0].id); return true; }
+                return false;
+            }, { atTop: () => !folder && tab === TABS[0].id })
+            : () => {};
 
         // ----- input -----
         const eat = (ev) => {
@@ -953,17 +985,18 @@
             if (zone === 'tabs') {
                 if (k === 'ArrowLeft') switchTab(-1);
                 else if (k === 'ArrowRight') switchTab(1);
-                else if ((k === 'ArrowDown' || k === 'Enter' || k === ' ') && rows.length) setZone('list'); // back on the recording it left
+                else if (k === 'Enter' || k === ' ') { if (!runTab() && rows.length) setZone('list'); }
+                else if (k === 'ArrowDown') { tabFocus = tab; if (rows.length) setZone('list'); else markTabs(); } // back on the recording it left
                 return;
             }
             if (!rows.length) {
-                if (k === 'ArrowUp') setZone('tabs');
+                if (k === 'ArrowUp') { tabFocus = tab; setZone('tabs'); }
                 return;
             }
             if (zone === 'list') {
                 if (k === 'ArrowDown') step(1);
                 else if (k === 'ArrowUp') {
-                    if (sel <= 0) setZone('tabs');
+                    if (sel <= 0) { tabFocus = tab; setZone('tabs'); }
                     else step(-1);
                 } else if (k === 'PageDown') step(6);
                 else if (k === 'PageUp') step(-6);
@@ -1002,6 +1035,8 @@
 
         $('.hr-brand').addEventListener('click', goHome);
         root.querySelectorAll('.hr-tab').forEach((t) => t.addEventListener('click', () => {
+            tabFocus = t.dataset.tab;
+            if (runTab()) { markTabs(); return; }
             setTab(t.dataset.tab);
             setZone(rows.length ? 'list' : 'tabs');
         }));
@@ -1048,6 +1083,7 @@
             const a = item.dataset.action;
             if (a === 'ok') {
                 if (data[tab].status === 'error') retry();
+                else if (zone === 'tabs') runTab();
                 else if (zone === 'actions') run(actions[act]);
                 else okInList();
             } else if (a === 'next-tab') switchTab(1);
@@ -1099,6 +1135,7 @@
             setTab(id) { if (TABS.some((t) => t.id === id)) setTab(id); },
             teardown() {
                 alive = false;
+                offScreenHome();
                 offActions();
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });

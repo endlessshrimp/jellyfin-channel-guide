@@ -607,3 +607,66 @@ html.homer-tvapp,
 html.homer-tvapp * {
     cursor: none !important;
 }
+
+/* ---------- A screen's own tabs ---------- */
+/*
+   One menu item, more than one screen behind it. Live TV is the guide, the
+   recordings and what's scheduled; House is the rooms and the cameras. Each
+   of those screens draws the same strip in its top bar, so the set reads as
+   one place with tabs rather than two items that happened to be merged, and
+   the tab you're on is the one lit.
+
+   Every screen that draws it puts the strip in its own focus order (the guide
+   in its filter row, the rest as a zone above their list), so a remote reaches
+   it: .foc is where the remote is, .on is the tab you're actually on. */
+.homer-screen-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.homer-screen-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.72);
+    font-family: var(--homer-font);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.homer-screen-tab .material-icons { font-size: 22px; }
+
+.homer-screen-tab:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+.homer-screen-tab.on {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+/* where the remote is */
+.homer-screen-tab.foc {
+    background: var(--homer-focus-fill);
+    color: #fff;
+    box-shadow: var(--homer-focus-ring);
+}
+
+.homer-screen-tab.on::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.85;
+}

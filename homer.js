@@ -41,7 +41,7 @@
     // over that and takes both down when the screen is up; it owns the class
     // from the moment it loads, and the screen names with it. An address that
     // isn't one of HOMER's is left alone, so Jellyfin's real 404 still answers.
-    const OURS = /^#\/(weather|rooms|cameras|planes|sports|news|books|music|playing)(\?|$)/;
+    const OURS = /^#\/(weather|rooms|cameras|planes|sports|news|books|music|radio|playing)(\?|$)/;
     if (!document.getElementById('homer-booting-css')) {
         const boot = document.createElement('style');
         boot.id = 'homer-booting-css';

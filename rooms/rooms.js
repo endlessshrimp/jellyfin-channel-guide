@@ -59,6 +59,13 @@
     const BIG_STILL_MS = 1000; // the camera view's still, until (or instead of) live video
     const BACK_KEYS = ['Escape', 'Backspace', 'GoBack', 'BrowserBack'];
     const CAMERAS = '__cameras'; // the Cameras item's id
+    // House is one menu item over two screens: the rooms here and the camera
+    // wall at #/cameras (cameras/cameras.js). Both draw this strip, so the
+    // doorbell is a tab away and the old address still works.
+    const HOUSE_TABS = [
+        { id: 'rooms', label: 'Rooms', icon: 'lightbulb', hash: '#/rooms' },
+        { id: 'cameras', label: 'Cameras', icon: 'videocam', hash: '#/cameras' }
+    ];
     const CLIMATE = '__climate'; // the Climate item's id (the house's thermostats)
     const MEMORY_KEY = 'homer-rooms-last'; // the room you were last in, per device
     const HOLD_BACK_MS = 600; // Back held this long comes out of the remote
@@ -858,7 +865,10 @@
         root.appendChild(stage);
         stage.innerHTML = `
             <div class="ho-topbar">
-                <div class="ho-brand homer-home" role="button" title="Home (H)"><span class="ho-brand-mark">${icon('home')}</span>HOMER<span class="ho-brand-sub">Rooms</span></div>
+                <div class="ho-brand homer-home" role="button" title="Home (H)"><span class="ho-brand-mark">${icon('home')}</span>HOMER<span class="ho-brand-sub">House</span></div>
+                <div class="homer-screen-tabs" role="tablist" aria-label="House">${HOUSE_TABS.map((t) => `
+                    <button type="button" class="homer-screen-tab${t.id === 'rooms' ? ' on' : ''}" role="tab"
+                        aria-selected="${t.id === 'rooms'}" data-house="${t.id}">${icon(t.icon)}${t.label}</button>`).join('')}</div>
                 <div class="ho-clock"><div class="ho-clock-time"></div><div class="ho-clock-date"></div></div>
             </div>
             <div class="ho-toast" role="status" aria-live="polite"></div>
@@ -959,7 +969,8 @@
         // ----- state -----
         let rooms = [];
         let sel = 0; // the room
-        let zone = 'list'; // list | room | camera
+        let zone = 'list'; // tabs | people | list | room | camera | remote
+        let ti = 0; // which House tab the remote is on, while zone is 'tabs'
         let rows = []; // the room's rows: { kind, id?, ids?, which? }
         let ri = 0; // the row
         let ci = {}; // row index -> the chip/camera picked in it
@@ -1744,6 +1755,9 @@
                 if (rowName === 'swatches') items.push({ key: '◀▶', label: 'Presets' }, { key: 'OK', label: 'Set color', action: 'ok' });
                 else items.push({ key: '◀▶', label: rowName === 'white' ? 'Warmer · cooler' : 'Color' }, { key: 'OK', label: 'Done', action: 'ok' });
                 items.push({ key: 'ESC', label: 'Close', action: 'back' });
+            } else if (!msg && zone === 'tabs') {
+                items.push({ key: '◀▶', label: 'Rooms · Cameras' }, { key: 'OK', label: 'Open', action: 'ok' },
+                    { key: '▼', label: 'Back down' });
             } else if (!msg && zone === 'people') {
                 // nothing on this band is a control, so no OK here on purpose
                 items.push({ key: '▼', label: 'Rooms' });
@@ -1764,7 +1778,7 @@
             }
             if (docked()) items.push({ key: 'F', label: 'Full screen', action: 'fullscreen' });
             items.push('spacer', { key: 'H', label: 'Home', action: 'home' });
-            if (zone === 'list' || zone === 'people' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
+            if (zone === 'list' || zone === 'people' || zone === 'tabs' || msg) items.push({ key: 'ESC', label: 'Back', action: 'back' });
             const html = items.map((i) => (i === 'spacer'
                 ? '<span class="spacer"></span>'
                 : `<span${i.action ? ` data-action="${i.action}"` : ''}><span class="ho-key">${esc(i.key)}</span>${esc(i.label)}</span>`)).join('');
@@ -1772,8 +1786,21 @@
             if (leg.dataset.html !== html) { leg.dataset.html = html; leg.innerHTML = html; }
         };
 
+        // ----- the House tabs (Rooms · Cameras) -----
+        // Cameras is a screen of its own at #/cameras; from here it's the tab
+        // next door, so the doorbell is two presses from the rooms instead of
+        // a trip through the menu.
+        const tabEls = () => [...stage.querySelectorAll('.homer-screen-tab')];
+        const paintTabs = () => tabEls().forEach((b, i) => b.classList.toggle('foc', zone === 'tabs' && i === ti));
+        const runTab = (id) => {
+            const t = HOUSE_TABS.find((x) => x.id === id);
+            if (!t || t.id === 'rooms') return; // already here
+            go(t.hash);
+        };
+
         const setZone = (z) => {
             zone = z;
+            stage.classList.toggle('ho-zone-tabs', z === 'tabs');
             stage.classList.toggle('ho-zone-people', z === 'people');
             stage.classList.toggle('ho-zone-list', z === 'list');
             stage.classList.toggle('ho-zone-room', z === 'room');
@@ -1785,6 +1812,7 @@
             $('.ho-rm-preview').toggleAttribute('data-homer-preview', z === 'remote');
             paintRoom();
             paintPeople();
+            paintTabs();
             updateLegend();
             if (z === 'room') revealRow();
         };
@@ -1937,6 +1965,7 @@
                 if (zone === 'camera') closeCamera();
                 else if (zone === 'remote') closeRemote();
                 else if (zone === 'room') setZone('list');
+                else if (zone === 'tabs') setZone(folks.length ? 'people' : 'list');
                 else goBack();
                 return;
             }
@@ -1952,13 +1981,21 @@
             eat(ev);
             const enter = k === 'Enter' || k === ' ';
             if (statusMessage()) { if (enter && !ev.repeat) statusOk(); return; }
-            if (zone === 'people') {
-                // ▼ (or ▶) drops into the rooms; nothing here to press
+            if (zone === 'tabs') {
+                if (k === 'ArrowLeft' && ti > 0) { ti -= 1; paintTabs(); }
+                else if (k === 'ArrowRight' && ti < HOUSE_TABS.length - 1) { ti += 1; paintTabs(); }
+                else if (k === 'ArrowDown') setZone(folks.length ? 'people' : 'list');
+                else if (enter && !ev.repeat) runTab(HOUSE_TABS[ti].id);
+            } else if (zone === 'people') {
+                // ▼ (or ▶) drops into the rooms; ▲ goes up to the House tabs
                 if (k === 'ArrowDown' || k === 'ArrowRight') setZone('list');
+                else if (k === 'ArrowUp') setZone('tabs');
             } else if (zone === 'list') {
-                // ▲ from the first room goes up to who's home, where there is one
+                // ▲ from the first room goes up to who's home, where there is
+                // one, and to the House tabs above that
                 const up = k === 'ArrowUp';
-                if (up && sel === 0 && folks.length) setZone('people');
+                if (up && sel === 0 && !folks.length) setZone('tabs');
+                else if (up && sel === 0 && folks.length) setZone('people');
                 else if (up) selectRoom(sel - 1);
                 else if (k === 'ArrowDown') selectRoom(sel + 1);
                 else if ((k === 'ArrowRight' || enter) && rows.length && !ev.repeat) setZone('room');
@@ -2028,6 +2065,13 @@
             if (zone === 'remote') {
                 const rk = t.closest('[data-rk]');
                 if (rk) press(rk.dataset.rk);
+                return;
+            }
+            const tabEl = t.closest('.homer-screen-tab');
+            if (tabEl) {
+                ti = Math.max(0, tabEls().indexOf(tabEl));
+                setZone('tabs');
+                runTab(tabEl.dataset.house);
                 return;
             }
             // who's home: a click puts the focus on the band, nothing more
@@ -2155,7 +2199,21 @@
             }
             if (docked()) out.push({ id: 'fullscreen', key: 'F', icon: 'fullscreen', label: 'Full screen', run: fullscreen });
             return out;
-        }, { id: 'rooms', title: 'Rooms' }) : () => {};
+        }, { id: 'rooms', title: 'House' }) : () => {};
+
+        // The top of this screen: the phone top bar's name and the menu's own
+        // House item come back here — out of a camera, a remote or a room, to
+        // the rooms list. On the list itself there's nowhere above, and
+        // atTop says so, so the press does nothing rather than going Home.
+        const offScreenHome = window.HomerLayout && window.HomerLayout.setScreenHome
+            ? window.HomerLayout.setScreenHome(() => {
+                if (picker) { closePicker(); return true; }
+                if (zone === 'camera') { closeCamera(); return true; }
+                if (zone === 'remote') { closeRemote(); return true; }
+                if (zone === 'room' || zone === 'people' || zone === 'tabs') { setZone('list'); return true; }
+                return false;
+            }, { atTop: () => zone === 'list' && !picker })
+            : () => {};
 
         setZone('list');
         syncDocked();
@@ -2181,6 +2239,7 @@
             teardown() {
                 alive = false;
                 offHA();
+                offScreenHome();
                 offActions();
                 stopStills();
                 stopLive();

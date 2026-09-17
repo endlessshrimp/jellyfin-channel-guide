@@ -37,7 +37,9 @@
         return e;
     };
 
-    const TABS = [
+    // Same list as the TV layout's: #/music draws everything but Radio, and
+    // #/radio draws Radio on its own screen (ctx.radio says which).
+    const ALL_TABS = [
         { id: 'radio', label: 'Radio', radio: true, list: () => (RM() ? RM().soma().concat(RM().local()) : []) },
         { id: 'recent', label: 'New', list: () => M().recent() },
         { id: 'artists', label: 'Artists', list: () => M().artists() },
@@ -50,6 +52,8 @@
 
     const create = (ctx) => {
         const { esc, icon, artImg, metaOf, subOf } = ctx;
+        const onRadio = !!ctx.radio;
+        const TABS = ALL_TABS.filter((t) => !!t.radio === onRadio);
         const player = () => M().player;
         const f = () => M().fmt;
 
@@ -78,7 +82,7 @@
             });
         };
 
-        const root = el('div', 'homer-screen mu-phone');
+        const root = el('div', 'homer-screen mu-phone' + (onRadio ? ' mu-radio-only' : ''));
         root.id = 'mu-root';
         root.style.visibility = 'hidden';
         root.innerHTML = `
@@ -94,7 +98,7 @@
         document.body.appendChild(root);
         const $ = (s) => root.querySelector(s);
 
-        let tab = 'recent';
+        let tab = onRadio ? 'radio' : 'recent';
         let radioQuery = '';
         let radioResults = null;
         let radioSaid = '';
@@ -749,6 +753,7 @@
 
         return {
             phone: true,
+            radio: onRadio,
             show() { root.style.visibility = ''; },
             sync() {},
             state() { return { tab }; },

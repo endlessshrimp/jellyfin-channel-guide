@@ -1272,3 +1272,39 @@
 /* narrower than 16:9: the legend has less room, so it tightens like Standard's */
 #cg-root.cg-large.cg-compact .cg-legend { gap: 20px; font-size: 18px; }
 #cg-root.cg-large.cg-compact .cg-key { height: 30px; font-size: 16px; }
+
+/* ---------- The Live TV tabs ---------- */
+/*
+   Live TV is one menu item over the guide and the DVR (recordings/), so both
+   draw the same strip: shared/shell.css has the look, and this places the
+   guide's copy beside the mark, where the guide's own name used to be. The
+   lit tab is the guide, because that's what you're looking at.
+
+   ▲ out of the filter row reaches it and ▼ comes back, so a remote gets to
+   the recordings without a trip through the menu. */
+.cg-topbar .cg-lt {
+    margin-left: 26px;
+    margin-right: auto; /* keep it with the mark; the clock stays right */
+    gap: 6px;
+}
+
+.cg-topbar .cg-lt .homer-screen-tab {
+    height: 38px;
+    padding: 0 15px;
+    border-radius: 19px;
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cg-topbar .cg-lt .homer-screen-tab.on::before { display: none; }
+
+/* Large: the guide read from a couch, and its tabs with it */
+#cg-root.cg-large .cg-lt .homer-screen-tab {
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 22px;
+    font-size: 20px;
+}
