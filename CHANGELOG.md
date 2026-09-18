@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other
   three: added to Home Assistant as a Generic Camera, and the NAS pulls its
