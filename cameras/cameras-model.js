@@ -95,7 +95,8 @@
     // it by (GET /camera/<nas>.jpg).
     const NAS_CAMS = [
         { nas: 'garage', match: /garage/i },
-        { nas: 'frontyard', match: /front\s*-?\s*yard/i }
+        { nas: 'frontyard', match: /front\s*-?\s*yard/i },
+        { nas: 'backyard', match: /back\s*-?\s*(yard|garden)|rear\s*yard/i }
     ];
 
     const HA = () => window.HomerHA || null;

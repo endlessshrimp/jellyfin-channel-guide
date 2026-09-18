@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.38
+
+- **The Backyard camera.** Third bulb camera, wired the same way as the other
+  two: the NAS pulls its stills straight off the camera, so it does not depend
+  on Home Assistant snapshot endpoint.
+
 ## v0.4.37
 
 - **Grab the album from the radio.** When a station says what is playing, the
