@@ -86,10 +86,14 @@
     // here; adding a camera that matches none of them needs nothing — it
     // lands after these.
     const PLANNED = [
-        // The garage camera looks down the driveway, so it takes that slot —
-        // it stays in the Garage area in Home Assistant, this is only where it
-        // sits on the wall.
-        { key: 'driveway', name: 'Driveway', match: /drive\s*-?\s*way|garage/i },
+        // Two distinct cameras now: one actually in the garage, one looking
+        // down the driveway (it used to be one camera doing both jobs, named
+        // "Garage" — that one is Driveway now, and a second, real Garage
+        // camera was added alongside it). Matches are kept mutually
+        // exclusive on purpose so a camera named "Garage" can never land in
+        // the Driveway slot or vice versa.
+        { key: 'garage', name: 'Garage', match: /\bgarage\b/i },
+        { key: 'driveway', name: 'Driveway', match: /drive\s*-?\s*way/i },
         { key: 'backyard', name: 'Backyard', match: /back\s*-?\s*(yard|garden)|rear\s*yard/i },
         { key: 'side_yard', name: 'Side Yard', match: /side\s*-?\s*yard|side\s*gate/i }
     ];
@@ -97,9 +101,11 @@
     // The cameras the NAS grabs stills for on its own (see the docstring
     // above) — matched the same way PLANNED is, by the camera's Home
     // Assistant name or entity id. `nas` is the short name homerfeeds knows
-    // it by (GET /camera/<nas>.jpg).
+    // it by (GET /camera/<nas>.jpg). Same driveway/garage split as PLANNED,
+    // and for the same reason — keep the two matchers mutually exclusive.
     const NAS_CAMS = [
-        { nas: 'garage', match: /garage/i },
+        { nas: 'driveway', match: /drive\s*-?\s*way/i },
+        { nas: 'garage', match: /\bgarage\b/i },
         { nas: 'frontyard', match: /front\s*-?\s*yard/i },
         { nas: 'backyard', match: /back\s*-?\s*(yard|garden)|rear\s*yard/i }
     ];
