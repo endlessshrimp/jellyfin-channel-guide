@@ -9,8 +9,10 @@
  *                and France's (5300s). OK watches one in the TV window.
  *   Tabs         My Teams (the Rangers, Cowboys, Longhorns and Arsenal:
  *                their next and last games, the tables they're in, their
- *                news), MLB, NFL, College FB, Soccer (Premier League and
- *                Champions League), NBA, NHL, College Hoops: scores with the
+ *                news), MLB, NFL, College FB, Soccer (Premier League,
+ *                Champions League, Carabao Cup, Europa League, FA Cup —
+ *                Arsenal's games sort first in whichever of these they're
+ *                actually in), NBA, NHL, College Hoops: scores with the
  *                teams' logos, standings, the AP Top 25, news with pictures
  *   Ticker       ESPN BottomLine style: every league's scores, finals and
  *                start times with the TV network (and our channel for it),
@@ -41,7 +43,7 @@
  * window.HomerSports = { version }
  */
 (() => {
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
     const MIN = 60000;
 
     const define = () => {
@@ -196,15 +198,31 @@
                 last = k;
                 body.innerHTML = '';
                 if (!shown.length) { body.appendChild(ui.empty('No games right now', `${L[league].name}: nothing on the schedule around today`)); return; }
-                const upcoming = shown.filter((g) => g.state !== 'post');
+                // three groups, top to bottom: live (full cards), upcoming
+                // (full cards), then final (smaller — a score is a score,
+                // not a watch pick). A group only gets a heading when it has
+                // something in it, so a quiet day doesn't grow empty labels.
+                const liveNow = shown.filter((g) => g.state === 'in');
+                const upcoming = shown.filter((g) => g.state === 'pre');
                 const finished = shown.filter((g) => g.state === 'post');
+                if (liveNow.length) {
+                    body.appendChild(el('div', 'sp-grp-head live', '<i></i>Live now'));
+                    const g = grid();
+                    liveNow.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
+                    body.appendChild(g);
+                }
                 if (upcoming.length) {
+                    body.appendChild(el('div', 'sp-grp-head', 'Upcoming'));
                     const g = grid();
                     upcoming.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
                     body.appendChild(g);
                 }
                 if (finished.length) {
-                    body.appendChild(el('div', 'sp-fin-head', `Final${upcoming.length ? '' : ` · ${L[league].name}`}`));
+                    // name the league only when Final is the only thing on
+                    // screen (a quiet tab whose section title is the generic
+                    // "Scores") — same rule this line always used, just
+                    // checked against both groups that can now sit above it
+                    body.appendChild(el('div', 'sp-grp-head', `Final${liveNow.length || upcoming.length ? '' : ` · ${L[league].name}`}`));
                     const g = grid(220);
                     finished.forEach((x) => g.appendChild(scoreCard(ctx, x, { league: x.conf || '' })));
                     body.appendChild(g);
@@ -866,6 +884,17 @@
                 body.appendChild(two);
             }, { every: 30 * MIN });
             scoresSection(ctx, 'ucl', { title: 'Champions League', limit: 18 });
+            // Europa League, FA Cup and Carabao Cup: Arsenal isn't always in
+            // any given one of these (this season it's Carabao Cup, not
+            // Europa or — yet — the FA Cup), and two of the three run deep
+            // fields of lower-league sides no one's watching. Arsenal's own
+            // games always sort first regardless (scores()'s byInterest), so
+            // a small limit here trims the noise without ever hiding them —
+            // Carabao Cup gets a bit more room since that's the one Arsenal's
+            // actually in.
+            scoresSection(ctx, 'efl', { title: 'Carabao Cup', limit: 8 });
+            scoresSection(ctx, 'uel', { title: 'Europa League', limit: 6 });
+            scoresSection(ctx, 'facup', { title: 'FA Cup', limit: 6 });
             newsSection(ctx, 'epl', { title: 'Premier League headlines' });
         };
 

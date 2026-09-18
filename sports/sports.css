@@ -305,9 +305,12 @@
 .hb-sports .sp-grid { gap: 16px; }
 .hb-sports .sp-two { gap: 16px; }
 
-/* the light label between a scores section's upcoming/live grid and its
-   finished games below — a boundary, not another heading */
-.hb-sports .sp-fin-head {
+/* the light label between a scores section's live/upcoming/final groups —
+   a boundary, not another heading */
+.hb-sports .sp-grp-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 4px 2px 10px;
     padding-top: 14px;
     border-top: 1px solid var(--line);
@@ -318,11 +321,19 @@
     text-transform: uppercase;
     color: var(--faint);
 }
-.hb-sports .sp-fin-head:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.hb-sports .sp-grp-head:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.hb-sports .sp-grp-head.live { color: #ff8a8a; }
+.hb-sports .sp-grp-head.live i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 8px var(--live);
+}
 
 /* ---------- Phone ---------- */
 
-.hb-phone.hb-sports .sp-fin-head { font-size: 12px; margin: 2px 2px 8px; padding-top: 10px; }
+.hb-phone.hb-sports .sp-grp-head { font-size: 12px; margin: 2px 2px 8px; padding-top: 10px; }
 .hb-phone.hb-sports .sp-match { height: 196px; padding: 10px 12px; border-radius: 14px; }
 .hb-phone.hb-sports .sp-match-top { height: 26px; gap: 8px; }
 .hb-phone.hb-sports .sp-fav { font-size: 12px; padding: 2px 7px; }
