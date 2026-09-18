@@ -1,6 +1,6 @@
 /*
- * HOMER + Sonarr/Radarr ("the arrs"): one client and one way of saying things,
- * for every screen that offers to get a show or a movie.
+ * HOMER + Sonarr/Radarr/Lidarr ("the arrs"): one client and one way of saying
+ * things, for every screen that offers to get a show, a movie or an album.
  *
  * The arrs sit behind HOMER's helper on the NAS (homerfeeds.py), which holds
  * their keys; the browser only talks to the helper:
@@ -8,19 +8,30 @@
  *   GET  /arr/status?tvdbId=…    one show (or ?tmdbId=… one movie), with its downloads
  *   POST /arr/add                {kind:'show', tvdbId, monitor} or {kind:'movie', tmdbId}
  *   GET  /arr/upcoming?days=7    episodes and movies coming up
- * A "view" is what those return for one show or movie:
+ *   GET  /music/lidarr/lookup?artist=&title=&album=   albums (Lidarr's own search;
+ *                                artist+title when only a song is known, artist+album
+ *                                when it's known outright)
+ *   GET  /music/lidarr/status?foreignAlbumId=…   one album, with its downloads
+ *   POST /music/lidarr/add       {foreignAlbumId}
+ * A "view" is what those return for one show, movie or album:
  *   show:  {kind:'show', tvdbId, title, year, overview, network, status, seasons,
  *           poster, fanart, added, sonarrId, monitored, newEpisodes, episodes,
  *           episodeFiles, nextAiring, queue?}
  *   movie: {kind:'movie', tmdbId, title, year, overview, studio, runtime, poster,
  *           fanart, status, added, radarrId, monitored, hasFile, queue?}
+ *   album: {kind:'album', foreignAlbumId, foreignArtistId, title, artist, year,
+ *           albumType, poster, added, lidarrId, artistId, monitored, trackCount,
+ *           trackFiles, hasFile, queue?}
  *
  * The client (timeouts, a small cache, one request at a time per URL):
  *   lookup(term, {signal})         → {shows, movies, showsError?, moviesError?}
- *   status({tvdbId} | {tmdbId})    → view (with queue)
+ *   lookupAlbum({artist, title, album} | {term}, {signal}) → {albums, term, error?}
+ *   status({tvdbId} | {tmdbId} | {foreignAlbumId}) → view (with queue)
  *   addShow(tvdbId, monitor)       → view; monitor 'future' (new episodes only),
  *                                    'all' or 'latestSeason'
  *   addMovie(tmdbId)               → view
+ *   addAlbum(foreignAlbumId)       → view; adds the artist first if Lidarr
+ *                                    doesn't have them yet
  *   upcoming(days)                 → {episodes, movies}
  *   available()                    → true when the helper's arr routes answer
  *   peek(term) / peekStatus(q)     → what's cached, or null (no request)
@@ -28,12 +39,20 @@
  *                                    fresh status); returns an unsubscribe
  *
  * Matching and ranking (Sonarr's search is fuzzy: "always sunny" doesn't even
- * return It's Always Sunny in Philadelphia):
+ * return It's Always Sunny in Philadelphia; Lidarr's is worse — a tribute
+ * album can outrank the real one):
  *   norm(title)                    → a comparable form ("It's Always Sunny" → "its always sunny")
  *   rank(views, term, {prefer})    → best first: preferred titles, then exact,
  *                                    prefix and all-words matches; drops the
  *                                    ones that don't match at all
+ *   rankAlbums(albums, {artist, title, album}) → best first: artist name and
+ *                                    title/album both weighed, so "Radiohead"
+ *                                    beats a string-quartet tribute of the
+ *                                    same album; nothing is ever dropped, so a
+ *                                    loose match still shows as something to
+ *                                    look at rather than nothing at all
  *   sameAs(view, jellyfinItem)     → the same show/movie (ProviderIds, else title + year)
+ *   sameAsAlbum(view, jellyfinItem) → the same album (MusicBrainz release group, else title + artist)
  *   findShow(title, {year})        → the best Sonarr match for a title, or null
  *   getIt(term, {library, titles, prefer, signal}) → the views a search can offer to
  *                                    get: not in the Jellyfin library, ranked
@@ -49,7 +68,8 @@
  *   detailText(view)               → the second line: "182 of 182 episodes · Next Mon 9:00 PM"
  *   actions(view, {inLibrary})     → [{id, label, icon}]: 'new' Get new episodes,
  *                                    'all' Get every episode, 'latest' Get the
- *                                    latest season, 'movie' Get this movie
+ *                                    latest season, 'movie' Get this movie,
+ *                                    'album' Get this album
  *   runner({toast, update, hint})  → runs an action: the first press asks
  *                                    ("Get new episodes of X? Press OK again";
  *                                    hint is that "Press OK again", or a function),
@@ -60,6 +80,8 @@
  *                                    .label(action, view), .busy(view), .disarm(), .dispose()
  *
  * window.HomerArr = { …all of the above, base, key, version }
+ * (Lidarr's own key never reaches the browser: the helper reads it from
+ * Lidarr's config.xml on the NAS, same as Sonarr's and Radarr's.)
  */
 (() => {
     const VERSION = '0.1.0';
@@ -152,10 +174,14 @@
 
     // ---------- Views ----------
 
-    const key = (v) => (v ? (v.kind === 'movie' ? 'movie:' + v.tmdbId : 'show:' + v.tvdbId) : '');
+    const key = (v) => (v ? (v.kind === 'movie' ? 'movie:' + v.tmdbId
+        : v.kind === 'album' ? 'album:' + v.foreignAlbumId
+            : 'show:' + v.tvdbId) : '');
     const statusPath = (q) => (q.tmdbId != null || q.kind === 'movie'
         ? `/arr/status?tmdbId=${encodeURIComponent(q.tmdbId)}`
-        : `/arr/status?tvdbId=${encodeURIComponent(q.tvdbId)}`);
+        : q.foreignAlbumId != null || q.kind === 'album'
+            ? `/music/lidarr/status?foreignAlbumId=${encodeURIComponent(q.foreignAlbumId)}`
+            : `/arr/status?tvdbId=${encodeURIComponent(q.tvdbId)}`);
 
     const listeners = new Set();
     const known = new Map(); // key -> the latest view (a fresh status, or an add's answer)
@@ -195,8 +221,32 @@
         return res ? { shows: (res.shows || []).map(latest), movies: (res.movies || []).map(latest) } : null;
     };
 
+    // Albums are artist/title-shaped, not one free-text term: {term} for a
+    // literal search (used internally for a status refresh), or {artist,
+    // title, album} for what a screen actually has — a radio track usually
+    // knows only artist+title (a song, not an album).
+    const lookupAlbumPath = (q = {}) => {
+        const p = new URLSearchParams();
+        if (q.term) p.set('term', q.term);
+        else {
+            if (q.artist) p.set('artist', q.artist);
+            if (q.album) p.set('album', q.album);
+            else if (q.title) p.set('title', q.title);
+        }
+        return '/music/lidarr/lookup?' + p.toString();
+    };
+    const lookupAlbum = async (q = {}, opts = {}) => {
+        if (!q.term && !q.artist && !q.title && !q.album) return { albums: [] };
+        const res = await get(lookupAlbumPath(q), LOOKUP_TTL, opts);
+        return {
+            albums: ((res && res.albums) || []).map(latest),
+            term: res && res.term,
+            error: res && res.error
+        };
+    };
+
     const status = async (q, opts = {}) => {
-        if (!q || (q.tvdbId == null && q.tmdbId == null)) throw new Error('tvdbId or tmdbId needed');
+        if (!q || (q.tvdbId == null && q.tmdbId == null && q.foreignAlbumId == null)) throw new Error('tvdbId, tmdbId or foreignAlbumId needed');
         const v = await get(statusPath(q), STATUS_TTL, opts);
         if (v && v.kind) {
             const k = key(v);
@@ -207,21 +257,25 @@
     };
     const peekStatus = (q) => {
         if (!q) return null;
-        const k = q.tmdbId != null ? 'movie:' + q.tmdbId : 'show:' + q.tvdbId;
+        const k = q.tmdbId != null ? 'movie:' + q.tmdbId : q.foreignAlbumId != null ? 'album:' + q.foreignAlbumId : 'show:' + q.tvdbId;
         return known.get(k) || cached(base() + statusPath(q)) || null;
     };
 
-    const add = async (body, action) => {
-        const v = await request(base() + '/arr/add', { method: 'POST', body, timeout: ADD_TIMEOUT_MS });
+    const postAdd = async (url, body, action) => {
+        const v = await request(base() + url, { method: 'POST', body, timeout: ADD_TIMEOUT_MS });
         if (v && v.kind) {
             justAdded.set(key(v), { at: Date.now(), action });
             changed(v);
         }
         return v;
     };
-    const addShow = (tvdbId, monitor = 'future') => add({ kind: 'show', tvdbId: Number(tvdbId), monitor },
+    const addShow = (tvdbId, monitor = 'future') => postAdd('/arr/add', { kind: 'show', tvdbId: Number(tvdbId), monitor },
         monitor === 'all' ? 'all' : monitor === 'latestSeason' ? 'latest' : 'new');
-    const addMovie = (tmdbId) => add({ kind: 'movie', tmdbId: Number(tmdbId) }, 'movie');
+    const addMovie = (tmdbId) => postAdd('/arr/add', { kind: 'movie', tmdbId: Number(tmdbId) }, 'movie');
+    // Adds the artist first if Lidarr doesn't have them yet (the helper does
+    // that with Jason's existing profiles, never new ones), then monitors and
+    // searches for this one album.
+    const addAlbum = (foreignAlbumId) => postAdd('/music/lidarr/add', { foreignAlbumId }, 'album');
 
     const upcoming = (days = 7, opts = {}) => get(`/arr/upcoming?days=${encodeURIComponent(days)}`, UPCOMING_TTL, opts);
 
@@ -293,6 +347,22 @@
         return list.sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.v);
     };
 
+    // Lidarr's own search ranks a tribute or cover-band album (a real match on
+    // the album's title) above the real one, because it never weighs the
+    // artist. This does: artist name and title/album both scored, an artist
+    // Jason already tracks in Lidarr favored, and — unlike rank() above —
+    // nothing is ever dropped, so a loose match still shows as *something* to
+    // look at rather than an empty list (an album is picked here, not
+    // guessed: dropping the only options would just hide the picker).
+    const albumScore = (v, want) => matchScore(v.artist, want.artist || '')
+        + matchScore(v.title, want.album || want.title || '')
+        + (v.artistId ? 20 : 0) + (v.added ? 5 : 0) + (v.poster ? 2 : 0);
+    const rankAlbums = (albums, want = {}, { max = 8 } = {}) => (albums || [])
+        .map((v, i) => ({ v, i, s: albumScore(v, want) }))
+        .sort((a, b) => b.s - a.s || a.i - b.i)
+        .slice(0, max)
+        .map((x) => x.v);
+
     const yearNear = (a, b) => !a || !b || Math.abs(Number(a) - Number(b)) <= 1;
     // the same show or movie as a Jellyfin item (by Tvdb/Tmdb id, else title and year)
     const sameAs = (v, it) => {
@@ -306,6 +376,17 @@
             if (ids.Tmdb && v.tmdbId) return String(ids.Tmdb) === String(v.tmdbId);
         }
         return norm(it.Name) === norm(v.title) && yearNear(it.ProductionYear, v.year);
+    };
+    // the same album as a Jellyfin item: Jellyfin tags a MusicAlbum with the
+    // MusicBrainz release-group id when it can, which is exactly Lidarr's
+    // foreignAlbumId; failing that, title + artist.
+    const sameAsAlbum = (v, it) => {
+        if (!v || !it) return false;
+        if (it.Type && it.Type !== 'MusicAlbum') return false;
+        const ids = it.ProviderIds || {};
+        const mbid = ids.MusicBrainzReleaseGroup || ids.MusicBrainzAlbum;
+        if (mbid && v.foreignAlbumId) return String(mbid).toLowerCase() === String(v.foreignAlbumId).toLowerCase();
+        return norm(it.Name) === norm(v.title) && norm(it.AlbumArtist || '') === norm(v.artist || '');
     };
 
     // the best Sonarr show for a title (from the guide, say): an exact title,
@@ -393,7 +474,7 @@
     const searching = (v) => {
         const j = justAdded.get(key(v));
         if (!j || Date.now() - j.at > SEARCHING_MS) return false;
-        if (v.kind === 'movie') return !v.hasFile;
+        if (v.kind === 'movie' || v.kind === 'album') return !v.hasFile;
         return j.action !== 'new' && (v.episodeFiles || 0) < (v.episodes || 0);
     };
 
@@ -409,18 +490,24 @@
             if (v.status === 'announced' || v.status === 'inCinemas') return 'Added · not out yet';
             return v.monitored ? 'In Radarr · not downloaded yet' : 'In Radarr · not monitored';
         }
+        if (v.kind === 'album') {
+            if (v.hasFile || inLibrary) return 'In your library';
+            if (!v.added) return 'Not in your library';
+            if (searching(v)) return 'Added · searching';
+            return v.monitored ? 'In Lidarr · not downloaded yet' : 'Not in your library';
+        }
         if (!v.added) return inLibrary ? 'Not getting new episodes' : 'Not in your library';
         if (searching(v)) return 'Added · searching';
         if (v.newEpisodes) return 'Getting new episodes';
         return `In Sonarr · ${v.episodeFiles || 0} of ${plural(v.episodes || 0, 'episode')}`;
     };
     // 'none' not in, 'on' getting it / have it, 'busy' downloading or
-    // searching, 'part' in Sonarr/Radarr but not getting new ones
+    // searching, 'part' in Sonarr/Radarr/Lidarr but not getting new ones
     const tone = (v, { inLibrary = false } = {}) => {
         v = latest(v);
         if (!v) return 'none';
         if (downloading(v) || searching(v)) return 'busy';
-        if (v.kind === 'movie') return v.hasFile || inLibrary ? 'on' : v.added ? 'part' : 'none';
+        if (v.kind === 'movie' || v.kind === 'album') return v.hasFile || inLibrary ? 'on' : (v.kind === 'album' ? v.monitored : v.added) ? 'part' : 'none';
         return !v.added ? 'none' : v.newEpisodes ? 'on' : 'part';
     };
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -437,6 +524,7 @@
         if (dl) return `Downloading ${dl.pct}%`;
         if (searching(v)) return 'Searching';
         if (v.kind === 'movie') return v.hasFile || inLibrary ? 'In your library' : v.added ? 'In Radarr' : '';
+        if (v.kind === 'album') return v.hasFile || inLibrary ? 'In your library' : v.monitored ? 'In Lidarr' : '';
         return !v.added ? '' : v.newEpisodes ? 'Getting new episodes' : 'In Sonarr';
     };
     const flagHtml = (v, opts = {}) => {
@@ -463,6 +551,8 @@
         if (v.kind === 'show') {
             if (v.added && v.episodes) bits.push(`${v.episodeFiles || 0} of ${plural(v.episodes, 'episode')}`);
             if (v.nextAiring) bits.push(`Next episode ${airWord(v.nextAiring)}`);
+        } else if (v.kind === 'album') {
+            if (v.monitored && v.trackCount) bits.push(`${v.trackFiles || 0} of ${plural(v.trackCount, 'track')}`);
         } else if (v.added && !v.hasFile && v.status === 'announced') bits.push('Not out yet');
         const dl = downloading(v);
         if (dl && dl.n > 1) bits.push(`${dl.n} downloads`);
@@ -473,7 +563,8 @@
         new: { id: 'new', label: 'Get new episodes', icon: 'fiber_new', monitor: 'future' },
         all: { id: 'all', label: 'Get every episode', icon: 'library_add', monitor: 'all' },
         latest: { id: 'latest', label: 'Get the latest season', icon: 'playlist_add', monitor: 'latestSeason' },
-        movie: { id: 'movie', label: 'Get this movie', icon: 'cloud_download' }
+        movie: { id: 'movie', label: 'Get this movie', icon: 'cloud_download' },
+        album: { id: 'album', label: 'Get this album', icon: 'album' }
     };
     // What can be done for a view. A show already in Jellyfin only offers new
     // episodes (its old ones are already there).
@@ -481,6 +572,10 @@
         v = latest(v);
         if (!v) return [];
         if (v.kind === 'movie') return !v.added && !v.hasFile && !inLibrary ? [ACTIONS.movie] : [];
+        // an album row can exist (Lidarr tracks a whole discography once it
+        // has the artist) without Jason ever having asked for it: "added"
+        // alone doesn't mean anything here, only whether it's on disk
+        if (v.kind === 'album') return !v.hasFile && !inLibrary ? [ACTIONS.album] : [];
         const list = [];
         // an ended show has no new episodes to get
         if (!v.newEpisodes && v.status !== 'ended') list.push(ACTIONS.new);
@@ -518,7 +613,7 @@
             v = latest(v);
             const k = key(v);
             if (busy.has(k)) {
-                toast({ text: `Still asking ${v.kind === 'movie' ? 'Radarr' : 'Sonarr'} about ${v.title}…` });
+                toast({ text: `Still asking ${v.kind === 'movie' ? 'Radarr' : v.kind === 'album' ? 'Lidarr' : 'Sonarr'} about ${v.title}…` });
                 return null;
             }
             if (!isArmed(a, v)) {
@@ -532,11 +627,14 @@
             }
             disarm(false);
             busy.add(k);
-            const app = v.kind === 'movie' ? 'Radarr' : 'Sonarr';
-            toast({ text: v.added ? `Asking ${app}…` : `Adding ${v.title} to ${app}…`, ms: 60000 });
+            const app = v.kind === 'movie' ? 'Radarr' : v.kind === 'album' ? 'Lidarr' : 'Sonarr';
+            const already = v.kind === 'album' ? v.monitored : v.added;
+            toast({ text: already ? `Asking ${app}…` : `Adding ${v.title} to ${app}…`, ms: 60000 });
             update(v);
             try {
-                const next = v.kind === 'movie' ? await addMovie(v.tmdbId) : await addShow(v.tvdbId, a.monitor || 'future');
+                const next = v.kind === 'movie' ? await addMovie(v.tmdbId)
+                    : v.kind === 'album' ? await addAlbum(v.foreignAlbumId)
+                        : await addShow(v.tvdbId, a.monitor || 'future');
                 if (!alive) return next;
                 busy.delete(k);
                 toast({ text: doneText(a, next || v), kind: 'ok' });
@@ -570,14 +668,14 @@
         base,
         key,
         // client
-        lookup, peek, status, peekStatus, addShow, addMovie, upcoming, available,
+        lookup, lookupAlbum, peek, status, peekStatus, addShow, addMovie, addAlbum, upcoming, available,
         onChange(fn) {
             listeners.add(fn);
             return () => listeners.delete(fn);
         },
         latest,
         // matching
-        norm, words, matchScore, rank, sameAs, findShow, getIt, img,
+        norm, words, matchScore, rank, rankAlbums, sameAs, sameAsAlbum, findShow, getIt, img,
         // saying it
         statusText, tone, chipHtml, flagText, flagHtml, detailText, airWord, actions, ACTIONS, runner
     };
