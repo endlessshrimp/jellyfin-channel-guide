@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.40
+
+- **Cameras are drawn at their real shape.** The bulb cameras are 16:9 and the
+  doorbell is 4:3; both were being forced into one shape. The ratio is read
+  off the picture itself and remembered, so a tile opens correctly next time.
+- **Empty camera slots are gone** - the wall shows the cameras that exist.
+- **Cameras is back on the menu**, going straight to the wall, alongside House.
+
 ## v0.4.39
 
 - **The garage camera sits in the Driveway spot** on the camera wall, since
