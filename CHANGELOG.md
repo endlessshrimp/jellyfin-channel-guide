@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.37
+
+- **Grab the album from the radio.** When a station says what is playing, the
+  Now Playing screen offers the album from Lidarr, with the same two-press
+  confirm as films and shows. Lidarr own lookup ranks badly (a tribute album
+  came first for OK Computer), so HOMER re-ranks on the artist. Ambiguous
+  matches show a picker rather than guessing; nothing is added on one press.
+
 ## v0.4.35
 
 - **Regional sports networks are tunable again.** A game's channel was only
