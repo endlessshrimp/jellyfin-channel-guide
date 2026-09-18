@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.35
 
 - **Regional sports networks are tunable again.** A game's channel was only
   accepted when the guide listing actually named both teams — which is fine
