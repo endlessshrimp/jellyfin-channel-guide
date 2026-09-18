@@ -113,7 +113,9 @@
 .cp-phone .cp-row {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    /* the camera's own shape (--ar, set once its picture has loaded — see
+       shared/homeassistant.js keepStill), 16:9 until then */
+    aspect-ratio: var(--ar, 16 / 9);
     border-radius: 14px;
     overflow: hidden;
     background: #0a1426;
@@ -181,36 +183,6 @@
 }
 
 .cp-phone .cp-row-note:empty { display: none; }
-
-.cp-phone .cp-row.planned {
-    aspect-ratio: 16 / 7;
-    background:
-        repeating-linear-gradient(135deg, rgba(160, 190, 230, 0.05) 0 10px, transparent 10px 20px),
-        var(--cell);
-    box-shadow: 0 0 0 1px var(--line);
-}
-
-.cp-phone .cp-row-soon {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-}
-
-.cp-phone .cp-row-soon .material-icons { font-size: 26px; color: var(--faint); }
-.cp-phone .cp-row-soon b { font-size: 17px; color: var(--dim); }
-
-.cp-phone .cp-row-soon span:not(.material-icons) {
-    font-family: var(--cond);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--faint);
-}
 
 /* A camera Home Assistant can't reach says so on its own row, so the column
    never carries a black rectangle with no explanation. */
@@ -397,7 +369,7 @@
 .cp-phone .cp-one-shot {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: var(--ar, 16 / 9);
     border-radius: 14px;
     overflow: hidden;
     background: #000;

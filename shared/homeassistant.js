@@ -36,7 +36,7 @@
  *                    addressProblem, signIn, disconnect, onChange, house,
  *                    location, people, peopleIn,
  *                    entity, lightOn, toggle, setBrightness, setTemperature,
- *                    setMode, scene, snapshotUrl, playCamera, keepStill, browseMedia,
+ *                    setMode, scene, snapshotUrl, playCamera, keepStill, cameraAspect, browseMedia,
  *                    resolveMedia, history, rings, onRing,
  *                    color, setColor, supports, playPause, mediaCommand,
  *                    playMedia, massPlayer, massPlay, players,
@@ -1645,6 +1645,41 @@
 
     // ---------- Cameras ----------
 
+    // The shape of each camera's real picture — a bulb camera is 2304×1296
+    // (16:9), the Reolink doorbell 640×480 (4:3) — learned once from an
+    // actual loaded still or stream (never hardcoded, so a camera swapped
+    // for a different model needs no code change) and then remembered, so a
+    // tile that's seen this camera before draws at its real shape from the
+    // first frame instead of guessing 16:9 and resizing under you. Kept in
+    // localStorage, not just memory, so it survives a reload too.
+    const AR_KEY = 'homer_camera_ar';
+    let arCache = null;
+    const loadArCache = () => {
+        if (arCache) return arCache;
+        try { arCache = JSON.parse(localStorage.getItem(AR_KEY) || '{}'); } catch { arCache = {}; }
+        if (!arCache || typeof arCache !== 'object') arCache = {};
+        return arCache;
+    };
+    // The ratio (width / height) HOMER has learned for this camera, or null
+    // before anything of its has loaded anywhere. Callers draw their own
+    // 16:9 default until this has something better to say.
+    const cameraAspect = (id) => (id && loadArCache()[id]) || null;
+    // A box (whatever [data-still-box] a caller is using — a wall tile, the
+    // big view, a phone row) drawn at this camera's real shape via the --ar
+    // custom property cameras.css/cameras-phone.css/rooms.css read with
+    // `aspect-ratio: var(--ar, 16 / 9)`. Only ever moves the shape closer to
+    // the truth: a bogus or repeated measurement is skipped.
+    const setAspect = (box, id, w, h) => {
+        if (!box || !(w > 0) || !(h > 0)) return;
+        const ratio = w / h;
+        if (!isFinite(ratio) || ratio < 0.2 || ratio > 5) return;
+        box.style.setProperty('--ar', String(ratio));
+        const c = loadArCache();
+        if (Math.abs((c[id] || 0) - ratio) < 0.001) return;
+        c[id] = ratio;
+        try { localStorage.setItem(AR_KEY, JSON.stringify(c)); } catch { /* private mode, or full — the shape just won't be remembered next time */ }
+    };
+
     // a still from the camera (an <img> can load it from any page); fresh
     // asks for a new one instead of the browser's copy.
     //
@@ -1733,6 +1768,9 @@
                 const t = setTimeout(() => reject(new Error('the stream didn\'t start')), 15000);
                 video.addEventListener('loadeddata', () => { clearTimeout(t); resolve(); }, { once: true });
             });
+            // the stream itself is real pixels too, same as a still — worth
+            // learning from if a tile goes live before any still has loaded
+            setAspect(video.closest('[data-still-box]'), id, video.videoWidth, video.videoHeight);
         })();
         return { started, stop };
     };
@@ -1754,6 +1792,10 @@
         let stopped = false;
         let loading = false;
         const box = img.closest('[data-still-box]') || img.parentElement;
+        // whatever shape this camera was last seen at, applied straight away
+        // so the tile doesn't sit at the 16:9 default for a whole round trip
+        const known = cameraAspect(id);
+        if (box && known) box.style.setProperty('--ar', String(known));
         const load = () => {
             if (stopped || loading) return;
             const CM = window.HomerCamerasModel;
@@ -1772,18 +1814,33 @@
                 img.src = url;
                 box && box.classList.add('has-still');
                 box && box.classList.remove('no-still');
+                img.addEventListener('load', () => setAspect(box, id, img.naturalWidth, img.naturalHeight), { once: true });
                 return;
             }
             loading = true;
             const next = new Image();
+            // a cold grab off the NAS can take several seconds (see
+            // cameras-model.js's docstring); a request that never calls back
+            // at all — the camera dropped off Wi-Fi mid-grab, say — used to
+            // wedge `loading` open forever and freeze this tile's picture for
+            // the rest of the session. One timeout, same pattern as the
+            // events strip's thumbnail loads below, and the next poll gets
+            // to try again instead of waiting on a request that's gone quiet.
+            const giveUp = setTimeout(() => {
+                loading = false;
+                if (!stopped && box && !box.classList.contains('has-still')) box.classList.add('no-still');
+            }, 12000);
             next.onload = () => {
+                clearTimeout(giveUp);
                 loading = false;
                 if (stopped) return;
                 img.src = next.src;
                 box && box.classList.add('has-still');
                 box && box.classList.remove('no-still');
+                setAspect(box, id, next.naturalWidth, next.naturalHeight);
             };
             next.onerror = () => {
+                clearTimeout(giveUp);
                 loading = false;
                 if (!stopped && box && !box.classList.contains('has-still')) box.classList.add('no-still');
             };
@@ -2463,6 +2520,7 @@
         snapshotUrl,
         playCamera,
         keepStill,
+        cameraAspect,
         browseMedia,
         resolveMedia,
         history,

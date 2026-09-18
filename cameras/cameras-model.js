@@ -6,11 +6,12 @@
  *
  * What it knows:
  *
- *   wall()          the tiles, in order: the doorbell, then the four planned
- *                   cameras, then anything else Home Assistant has. A planned
- *                   camera that isn't in Home Assistant yet is a placeholder
- *                   ({ planned: true }); the moment a camera with that name
- *                   turns up it takes the same square, with no code change.
+ *   wall()          the tiles, in order: the doorbell, then whichever planned
+ *                   cameras actually exist yet, then anything else Home
+ *                   Assistant has. PLANNED only decides where a camera lands
+ *                   and in what order once it shows up (by name) — a slot
+ *                   with nothing behind it draws no tile at all, so the wall
+ *                   is never a row short a square.
  *   controls(id)    the camera's own buttons, found on its device: a siren, a
  *                   quick reply, an LED mode, privacy mode. Only the ones it
  *                   really has.
@@ -77,11 +78,13 @@
 (() => {
     const VERSION = '0.1.0';
 
-    // The cameras Jason is putting up (ONVIF bulb cameras), so the wall is the
-    // right shape before they arrive. `match` is what makes one real: any
-    // Home Assistant camera whose name or entity id matches takes the slot.
-    // Adding a fifth planned camera is one line here; adding a camera that
-    // matches none of them needs nothing — it lands after these.
+    // Where a real camera lands and what order it takes, not whether a
+    // square is held for one that doesn't exist yet — no camera in Home
+    // Assistant matching a slot means no tile for that slot. `match` is what
+    // makes one real: any Home Assistant camera whose name or entity id
+    // matches takes the slot. Adding a fifth planned camera is one line
+    // here; adding a camera that matches none of them needs nothing — it
+    // lands after these.
     const PLANNED = [
         // The garage camera looks down the driveway, so it takes that slot —
         // it stays in the Garage area in Home Assistant, this is only where it
@@ -226,11 +229,11 @@
             for (const b of bells) {
                 if (b.camera && cams.includes(b.camera) && !used.has(b.camera)) out.push(tile(b.camera));
             }
-            // then the planned four, real where Home Assistant has them
+            // then the planned four, each only where Home Assistant actually
+            // has it — a slot nothing matches yet draws no tile
             for (const p of PLANNED) {
                 const found = cams.find((id) => !used.has(id) && (p.match.test(h.name(id)) || p.match.test(id)));
                 if (found) out.push(tile(found, p));
-                else out.push({ id: '', key: p.key, name: p.name, room: '', doorbell: false, bellId: '', planned: true, state: 'planned', available: false, since: null });
             }
             // then anything else that's already there
             for (const id of cams) if (!used.has(id)) out.push(tile(id));
