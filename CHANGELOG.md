@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.41
+
+- **Live now, Upcoming, Final** - every sport splits into three sections
+  instead of mixing live and scheduled games together. An empty section draws
+  nothing.
+- **The Europa League, FA Cup and Carabao Cup** join the Premier League and
+  Champions League. Arsenal sorts first in all of them.
+
 ## v0.4.40
 
 - **Cameras are drawn at their real shape.** The bulb cameras are 16:9 and the
