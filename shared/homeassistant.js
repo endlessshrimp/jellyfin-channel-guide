@@ -1694,7 +1694,18 @@
             if (stopped) return;
             if (Hls && Hls.isSupported()) {
                 hls = new Hls({ lowLatencyMode: false, liveSyncDurationCount: 2, maxBufferLength: 8, backBufferLength: 0 });
-                hls.on(Hls.Events.ERROR, (_e, d) => { if (d && d.fatal) warn('camera stream', d.type, d.details); });
+                // A fatal error leaves hls.js's own retry budget exhausted, but it
+                // doesn't recover on its own — that's left to the caller (hls.js's
+                // documented pattern). Home Assistant's LL-HLS blocking reload can
+                // 404/503 a stream that's gone briefly idle; give it one recovery
+                // attempt before falling back to the still.
+                hls.on(Hls.Events.ERROR, (_e, d) => {
+                    if (!d || !d.fatal) return;
+                    warn('camera stream', d.type, d.details);
+                    if (stopped) return;
+                    if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+                    else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+                });
                 hls.loadSource(src);
                 hls.attachMedia(video);
             } else if (native) {

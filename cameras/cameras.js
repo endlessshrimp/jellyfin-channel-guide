@@ -451,6 +451,7 @@
                     }
                     paintWall();
                 }).catch(() => {
+                    safe(() => run.stop()); // don't leave it retrying in the background forever
                     if (liveFor !== id) return;
                     liveFor = '';
                     live = null;
