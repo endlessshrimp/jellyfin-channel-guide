@@ -283,9 +283,29 @@
                 .filter((p) => covers(p, t))
                 .some((p) => !isReplay(p) && programIsGame(p, g)));
             // exactly one channel whose listing actually names this game:
-            // resolved. Zero (no listing yet, or none of them match) or more
-            // than one (ambiguous) — leave it a named network, not tunable.
-            g.channel = named.length === 1 ? { number: named[0].Number, name: named[0].Name, ch: named[0] } : null;
+            // resolved.
+            if (named.length === 1) {
+                g.channel = { number: named[0].Number, name: named[0].Name, ch: named[0] };
+                return;
+            }
+            // A network with only ONE channel in the lineup has nothing to
+            // disambiguate — that's what the guide match is for. Regional
+            // sports networks (MASN, NESN, the Rangers' own) carry one game at
+            // a time and their listings often don't name the teams at all
+            // ("MLB Baseball"), so demanding a match there turned perfectly
+            // tunable channels into "not tunable". Take the one channel, and
+            // still refuse if what's actually on is a replay.
+            if (!named.length && g._chanCandidates.length === 1) {
+                const only = g._chanCandidates[0];
+                const blocks = (byChan.get(only.Id) || []).filter((p) => covers(p, t));
+                if (!blocks.length || !blocks.every((p) => isReplay(p))) {
+                    g.channel = { number: only.Number, name: only.Name, ch: only };
+                    return;
+                }
+            }
+            // zero on a network with several channels (can't tell which feed),
+            // or more than one match (ambiguous) — name the network, don't tune
+            g.channel = null;
         });
         return games;
     };

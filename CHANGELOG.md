@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Regional sports networks are tunable again.** A game's channel was only
+  accepted when the guide listing actually named both teams — which is fine
+  for disambiguating four FOX affiliates, but wrong for a network with one
+  channel in the lineup. MASN, NESN and the like usually list as plain "MLB
+  Baseball" with no teams in it, so a channel Jason could watch was being
+  shown as "not tunable". A network with a single channel has nothing to
+  disambiguate, so HOMER now takes it — unless what's on is a replay.
+
 ## v0.4.34
 
 - **A camera stream that hits a fatal error now tries to recover.** hls.js's
