@@ -36,7 +36,7 @@
  *                    addressProblem, signIn, disconnect, onChange, house,
  *                    location, people, peopleIn,
  *                    entity, lightOn, toggle, setBrightness, setTemperature,
- *                    setMode, scene, snapshotUrl, playCamera, browseMedia,
+ *                    setMode, scene, snapshotUrl, playCamera, keepStill, browseMedia,
  *                    resolveMedia, history, rings, onRing,
  *                    color, setColor, supports, playPause, mediaCommand,
  *                    playMedia, massPlayer, massPlay, players,
@@ -1646,9 +1646,23 @@
     // ---------- Cameras ----------
 
     // a still from the camera (an <img> can load it from any page); fresh
-    // asks for a new one instead of the browser's copy
+    // asks for a new one instead of the browser's copy.
+    //
+    // A camera cameras/cameras-model.js lists in NAS_CAMS skips Home
+    // Assistant's own snapshot proxy entirely — it 500s for those two
+    // (home-assistant/core#158305, not a HOMER bug) — in favor of a still the
+    // NAS grabs straight off the camera over RTSP. Every screen that shows a
+    // camera (Cameras, Rooms, the House tabs, phone or TV) calls this one
+    // function for "what still do I load", so the NAS fallback only has to
+    // live here once. window.HomerCamerasModel loads after this file but is
+    // only ever read here at call time, well after both have finished
+    // loading, the same lazy-lookup pattern the rest of this file already
+    // uses for HomerPlayer and HomerRooms.
     const snapshotUrl = (id, fresh) => {
         if (mocking()) return mockSnapshot(id);
+        const CM = window.HomerCamerasModel;
+        const nasUrl = CM ? CM.nasStillUrl(id, fresh) : '';
+        if (nasUrl) return nasUrl;
         const s = states[id];
         const pic = s && s.attributes.entity_picture;
         if (!pic) return '';
@@ -1721,6 +1735,63 @@
             });
         })();
         return { started, stop };
+    };
+
+    // Keeps an <img> showing a recent still of a camera, refreshed on its own
+    // interval for as long as it's on screen; the new picture loads out of
+    // sight and swaps in, so it never flashes. Cameras, Rooms and the House
+    // tabs all used to keep a private copy of this (one of them missing the
+    // NAS fallback above, which is what left two camera tiles blank) — now
+    // there's one, so a fix to how a still is fetched only has to happen once.
+    //
+    // A camera snapshotUrl resolves through the NAS (see above) keeps its
+    // picture up even while Home Assistant calls it "unavailable" — that's
+    // the whole point of routing around Home Assistant's bug — so the
+    // "nothing to show" state below only applies when there's no such
+    // fallback for this camera.
+    const keepStill = (img, id, everyMs) => {
+        let timer = 0;
+        let stopped = false;
+        let loading = false;
+        const box = img.closest('[data-still-box]') || img.parentElement;
+        const load = () => {
+            if (stopped || loading) return;
+            const CM = window.HomerCamerasModel;
+            const nasBacked = !!(CM && CM.nasStillUrl(id, false));
+            if (!nasBacked) {
+                const s = entity(id);
+                if (!s || s.state === 'unavailable' || s.state === 'unknown') {
+                    if (box) { box.classList.remove('has-still'); box.classList.add('no-still'); }
+                    img.removeAttribute('src');
+                    return;
+                }
+            }
+            const url = snapshotUrl(id, true);
+            if (!url) { box && box.classList.add('no-still'); return; }
+            if (url.startsWith('data:')) {
+                img.src = url;
+                box && box.classList.add('has-still');
+                box && box.classList.remove('no-still');
+                return;
+            }
+            loading = true;
+            const next = new Image();
+            next.onload = () => {
+                loading = false;
+                if (stopped) return;
+                img.src = next.src;
+                box && box.classList.add('has-still');
+                box && box.classList.remove('no-still');
+            };
+            next.onerror = () => {
+                loading = false;
+                if (!stopped && box && !box.classList.contains('has-still')) box.classList.add('no-still');
+            };
+            next.src = url;
+        };
+        load();
+        timer = setInterval(() => { if (!document.hidden && img.isConnected) load(); }, everyMs);
+        return () => { stopped = true; clearInterval(timer); };
     };
 
     // ---------- Media sources (the cameras' own recordings) ----------
@@ -2391,6 +2462,7 @@
         isMain: (id) => mainOf.has(id),
         snapshotUrl,
         playCamera,
+        keepStill,
         browseMedia,
         resolveMedia,
         history,

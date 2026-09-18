@@ -169,60 +169,27 @@
     };
 
     // A camera's still in an <img>, refreshed while it's on screen; the new
-    // picture loads out of sight and swaps in, so it never flashes.
+    // picture loads out of sight and swaps in, so it never flashes. The
+    // actual fetch (including the NAS fallback for the two cameras Home
+    // Assistant can't snapshot — see cameras-model.js's docstring) lives in
+    // shared/homeassistant.js now, shared with Rooms and the House tabs, so
+    // there's exactly one place that decides how a camera's still is fetched.
     const keepStill = (img, id, everyMs = STILL_MS) => {
-        let timer = 0;
-        let stopped = false;
-        let loading = false;
-        const box = img.closest('[data-still-box]') || img.parentElement;
-        const load = () => {
-            if (stopped || loading) return;
-            const h = HA();
-            // The garage and front yard cameras skip Home Assistant entirely —
-            // the NAS grabs their stills straight off the camera (see
-            // cameras-model.js's docstring) — so they're never blanked by
-            // Home Assistant being unreachable or the camera showing
-            // "unavailable" there; that's the whole point of going around it.
-            const CM = window.HomerCamerasModel;
-            const nasUrl = CM ? CM.nasStillUrl(id, true) : '';
-            if (!nasUrl) {
-                // every other camera: a camera Home Assistant can't reach has
-                // no still to ask for, and the one on screen is however old
-                // the outage is: clear it, say there's no picture, and stop
-                // asking until it's back
-                const ent = h && h.entity ? h.entity(id) : null;
-                if (ent && (ent.state === 'unavailable' || ent.state === 'unknown')) {
-                    if (box) { box.classList.remove('has-still'); box.classList.add('no-still'); }
-                    img.removeAttribute('src');
-                    return;
-                }
-            }
-            const url = nasUrl || (h ? h.snapshotUrl(id, true) : '');
-            if (!url) { box && box.classList.add('no-still'); return; }
-            if (url.startsWith('data:')) {
-                img.src = url;
-                box && box.classList.add('has-still');
-                box && box.classList.remove('no-still');
-                return;
-            }
-            loading = true;
-            const next = new Image();
-            next.onload = () => {
-                loading = false;
-                if (stopped) return;
-                img.src = next.src;
-                box && box.classList.add('has-still');
-                box && box.classList.remove('no-still');
-            };
-            next.onerror = () => {
-                loading = false;
-                if (!stopped && box && !box.classList.contains('has-still')) box.classList.add('no-still');
-            };
-            next.src = url;
-        };
-        load();
-        timer = setInterval(() => { if (!document.hidden && img.isConnected) load(); }, everyMs);
-        return () => { stopped = true; clearInterval(timer); };
+        const h = HA();
+        return h ? h.keepStill(img, id, everyMs) : () => {};
+    };
+    // The two cameras the NAS grabs stills for on its own can sustain a much
+    // faster poll than a real Home Assistant camera proxy should be asked
+    // for: a warm request is served straight from the NAS's cache in tens of
+    // milliseconds (measured: ~36ms), so polling them doesn't cost the NAS or
+    // the camera anything extra between the grabs it's already doing every
+    // few seconds — it just means whichever grab lands is shown sooner
+    // instead of sitting cached for up to STILL_MS. Every other camera (the
+    // doorbell) keeps the slower, proven cadence.
+    const NAS_TILE_MS = 1000;
+    const tileStillMs = (id, otherwise = STILL_MS) => {
+        const CM = window.HomerCamerasModel;
+        return CM && CM.nasStillUrl(id, false) ? NAS_TILE_MS : otherwise;
     };
 
     // ---------- Stylesheets ----------
@@ -385,7 +352,7 @@
             const wall = $('.hc-wall');
             wall.innerHTML = tiles.map(tileHtml).join('');
             wall.classList.toggle('hc-wall-wide', tiles.length > 5);
-            $$('.hc-tile[data-cam]').forEach((t) => stopStills.push(keepStill(t.querySelector('img'), t.dataset.cam)));
+            $$('.hc-tile[data-cam]').forEach((t) => stopStills.push(keepStill(t.querySelector('img'), t.dataset.cam, tileStillMs(t.dataset.cam))));
             paintWall();
         };
 
@@ -1100,7 +1067,7 @@
 
     const phoneLayout = () => !!(window.HomerLayout && window.HomerCamerasPhone && window.HomerLayout.usePhone('cameras'));
     const PHONE_CTX = {
-        model: theModel, keepStill, statusMessage, whenText, agoText, runLength, fmtTime, roomTag,
+        model: theModel, keepStill, tileStillMs, statusMessage, whenText, agoText, runLength, fmtTime, roomTag,
         esc, icon, clamp, go, goBack, goHome, docked, fullscreen, BASE, QUERY
     };
     const draw = (openAt) => (phoneLayout() ? window.HomerCamerasPhone.create({ ...PHONE_CTX, openAt }) : createScreen(openAt));

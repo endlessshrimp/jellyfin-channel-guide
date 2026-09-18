@@ -31,7 +31,7 @@
     const icon = (name) => `<span class="material-icons" aria-hidden="true">${name}</span>`;
 
     const create = (ctx) => {
-        const { esc, whenText, agoText, runLength, keepStill, statusMessage, roomTag } = ctx;
+        const { esc, whenText, agoText, runLength, keepStill, tileStillMs, statusMessage, roomTag } = ctx;
         const P = () => window.HomerPlayer || null;
         const HA = () => window.HomerHA || null;
         const M = ctx.model();
@@ -188,7 +188,7 @@
                 if (first && first.nextSibling) wall.insertBefore(strip, first.nextSibling);
                 loadEvents(bell.id, strip, 'Recent at ' + bell.name);
             } else strip.remove();
-            $$('.cp-row[data-cam]').forEach((r) => stills.push(keepStill(r.querySelector('img'), r.dataset.cam, 5000)));
+            $$('.cp-row[data-cam]').forEach((r) => stills.push(keepStill(r.querySelector('img'), r.dataset.cam, tileStillMs(r.dataset.cam, 5000))));
             paintWall();
         };
 
