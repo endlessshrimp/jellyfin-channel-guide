@@ -741,43 +741,16 @@
     };
 
     // A camera's still in an <img>, refreshed every few seconds while it's
-    // on screen. The new picture loads out of sight and swaps in, so it never
-    // flashes. Returns stop().
+    // on screen. The fetch itself (including the NAS fallback for the two
+    // cameras Home Assistant can't snapshot — cameras/cameras-model.js's
+    // docstring) lives in shared/homeassistant.js now, shared with the
+    // Cameras screen, so there's exactly one place that decides how a
+    // camera's still is fetched — this used to be its own copy, missing that
+    // fallback, which is why these two cameras showed nothing here even
+    // though #/cameras had them working. Returns stop().
     const keepStill = (img, id, everyMs = STILL_MS) => {
-        let timer = 0;
-        let stopped = false;
-        let loading = false;
-        const box = img.closest('[data-still-box]') || img.parentElement;
-        const load = () => {
-            if (stopped || loading) return;
-            const h = HA();
-            const url = h ? h.snapshotUrl(id, true) : '';
-            if (!url) { box && box.classList.add('no-still'); return; }
-            if (url.startsWith('data:')) {
-                img.src = url;
-                box && box.classList.add('has-still');
-                return;
-            }
-            loading = true;
-            const next = new Image();
-            next.onload = () => {
-                loading = false;
-                if (stopped) return;
-                img.src = next.src;
-                box && box.classList.add('has-still');
-                box && box.classList.remove('no-still');
-            };
-            next.onerror = () => {
-                loading = false;
-                if (!stopped && box && !box.classList.contains('has-still')) box.classList.add('no-still');
-            };
-            next.src = url;
-        };
-        load();
-        timer = setInterval(() => {
-            if (!document.hidden && img.isConnected) load();
-        }, everyMs);
-        return () => { stopped = true; clearInterval(timer); };
+        const h = HA();
+        return h ? h.keepStill(img, id, everyMs) : () => {};
     };
 
     // Where Rooms opens when you haven't been in one yet: the living room
