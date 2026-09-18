@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.34
+
+- **A camera stream that hits a fatal error now tries to recover.** hls.js's
+  own documented recovery (`startLoad()` for a network error,
+  `recoverMediaError()` for a media one) was never called — a fatal error was
+  logged and nothing else, so the picture simply sat there until the 15 second
+  timeout gave up and fell back to a still. Also stops the runner when the
+  live view fails to start, so a recovering instance can't keep retrying in
+  the background for ever.
+
 ## v0.4.32
 
 - **Live scores delay, so MLB's own data doesn't spoil the broadcast.**
