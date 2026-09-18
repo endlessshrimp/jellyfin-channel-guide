@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.39
+
+- **The garage camera sits in the Driveway spot** on the camera wall, since
+  that is what it is pointed at. It stays in the Garage area in Home
+  Assistant; only its place on the wall changed.
+
 ## v0.4.38
 
 - **The Backyard camera.** Third bulb camera, wired the same way as the other

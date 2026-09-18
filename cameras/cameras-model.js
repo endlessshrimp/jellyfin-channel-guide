@@ -83,9 +83,11 @@
     // Adding a fifth planned camera is one line here; adding a camera that
     // matches none of them needs nothing — it lands after these.
     const PLANNED = [
-        { key: 'driveway', name: 'Driveway', match: /drive\s*-?\s*way/i },
+        // The garage camera looks down the driveway, so it takes that slot —
+        // it stays in the Garage area in Home Assistant, this is only where it
+        // sits on the wall.
+        { key: 'driveway', name: 'Driveway', match: /drive\s*-?\s*way|garage/i },
         { key: 'backyard', name: 'Backyard', match: /back\s*-?\s*(yard|garden)|rear\s*yard/i },
-        { key: 'garage', name: 'Garage', match: /garage/i },
         { key: 'side_yard', name: 'Side Yard', match: /side\s*-?\s*yard|side\s*gate/i }
     ];
 
