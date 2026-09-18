@@ -43,7 +43,7 @@
  *                            setDelaySeconds, DELAY_OPTIONS, DELAY_DEFAULT }
  */
 (() => {
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
 
     const SITE = 'https://site.api.espn.com/apis/site/v2/sports/';
     const V2 = 'https://site.api.espn.com/apis/v2/sports/';
@@ -60,6 +60,9 @@
         cfb: { key: 'cfb', label: 'College FB', name: 'College Football', path: 'football/college-football', color: '#7a2a12', logo: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png' },
         epl: { key: 'epl', label: 'Premier League', name: 'Premier League', path: 'soccer/eng.1', color: '#3d195b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png' },
         ucl: { key: 'ucl', label: 'Champions League', name: 'Champions League', path: 'soccer/uefa.champions', color: '#0b1e5b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2.png' },
+        uel: { key: 'uel', label: 'Europa League', name: 'Europa League', path: 'soccer/uefa.europa', color: '#ff6900', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2310.png' },
+        efl: { key: 'efl', label: 'Carabao Cup', name: 'Carabao Cup', path: 'soccer/eng.league_cup', color: '#00265b', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/41.png' },
+        facup: { key: 'facup', label: 'FA Cup', name: 'FA Cup', path: 'soccer/eng.fa', color: '#7a1224', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500-dark/40.png' },
         nba: { key: 'nba', label: 'NBA', name: 'NBA', path: 'basketball/nba', color: '#1d428a', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png' },
         nhl: { key: 'nhl', label: 'NHL', name: 'NHL', path: 'hockey/nhl', color: '#111111', logo: 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nhl.png' },
         cbb: { key: 'cbb', label: 'College Hoops', name: 'College Basketball', path: 'basketball/mens-college-basketball', color: '#1a3b73', logo: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png' }
@@ -72,7 +75,11 @@
         { key: 'texas', league: 'cfb', id: '251', abbr: 'TEX', name: 'Longhorns', full: 'Texas Longhorns', color: '#bf5700' },
         { key: 'arsenal', league: 'epl', id: '359', abbr: 'ARS', name: 'Arsenal', full: 'Arsenal', color: '#db0007' }
     ];
-    const favFor = (league, teamId) => FAVS.find((f) => (f.league === league || (f.league === 'epl' && league === 'ucl')) && String(f.id) === String(teamId)) || null;
+    // every other soccer competition an EPL favorite (Arsenal) can turn up
+    // in — their ESPN team id is the same one across all of them, so a
+    // favorite's games surface wherever they are, not just in their home league
+    const SOCCER_CUPS = ['ucl', 'uel', 'efl', 'facup'];
+    const favFor = (league, teamId) => FAVS.find((f) => (f.league === league || (f.league === 'epl' && SOCCER_CUPS.includes(league))) && String(f.id) === String(teamId)) || null;
     const isFav = (league, teamId) => !!favFor(league, teamId);
 
     // ---------- Dates ----------
