@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **A fourth bulb camera, in the Garage.** Wired the same way as the other
+  three: added to Home Assistant as a Generic Camera, and the NAS pulls its
+  own stills over RTSP so the wall doesn't depend on Home Assistant's
+  snapshot endpoint. The old "Garage" camera (it was always pointed down the
+  driveway, per v0.4.39) is renamed to Driveway now that a camera actually
+  lives in the garage too; the wall's matchers no longer let "garage" and
+  "driveway" cross-match each other.
+
 ## v0.4.41
 
 - **Live now, Upcoming, Final** - every sport splits into three sections
