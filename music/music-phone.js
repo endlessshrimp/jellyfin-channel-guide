@@ -34,6 +34,7 @@
     const VERSION = '0.2.0';
     const M = () => window.HomerMusicModel;
     const RM = () => window.HomerRadioModel || null;
+    const AR = () => window.HomerArr || null;
 
     const el = (tag, cls, html) => {
         const e = document.createElement(tag);
@@ -515,6 +516,7 @@
                     <div class="mup-np-art">${artImg(s.track, 700, 'mu-img')}</div>
                     <h1 class="mup-np-t"></h1>
                     <div class="mup-np-a"></div>
+                    <div class="mup-np-lidarr"></div>
                     <div class="mup-np-seek"><span class="mup-np-track"><b></b></span><span class="mup-np-times"><i class="at"></i><i class="left"></i></span></div>
                     <div class="mup-np-ctl">
                         <button type="button" class="mup-rb" data-k="fav">${icon('star_border')}</button>
@@ -572,6 +574,105 @@
             });
         };
         const liveTimer = setInterval(pollLive, 20000);
+
+        // ----- "Get this album" from a radio track (shared/arr.js + Lidarr) -----
+        // Same idea as the TV screen (music/music.js): artist+title (or
+        // artist+album) goes to Lidarr, shared/arr.js ranks what comes back
+        // so the real album beats a tribute, and nothing is added without a
+        // tap — the same two-press confirm as every other Get it button.
+        let lidarrAsked = '';
+        let lidarrState = null; // null | {status, candidates, top}
+        let lidarrShowMore = false;
+        let lidarrRunner = null;
+        const arrRunner = () => {
+            if (!lidarrRunner && AR()) {
+                lidarrRunner = AR().runner({
+                    hint: () => 'Tap again',
+                    // The button's own label already says "Get it? / Tap
+                    // again" while armed; only an error needs saying at all,
+                    // as a note under the row (there's no toast on the phone).
+                    toast: (tt) => {
+                        if (tt.kind !== 'err') return;
+                        const box = $('.mup-np-lidarr');
+                        if (!box) return;
+                        box.querySelectorAll('.mup-lidarr-err').forEach((e) => e.remove());
+                        const note = document.createElement('div');
+                        note.className = 'mup-note small mup-lidarr-err';
+                        note.textContent = tt.text;
+                        box.appendChild(note);
+                        setTimeout(() => note.remove(), 4000);
+                    },
+                    update: (v) => {
+                        if (lidarrState && lidarrState.candidates) {
+                            const k = AR().key(v);
+                            lidarrState.candidates = lidarrState.candidates.map((c) => (AR().key(c) === k ? v : c));
+                            if (lidarrState.top && AR().key(lidarrState.top) === k) lidarrState.top = v;
+                        }
+                        paintLidarrSection();
+                    },
+                });
+            }
+            return lidarrRunner;
+        };
+        const lidarrKnown = (t) => {
+            const np = t && t.live && liveNow[t.stationId];
+            if (!np || !np.title || !np.artist) return null;
+            return { artist: np.artist, title: np.title, album: np.album || '' };
+        };
+        const checkLidarr = (t) => {
+            const known = lidarrKnown(t);
+            const ask = known ? [t.stationId, known.artist, known.title, known.album].join('|') : '';
+            if (ask === lidarrAsked) return;
+            lidarrAsked = ask;
+            lidarrShowMore = false;
+            if (!known || !AR()) { lidarrState = null; return; }
+            lidarrState = { status: 'looking' };
+            const q = known.album ? { artist: known.artist, album: known.album } : { artist: known.artist, title: known.title };
+            AR().lookupAlbum(q).then((res) => {
+                if (ask !== lidarrAsked) return;
+                if (res.error || !res.albums || !res.albums.length) lidarrState = { status: 'none' };
+                else {
+                    const ranked = AR().rankAlbums(res.albums, known).slice(0, 5);
+                    lidarrState = { status: 'found', candidates: ranked, top: ranked[0] };
+                }
+                paintLidarrSection();
+            }).catch(() => {
+                if (ask === lidarrAsked) { lidarrState = { status: 'error' }; paintLidarrSection(); }
+            });
+        };
+        const lidarrRow = (v, { main = false } = {}) => {
+            const a = AR().actions(v)[0];
+            const runner = arrRunner();
+            const armed = !!(a && runner && runner.armed(a, v));
+            const btn = a
+                ? `<button type="button" class="mup-lidarr-get${armed ? ' armed' : ''}" data-lidarr-k="${esc(AR().key(v))}">${esc(runner.label(a, v))}</button>`
+                : '';
+            return `<div class="mup-lidarr-row${main ? ' main' : ''}">
+                ${v.poster ? `<img class="mup-lidarr-art" src="${esc(v.poster)}" alt="">` : `<span class="mup-lidarr-art mup-lidarr-noart">${icon('album')}</span>`}
+                <div class="mup-lidarr-text"><b>${esc(v.title)}</b><span>${esc(v.artist || '')}${v.year ? ' · ' + v.year : ''}</span>${AR().chipHtml(v)}</div>
+                ${btn}
+            </div>`;
+        };
+        const paintLidarrSection = () => {
+            const box = $('.mup-np-lidarr');
+            if (!box) return;
+            if (!lidarrState) { box.innerHTML = ''; return; }
+            if (lidarrState.status === 'looking') { box.innerHTML = `<div class="mup-note small">Looking for this album in Lidarr…</div>`; return; }
+            if (lidarrState.status === 'error') { box.innerHTML = `<div class="mup-note small">Couldn’t reach Lidarr just now.</div>`; return; }
+            if (lidarrState.status === 'none') { box.innerHTML = `<div class="mup-note small">Couldn’t find an album for this in Lidarr.</div>`; return; }
+            const [top, ...rest] = lidarrState.candidates;
+            const ambiguous = rest.length > 0;
+            box.innerHTML = lidarrRow(top, { main: true })
+                + (ambiguous ? `<button type="button" class="mup-lidarr-more">${lidarrShowMore ? 'Hide other matches' : `Not this one? ${rest.length} more match${rest.length === 1 ? '' : 'es'}`}</button>` : '')
+                + (ambiguous && lidarrShowMore ? rest.map((v) => lidarrRow(v)).join('') : '');
+            box.querySelectorAll('[data-lidarr-k]').forEach((b) => {
+                const v = lidarrState.candidates.find((c) => AR().key(c) === b.dataset.lidarrK);
+                const a = v && AR().actions(v)[0];
+                if (v && a) b.onclick = () => arrRunner().press(a, v);
+            });
+            const moreBtn = box.querySelector('.mup-lidarr-more');
+            if (moreBtn) moreBtn.onclick = () => { lidarrShowMore = !lidarrShowMore; paintLidarrSection(); };
+        };
 
         let lyricsFor = '';
         const drawLyrics = () => {
@@ -638,6 +739,8 @@
             q('.mup-np-a').textContent = live
                 ? (np && (np.title || np.artist) ? [np.artist, np.title].filter(Boolean).join(' — ') : (s.track.artist || ''))
                 : [s.track.artist, s.track.album].filter(Boolean).join(' · ');
+            if (live) checkLidarr(s.track); else { lidarrAsked = ''; lidarrState = null; }
+            paintLidarrSection();
             const dur = s.duration || (live ? 0 : s.track.duration) || 0;
             box.classList.toggle('mup-live', !!live);
             q('.mup-np-track b').style.width = (live ? 100 : dur ? (s.position / dur) * 100 : 0).toFixed(2) + '%';
@@ -902,6 +1005,7 @@
                 offHA();
                 $('.mup-scroll').removeEventListener('scroll', onScroll);
                 clearInterval(liveTimer);
+                if (lidarrRunner) lidarrRunner.dispose();
                 document.removeEventListener('keydown', onKey, true);
                 root.remove();
                 if (window.HomerMusicStrip) window.HomerMusicStrip.sync();

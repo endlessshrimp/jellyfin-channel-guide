@@ -909,6 +909,43 @@
     color: var(--faint);
 }
 
+/* "Get this album" from a radio track (shared/arr.js + Lidarr) */
+.mu-pl-lidarr { margin-top: 6px; display: flex; flex-direction: column; gap: 10px; }
+.mu-lidarr-said { font-size: 20px; color: var(--faint); }
+.mu-lidarr-row { display: flex; align-items: center; gap: 14px; }
+.mu-lidarr-art { flex: none; width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: rgba(255, 255, 255, 0.08); }
+.mu-lidarr-noart { display: flex; align-items: center; justify-content: center; color: var(--faint); }
+.mu-lidarr-noart .material-icons { font-size: 28px; }
+.mu-lidarr-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mu-lidarr-text b { font-size: 22px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-lidarr-text span { font-size: 18px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-lidarr-get {
+    flex: none;
+    padding: 10px 20px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    cursor: pointer;
+}
+.mu-lidarr-get.armed { background: rgba(255, 180, 60, 0.22); border-color: rgba(255, 180, 60, 0.5); }
+.mu-lidarr-get.focus { background: var(--focus-fill); border-color: transparent; box-shadow: var(--focus-ring); color: #fff; }
+.mu-lidarr-more {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 2px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dim);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.mu-lidarr-more.focus { color: #fff; }
+
 /* the progress bar, pinned low so the controls sit where a remote expects them */
 .mu-pl-seek {
     margin-top: auto;

@@ -330,6 +330,30 @@
 
 .mup-np-t { margin: 20px 0 0; font-size: 22px; font-weight: 800; line-height: 1.2; }
 .mup-np-a { margin-top: 4px; font-size: 15px; color: var(--dim, #8ea3bd); }
+
+/* "Get this album" from a radio track (shared/arr.js + Lidarr) */
+.mup-np-lidarr { width: 100%; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.mup-np-lidarr .mup-note.small { font-size: 13px; }
+.mup-lidarr-row { display: flex; align-items: center; gap: 10px; text-align: left; }
+.mup-lidarr-art { flex: none; width: 42px; height: 42px; border-radius: 7px; object-fit: cover; background: rgba(255, 255, 255, 0.08); }
+.mup-lidarr-noart { display: flex; align-items: center; justify-content: center; color: var(--dim, #8ea3bd); }
+.mup-lidarr-noart .material-icons { font-size: 22px; }
+.mup-lidarr-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.mup-lidarr-text b { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mup-lidarr-text span { font-size: 13px; color: var(--dim, #8ea3bd); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mup-lidarr-get {
+    flex: none;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    font-size: 13px;
+    font-weight: 700;
+    color: inherit;
+    white-space: nowrap;
+}
+.mup-lidarr-get.armed { background: rgba(255, 180, 60, 0.22); border-color: rgba(255, 180, 60, 0.5); }
+.mup-lidarr-more { align-self: flex-start; background: none; border: none; padding: 0; font-size: 13px; font-weight: 600; color: var(--dim, #8ea3bd); text-decoration: underline; }
 .mup-np-seek { width: 100%; margin-top: 22px; }
 
 .mup-np-track {
