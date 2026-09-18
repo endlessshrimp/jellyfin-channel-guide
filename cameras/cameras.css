@@ -18,26 +18,26 @@
 .hc-waiting .hc-body,
 .hc-waiting .hc-view { visibility: hidden; }
 
-/* Four columns, two rows: the doorbell takes the left half, the other four
-   fill the right. More than five cameras and the rest wrap on below. */
+/* One row, each tile the shape of its own camera's real picture (--ar, set
+   once a still or stream has loaded — see shared/homeassistant.js keepStill
+   and playCamera — 16:9 until then). A tile is exactly as wide as its height
+   times that ratio, so nothing is ever cropped or stretched to fit a cell;
+   centered as a group so three cameras or four both sit properly on the
+   wall, and a fifth needs no new CSS. Only if they'd overflow the width does
+   the row shrink them, evenly, still at their own shape. */
 .hc-wall {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 1fr;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 22px;
     height: 100%;
 }
 
-.hc-wall .hc-tile.first {
-    grid-column: span 2;
-    grid-row: span 2;
-}
-
-.hc-wall-wide { grid-template-columns: repeat(6, 1fr); }
-.hc-wall-wide .hc-tile.first { grid-column: span 3; }
-
 .hc-tile {
     position: relative;
+    flex: 0 1 auto;
+    height: 100%;
+    aspect-ratio: var(--ar, 16 / 9);
     border-radius: 16px;
     overflow: hidden;
     background: #0a1426;
@@ -198,48 +198,6 @@
 
 .hc-tile.streaming .hc-tile-badge::after { content: "Live"; }
 
-/* A camera that isn't up yet: the square is held, and says so. */
-.hc-tile.planned {
-    background:
-        repeating-linear-gradient(135deg, rgba(160, 190, 230, 0.05) 0 12px, transparent 12px 24px),
-        var(--cell);
-    box-shadow: 0 0 0 1px var(--line);
-    cursor: default;
-}
-
-.hc-tile-soon {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    text-align: center;
-    padding: 12px;
-}
-
-.hc-tile-soon .material-icons {
-    font-size: 44px;
-    color: var(--faint);
-    margin-bottom: 4px;
-}
-
-.hc-tile-soon b {
-    font-size: 26px;
-    font-weight: 700;
-    color: var(--dim);
-}
-
-.hc-tile-soon span:not(.material-icons) {
-    font-family: var(--cond);
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--faint);
-}
-
 /* ---------- One camera, full screen ---------- */
 
 .hc-view {
@@ -259,6 +217,20 @@
 
 .hc-view-main {
     position: relative;
+    /* the frame is the camera's own shape (--ar again), not whatever the
+       grid cell happens to be: centered in the space next to the sidebar
+       rather than stretched wide or cropped tall to fill it. A grid item
+       with only aspect-ratio and no definite width doesn't size itself
+       reliably (stretches full-bleed, ignoring the ratio, or — width:auto —
+       collapses to nothing), so cameras.js's fitView() sets the actual
+       pixel width/height here once it knows the cell size; these are the
+       values before that runs, and the cap once it has. */
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: var(--ar, 16 / 9);
+    justify-self: center;
+    align-self: center;
     border-radius: 16px;
     overflow: hidden;
     background: #000;

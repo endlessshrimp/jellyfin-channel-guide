@@ -207,6 +207,10 @@
             // Home Assistant, once it's connected on this device (Settings):
             // who's home, the rooms, and the cameras on their own tab
             { id: 'house', icon: 'house', label: 'House', act: () => go('#/rooms'), when: haUp },
+            // the camera wall direct, same screen as House's Cameras tab —
+            // Cameras used to be its own item and Jason wants that one click
+            // back, not just the tab
+            { id: 'cameras', icon: 'videocam', label: 'Cameras', act: () => go('#/cameras'), when: haUp },
             // what's flying over the house, on a map (planes/planes.js)
             { id: 'planes', icon: 'flight', label: 'Planes', act: () => go('#/planes') },
             // (Weather isn't in the menu: the bug in every screen's top bar
@@ -377,8 +381,10 @@
         if (/^#!?\/movies(\.html)?\?/.test(h)) return 'movies';
         if (/^#!?\/tv(\.html)?\?/.test(h)) return 'shows';
         if (/^#!?\/mypreferencesmenu(\.html)?(\?|$)/.test(h)) return 'settings';
-        // Rooms and Cameras are tabs of the one House item
-        if (/^#!?\/(rooms|cameras)(\?|$)/.test(h)) return 'house';
+        // Rooms is House's own screen; Cameras is a House tab that's also
+        // its own direct item, so it marks itself rather than House
+        if (/^#!?\/rooms(\?|$)/.test(h)) return 'house';
+        if (/^#!?\/cameras(\?|$)/.test(h)) return 'cameras';
         const own = h.match(/^#!?\/(radio|planes|sports|news|books|music|playing)(\?|$)/);
         if (own) return own[1];
         // Weather is off the menu: nothing to mark (the top bar's bug opens it)

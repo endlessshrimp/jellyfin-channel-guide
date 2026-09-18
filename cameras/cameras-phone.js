@@ -159,20 +159,13 @@
 
         // ----- the wall -----
 
-        const tileHtml = (t, i) => {
-            if (t.planned) {
-                return `<div class="cp-row planned" data-i="${i}">
-                    <div class="cp-row-soon">${icon('videocam_off')}<b>${esc(t.name)}</b><span>Not set up yet</span></div>
-                </div>`;
-            }
-            return `<div class="cp-row" data-i="${i}" data-cam="${esc(t.id)}" data-still-box role="button">
+        const tileHtml = (t, i) => `<div class="cp-row" data-i="${i}" data-cam="${esc(t.id)}" data-still-box role="button">
                 <img alt="" draggable="false">
                 <div class="cp-row-none">${icon('videocam_off')}</div>
                 <div class="cp-row-down">${icon('videocam_off')}<b>Camera unavailable</b><span class="cp-row-seen"></span></div>
                 <div class="cp-row-label">${t.doorbell ? icon('doorbell') : ''}<span>${esc(t.name)}</span>${roomTag(t) ? `<i>${esc(roomTag(t))}</i>` : ''}</div>
                 <div class="cp-row-note"></div>
             </div>`;
-        };
 
         const drawWall = () => {
             stills.forEach((fn) => fn());

@@ -326,16 +326,11 @@
         let stopStills = []; // the wall's still refreshers
         let stopBig = null;
         let eventsTimer = 0;
+        let fitTimer = 0; // the wall's follow-up re-measures, after a slow camera's --ar lands
 
         // ----- the wall -----
 
-        const tileHtml = (t, i) => {
-            if (t.planned) {
-                return `<div class="hc-tile planned${i === 0 ? ' first' : ''}" data-i="${i}" role="button">
-                    <div class="hc-tile-soon">${icon('videocam_off')}<b>${esc(t.name)}</b><span>Not set up yet</span></div>
-                </div>`;
-            }
-            return `<div class="hc-tile${i === 0 ? ' first' : ''}" data-i="${i}" data-cam="${esc(t.id)}" data-still-box role="button">
+        const tileHtml = (t, i) => `<div class="hc-tile${i === 0 ? ' first' : ''}" data-i="${i}" data-cam="${esc(t.id)}" data-still-box role="button">
                 <img alt="" draggable="false">
                 <video class="hc-tile-live" muted playsinline></video>
                 <div class="hc-tile-none">${icon('videocam_off')}</div>
@@ -344,6 +339,62 @@
                 <div class="hc-tile-label">${t.doorbell ? icon('doorbell') : ''}<span>${esc(t.name)}</span>${roomTag(t) ? `<i>${esc(roomTag(t))}</i>` : ''}</div>
                 <div class="hc-tile-note"></div>
             </div>`;
+
+        // The wall's own height (--ar and flex-shrink alone can't do this
+        // together): flexbox only shrinks a percentage-height item's WIDTH
+        // when a row doesn't fit, which leaves the height wherever it was —
+        // that squashes every tile out of its real shape instead of keeping
+        // it. So the height comes from here instead: each tile at the
+        // wall's full height, its own real ratio (--ar, 16:9 until known);
+        // if that's wider than the wall, one shared height — still fit to
+        // every tile's own shape — that makes them all fit, is used
+        // instead, so the row is never wider than the screen.
+        // The declared aspect-ratio (--ar, or the 16:9 fallback) read back as
+        // a plain number — what both fits below size their boxes to.
+        const ratioOf = (el) => {
+            const parts = getComputedStyle(el).aspectRatio.split('/').map(Number);
+            const r = parts.length === 2 ? parts[0] / parts[1] : parts[0];
+            return isFinite(r) && r > 0 ? r : 16 / 9;
+        };
+
+        const fitWall = () => {
+            const wall = $('.hc-wall');
+            const els = $$('.hc-tile');
+            if (!wall || !els.length) return;
+            const maxH = wall.clientHeight;
+            const availW = wall.clientWidth;
+            if (!maxH || !availW) return;
+            const oneGap = parseFloat(getComputedStyle(wall).columnGap) || 22;
+            const gap = oneGap * (els.length - 1);
+            const ratios = els.map(ratioOf);
+            const ratioSum = ratios.reduce((s, r) => s + r, 0);
+            const naturalW = maxH * ratioSum + gap;
+            const h = naturalW > availW ? Math.max(0, (availW - gap) / ratioSum) : maxH;
+            els.forEach((t) => { t.style.height = h + 'px'; });
+        };
+
+        // Same idea, one box: a grid item with only `aspect-ratio` and no
+        // definite width doesn't reliably size itself (it either stretches
+        // full and ignores the ratio, or — width:auto — collapses to
+        // nothing, tried both). The grid already knows the real cell size
+        // (its resolved track sizes), so read that and size the frame in
+        // pixels: as tall as the cell allows, at the camera's own width,
+        // narrower instead if that's wider than the cell.
+        const fitView = () => {
+            const main = $('.hc-view-main');
+            const view = $('.hc-view');
+            if (!main || !view || zone === 'wall' || zone === 'tabs') return;
+            const cols = getComputedStyle(view).gridTemplateColumns.split(' ').map(parseFloat);
+            const rows = getComputedStyle(view).gridTemplateRows.split(' ').map(parseFloat);
+            const availW = cols[0];
+            const availH = rows[0];
+            if (!availW || !availH) return;
+            const ratio = ratioOf(main);
+            let w = availH * ratio;
+            let h = availH;
+            if (w > availW) { w = availW; h = availW / ratio; }
+            main.style.width = w + 'px';
+            main.style.height = h + 'px';
         };
 
         const drawWall = () => {
@@ -351,9 +402,17 @@
             stopStills = [];
             const wall = $('.hc-wall');
             wall.innerHTML = tiles.map(tileHtml).join('');
-            wall.classList.toggle('hc-wall-wide', tiles.length > 5);
             $$('.hc-tile[data-cam]').forEach((t) => stopStills.push(keepStill(t.querySelector('img'), t.dataset.cam, tileStillMs(t.dataset.cam))));
             paintWall();
+            fitWall();
+            // a cold NAS grab or a first-ever look at a camera can take a few
+            // seconds (see cameras-model.js) — its --ar lands after this
+            // paint, so a couple of follow-up passes catch a tile up to its
+            // real shape instead of leaving it at the 16:9 guess all wall
+            clearTimeout(fitTimer);
+            const retry = (at) => setTimeout(() => { if (alive && zone === 'wall') fitWall(); }, at);
+            fitTimer = retry(1200);
+            retry(4000);
         };
 
         // "Last seen 7:13 AM" — when Home Assistant last had anything from a
@@ -615,6 +674,15 @@
             loadEvents();
             clearInterval(eventsTimer);
             eventsTimer = setInterval(() => { if (!document.hidden && zone !== 'wall') loadEvents(true); }, EVENTS_MS);
+            fitView();
+            // the events row's own height (grid-template-rows: 1fr auto)
+            // settles once its content is in, and a cold camera's --ar can
+            // still be a few seconds out — a couple of follow-ups catch both
+            clearTimeout(fitTimer);
+            const retry = (at) => setTimeout(() => { if (alive && zone !== 'wall' && zone !== 'tabs') fitView(); }, at);
+            fitTimer = retry(400);
+            retry(1200);
+            retry(4000);
         };
 
         const closeCamera = () => {
@@ -971,7 +1039,8 @@
 
         window.addEventListener('keydown', onKey, true);
         window.addEventListener('wheel', onWheel, { capture: true, passive: false });
-        window.addEventListener('resize', fit);
+        const onResize = () => { fit(); if (zone === 'wall') fitWall(); else fitView(); };
+        window.addEventListener('resize', onResize);
         stage.addEventListener('click', onClick);
 
         // ----- the Actions strip (shared/actions.js) -----
@@ -1035,9 +1104,10 @@
                 clearInterval(clockTimer);
                 clearInterval(eventsTimer);
                 clearTimeout(toastTimer);
+                clearTimeout(fitTimer);
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
-                window.removeEventListener('resize', fit);
+                window.removeEventListener('resize', onResize);
                 root.remove();
             }
         };
