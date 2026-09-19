@@ -10,6 +10,22 @@
   reach it. Tapping the row itself still plays it here, same as always. The
   icon is off the same way the page's Play on… button already is, when Home
   Assistant or Music Assistant isn't ready.
+- **Sports games that are only on a streaming service now name it and link
+  to it, the same way a card names a TV channel.** A game that isn't on any
+  channel in the lineup — a Peacock- or Prime Video-exclusive game, an
+  ESPN+/ACC Network Extra college game, MLB's Apple TV+ Friday game — shows
+  the service's name and, where it opens on the web, a link to it, instead
+  of sitting there blank or naming a network you can't tune. A channel
+  always wins when there is one; this only ever shows up when there isn't.
+  On the Apple TV app, which can't open an outside site, it just names the
+  service instead of a dead link. Also fixed: a favorite team's game that's
+  exclusively streaming used to sometimes print the streaming service's
+  name as if it were an unresolved TV network ("Apple TV · not tunable") —
+  it gets the proper streaming badge now.
+- **MLB's live scores delay default is 60 seconds now, up from 25.** Jason's
+  broadcast runs closer to a minute behind MLB's own data than the original
+  guess. If you never touched this setting it just moves to 60; if you'd
+  deliberately picked 25 seconds, that choice sticks.
 
 ## v0.4.43
 
