@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.43
 
 - **The Cameras wall is a grid now, not a single row.** Every camera is
   bigger than before — the wall works out how many rows makes the most of
