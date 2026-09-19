@@ -28,7 +28,7 @@
  *   chapters, enrich, color, coverUrl, player, onChange, fmt, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     if (window.HomerBooksModel && typeof window.HomerBooksModel.destroy === 'function') {
         window.HomerBooksModel.destroy();
@@ -40,6 +40,7 @@
     const OL_KEY = 'homer-books-ol';
     const CH_KEY = 'homer-books-chapters';
     const RATE_KEY = 'homer-books-rate';
+    const VOL_KEY = 'homer-books-volume';
     const RATES = [0.8, 1, 1.1, 1.25, 1.5, 1.75, 2];
     const SLEEPS = [null, 15, 30, 45, 60, 'chapter'];
 
@@ -458,6 +459,8 @@
         let lastReport = 0;
         let pendingSeek = null;
         let rate = +(store.get(RATE_KEY, 1)) || 1;
+        let volume = Math.max(0, Math.min(1, +(store.get(VOL_KEY, 1))));
+        if (!isFinite(volume)) volume = 1;
         let sleep = null; // { mode: minutes | 'chapter', until: ms, chapterEnd: sec }
         let sleepTimer = null;
         let error = null;
@@ -470,6 +473,7 @@
             audio.id = 'homer-books-audio';
             audio.preload = 'auto';
             audio.style.display = 'none';
+            audio.volume = volume;
             document.body.appendChild(audio);
             ['play', 'pause', 'seeked', 'ended', 'error', 'loadedmetadata', 'waiting', 'playing', 'ratechange'].forEach((ev) =>
                 audio.addEventListener(ev, () => onAudio(ev)));
@@ -510,6 +514,7 @@
                 position: pos(),
                 duration: (audio && isFinite(audio.duration) && audio.duration) || (b && b.duration) || 0,
                 rate,
+                volume,
                 sleep: sleep ? { mode: sleep.mode, left: sleep.mode === 'chapter' ? null : Math.max(0, sleep.until - Date.now()) } : null,
                 error,
                 chapter: b ? chapterAt(b, pos()) : null,
@@ -646,6 +651,19 @@
         };
         const cycleRate = () => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length] || 1);
 
+        // The book's own volume, independent of the system/device volume.
+        // Added for HOME-104 (ambience): with a second sound layer playing
+        // alongside the book, book and ambience need separate levels. Not
+        // reported to Jellyfin (IsMuted/VolumeLevel aren't part of its body
+        // here, unlike music-model.js, which does report them) — a minimal
+        // add, not a full port of music's volume handling.
+        const setVolume = (v) => {
+            volume = Math.max(0, Math.min(1, v));
+            store.set(VOL_KEY, volume);
+            if (audio) audio.volume = volume;
+            changed();
+        };
+
         const stopSleep = () => {
             clearTimeout(sleepTimer);
             sleepTimer = null;
@@ -696,7 +714,7 @@
         document.addEventListener('visibilitychange', onHide);
 
         return {
-            play, pause, resume, toggle, seek, skip, chapterJump, setRate, cycleRate, setSleep, cycleSleep, stop, state,
+            play, pause, resume, toggle, seek, skip, chapterJump, setRate, cycleRate, setVolume, setSleep, cycleSleep, stop, state,
             rates: RATES,
             get audio() { return ensure(); },
             destroy() {

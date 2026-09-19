@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **Ambience (spike, HOME-104): background sound while a book plays.** A new
+  "Ambience" control in Books' Listening view (and, from anywhere a book or a
+  track is loaded, the Actions strip — hold OK, or M on a keyboard) picks a
+  generative storm preset ("Distant summer storm," "Heavy downpour, close
+  strikes," "Windy squall" and others — each a rain/wind bed plus randomly
+  scheduled thunder so it never sounds looped), ocean waves, procedural fan/
+  brown or pink noise, or any SomaFM/local/favorite radio station — playing
+  underneath the book without pausing it. The book and the ambience each get
+  their own independent volume slider (remote, mouse or touch), plus a sleep
+  timer (15/30/45/60/90 minutes, or end of the current chapter) that fades
+  both out over 30 seconds and stops them. Choices are remembered per device.
+  This is a proof of concept, not a finished feature: the bundled storm/
+  nature sounds are small placeholder CC0 samples, not the multi-minute
+  high-quality recordings this deserves (see ambient/assets/README.md), and
+  it hasn't been verified yet on the Apple TV app specifically — try it there
+  first. When music/radio is playing on a speaker, ambience only plays here
+  in the browser; the panel says so.
+
 ## v0.4.44
 
 - **Every track row on the phone can be sent to a speaker or TV before it

@@ -77,6 +77,7 @@
     css('music/playon.css', 'homer-playon-css'); // "Play on…", the Music screens' device picker
     css('music/radio.css', 'homer-radio-css'); // the Music screens' Radio tab
     css('library/castvideo.css', 'homer-castvideo-css'); // "Play on…", the movie/episode device picker
+    css('ambient/ambient.css', 'homer-ambient-css'); // HOME-104 spike: background sound alongside a book
     js('shared/loading.js'); // first of all: HOMER's loading screen, over Jellyfin's 404
     js('shared/layout.js'); // first: TV or phone layout, and touch
     js('shared/menu.js'); // before the screens: Home and Now Playing draw its menu
@@ -132,6 +133,9 @@
     js('music/music-strip.js'); // the music's now-playing strip on every other screen
     js('music/music.js'); // Music (#/music)
     js('music/music-phone.js'); // Music's phone layout
+    js('ambient/ambient-logic.js'); // HOME-104 spike: pure math/catalog, no DOM (also required by its own tests)
+    js('ambient/ambient-model.js'); // HOME-104 spike: the ambience engine (storms/nature/noise + radio, Web Audio)
+    js('ambient/ambient-ui.js'); // HOME-104 spike: the Ambience picker sheet
     js('playing/playing-model.js'); // everything playing: Jellyfin's sessions, the house, HOMER's music
     js('playing/playing.js'); // Now Playing (#/playing)
     js('playing/playing-phone.js'); // Now Playing's phone layout

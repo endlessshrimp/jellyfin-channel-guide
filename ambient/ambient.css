@@ -1,0 +1,291 @@
+/*
+ * HOMER Ambience (ambient/ambient-ui.js): the picker sheet. Fixed over the
+ * whole window (it isn't nested in any one screen's stage — it's reachable
+ * from Books and, via the Actions strip, from anywhere), drawn in 1080-tall
+ * units and scaled with --am-s the same way shared/actions.css does.
+ */
+
+#am-root {
+    position: fixed;
+    inset: 0;
+    z-index: 100000; /* over screens (99990-99995), under the Actions strip (100001) and quick panel */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    color: var(--homer-text, #f4f7fb);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+#am-root[hidden] { display: none; }
+
+#am-root .am-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 5, 10, 0.68);
+    opacity: 0;
+    transition: opacity 180ms ease;
+}
+
+#am-root.show .am-scrim { opacity: 1; }
+
+#am-root .am-sheet {
+    position: relative;
+    width: calc(760px * var(--am-s, 1));
+    max-width: calc(100vw - 32px);
+    max-height: calc(940px * var(--am-s, 1));
+    max-height: min(calc(940px * var(--am-s, 1)), calc(100vh - 40px));
+    display: flex;
+    flex-direction: column;
+    padding: calc(28px * var(--am-s, 1)) calc(28px * var(--am-s, 1)) calc(18px * var(--am-s, 1));
+    border-radius: calc(20px * var(--am-s, 1));
+    background: linear-gradient(180deg, rgba(14, 30, 54, 0.98), rgba(6, 14, 28, 0.98));
+    box-shadow: 0 0 0 1px var(--homer-line-strong, rgba(160, 190, 230, 0.24)), 0 30px 90px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    transform: translateY(calc(16px * var(--am-s, 1))) scale(0.98);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+#am-root.show .am-sheet { opacity: 1; transform: none; }
+
+#am-root .am-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: calc(10px * var(--am-s, 1));
+    margin-bottom: calc(14px * var(--am-s, 1));
+    font-size: calc(30px * var(--am-s, 1));
+    font-weight: 800;
+}
+
+#am-root .am-head .material-icons {
+    font-size: calc(30px * var(--am-s, 1));
+    color: var(--homer-accent, #2f8cff);
+    align-self: center;
+}
+
+#am-root .am-head-sub {
+    font-size: calc(18px * var(--am-s, 1));
+    font-weight: 600;
+    color: var(--homer-dim, #8ea3bd);
+}
+
+#am-root .am-hint {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: calc(8px * var(--am-s, 1));
+    margin-bottom: calc(14px * var(--am-s, 1));
+    padding: calc(10px * var(--am-s, 1)) calc(14px * var(--am-s, 1));
+    border-radius: calc(10px * var(--am-s, 1));
+    background: rgba(255, 176, 32, 0.12);
+    color: var(--homer-needle, #ffb020);
+    font-size: calc(17px * var(--am-s, 1));
+    font-weight: 600;
+}
+
+#am-root .am-hint .material-icons { font-size: calc(20px * var(--am-s, 1)); }
+
+#am-root .am-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding-right: calc(4px * var(--am-s, 1));
+}
+
+#am-root .am-body::-webkit-scrollbar { width: 0; height: 0; }
+
+#am-root .am-group {
+    margin: calc(14px * var(--am-s, 1)) 0 calc(6px * var(--am-s, 1));
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(16px * var(--am-s, 1));
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-faint, #5a6f89);
+}
+
+#am-root .am-group:first-child { margin-top: 0; }
+
+#am-root .am-row {
+    display: flex;
+    align-items: center;
+    gap: calc(14px * var(--am-s, 1));
+    padding: calc(12px * var(--am-s, 1)) calc(14px * var(--am-s, 1));
+    margin-bottom: calc(6px * var(--am-s, 1));
+    border-radius: calc(12px * var(--am-s, 1));
+    background: var(--homer-cell, rgba(20, 36, 60, 0.78));
+    cursor: pointer;
+    transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+#am-root .am-row .material-icons { color: var(--homer-accent-2, #6fd3ff); font-size: calc(22px * var(--am-s, 1)); }
+#am-root .am-row.active { box-shadow: inset 0 0 0 1px rgba(47, 140, 255, 0.5); }
+#am-root .am-row.active .material-icons { color: var(--homer-accent, #2f8cff); }
+
+#am-root .am-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+#am-root .am-row-text b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(19px * var(--am-s, 1)); }
+#am-root .am-row-text i {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--homer-dim, #8ea3bd);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: calc(15px * var(--am-s, 1));
+}
+
+#am-root .am-row-tag {
+    flex: 0 0 auto;
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: calc(13px * var(--am-s, 1));
+    padding: calc(4px * var(--am-s, 1)) calc(10px * var(--am-s, 1));
+    border-radius: calc(999px * var(--am-s, 1));
+    background: var(--homer-accent, #2f8cff);
+    color: #fff;
+}
+
+#am-root .am-row.sel {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
+    color: #fff;
+}
+
+#am-root .am-row.sel .material-icons,
+#am-root .am-row.sel .am-row-text i { color: rgba(255, 255, 255, 0.85); }
+#am-root .am-row.dim { opacity: 0.5; }
+
+#am-root .am-empty {
+    padding: calc(20px * var(--am-s, 1));
+    text-align: center;
+    color: var(--homer-dim, #8ea3bd);
+    font-weight: 600;
+}
+
+/* ---------- Sliders ---------- */
+
+#am-root .am-sliders { margin-top: calc(16px * var(--am-s, 1)); }
+
+#am-root .am-slider { margin-bottom: calc(14px * var(--am-s, 1)); }
+#am-root .am-slider.dim { opacity: 0.45; }
+
+#am-root .am-slider-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: calc(8px * var(--am-s, 1));
+    font-weight: 700;
+    font-size: calc(17px * var(--am-s, 1));
+}
+
+#am-root .am-slider-val { color: var(--homer-accent-2, #6fd3ff); font-variant-numeric: tabular-nums; }
+
+#am-root .am-slider-track {
+    position: relative;
+    height: calc(14px * var(--am-s, 1));
+    border-radius: calc(999px * var(--am-s, 1));
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    touch-action: none;
+}
+
+#am-root .am-slider-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: calc(999px * var(--am-s, 1));
+    background: var(--homer-accent, #2f8cff);
+    pointer-events: none;
+}
+
+#am-root .am-slider-handle {
+    position: absolute;
+    top: 50%;
+    width: calc(26px * var(--am-s, 1));
+    height: calc(26px * var(--am-s, 1));
+    margin-left: calc(-13px * var(--am-s, 1));
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+#am-root .am-slider.sel .am-slider-track { box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55)); }
+
+/* ---------- Sleep timer ---------- */
+
+#am-root .am-sleep { margin-top: calc(6px * var(--am-s, 1)); }
+
+#am-root .am-chips { display: flex; flex-wrap: wrap; gap: calc(8px * var(--am-s, 1)); }
+
+#am-root .am-chip {
+    padding: calc(8px * var(--am-s, 1)) calc(14px * var(--am-s, 1));
+    border-radius: calc(999px * var(--am-s, 1));
+    background: var(--homer-cell, rgba(20, 36, 60, 0.78));
+    font-weight: 700;
+    font-size: calc(15px * var(--am-s, 1));
+    cursor: pointer;
+}
+
+#am-root .am-chip.sel {
+    background: var(--homer-accent, #2f8cff);
+    color: #fff;
+}
+
+/* the invisible focus target that owns the chip row (see ambient-ui.js) gets
+   its own selection ring drawn on the chip row's container instead */
+#am-root .am-sleep:has(+ .am-off) { position: relative; }
+
+#am-root .am-sleep-left {
+    margin-top: calc(8px * var(--am-s, 1));
+    font-size: calc(14px * var(--am-s, 1));
+    color: var(--homer-dim, #8ea3bd);
+    font-weight: 600;
+}
+
+/* ---------- Footer ---------- */
+
+#am-root .am-foot { flex: 0 0 auto; margin-top: calc(10px * var(--am-s, 1)); }
+
+#am-root .am-off { justify-content: center; font-weight: 700; }
+#am-root .am-off .material-icons { color: var(--homer-live, #ff3b3b); }
+
+#am-root .am-legend {
+    display: flex;
+    justify-content: center;
+    gap: calc(24px * var(--am-s, 1));
+    margin-top: calc(10px * var(--am-s, 1));
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(15px * var(--am-s, 1));
+    font-weight: 600;
+    color: var(--homer-dim, #8ea3bd);
+}
+
+#am-root .am-key {
+    display: inline-grid;
+    place-items: center;
+    min-width: calc(30px * var(--am-s, 1));
+    height: calc(26px * var(--am-s, 1));
+    padding: 0 calc(6px * var(--am-s, 1));
+    margin-right: calc(6px * var(--am-s, 1));
+    border-radius: calc(7px * var(--am-s, 1));
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--homer-line-strong, rgba(160, 190, 230, 0.24));
+    font-size: calc(13px * var(--am-s, 1));
+    font-weight: 700;
+}
+
+/* ---------- On a phone ---------- */
+
+#am-root.phone .am-sheet {
+    width: auto;
+    left: 12px;
+    right: 12px;
+    max-height: 82vh;
+}
+
+#am-root.phone .am-legend { display: none; }

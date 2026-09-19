@@ -30,7 +30,7 @@
  * window.HomerBooks = { open, close, destroy, version }
  */
 (() => {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     if (window.HomerBooks && typeof window.HomerBooks.destroy === 'function') {
         window.HomerBooks.destroy();
@@ -656,6 +656,7 @@
                         <span class="bk-lv-gap"></span>
                         <div class="bk-pill" data-k="rate"><span class="bk-pill-k">Speed</span><span class="bk-pill-v"></span></div>
                         <div class="bk-pill" data-k="sleep"><span class="bk-pill-k">Sleep</span><span class="bk-pill-v"></span></div>
+                        <div class="bk-pill" data-k="ambience"><span class="bk-pill-k">Ambience</span><span class="bk-pill-v"></span></div>
                     </div>
                     <div class="bk-lv-err"></div>
                 </div>`;
@@ -669,6 +670,7 @@
                 next: [() => P.chapterJump(1), 'Next chapter'],
                 rate: [() => { P.cycleRate(); toast(`Speed ${P.state().rate}×`); }, 'Change speed'],
                 sleep: [() => { P.cycleSleep(); const sl = P.state().sleep; toast(sl ? (sl.mode === 'chapter' ? 'Sleep at the end of this chapter' : `Sleep in ${sl.mode} minutes`) : 'Sleep timer off'); }, 'Sleep timer'],
+                ambience: [() => { if (window.HomerAmbient) window.HomerAmbient.open(); }, 'Background sound (HOME-104 spike)'],
             };
             box.querySelectorAll('[data-k]').forEach((e) => focusable(e, e.dataset.k, acts[e.dataset.k][0], acts[e.dataset.k][1]));
             paintListen();
@@ -715,6 +717,13 @@
             const sl = s.sleep;
             q('[data-k="sleep"] .bk-pill-v').textContent = !sl ? 'Off' : sl.mode === 'chapter' ? 'End of chapter' : `${Math.ceil(sl.left / 60000)} min`;
             q('[data-k="sleep"]').classList.toggle('set', !!sl);
+            const AM = window.HomerAmbientModel;
+            const amb = AM && AM.current();
+            const ambPill = q('[data-k="ambience"]');
+            if (ambPill) {
+                ambPill.querySelector('.bk-pill-v').textContent = amb && amb.active ? amb.sourceLabel : 'Off';
+                ambPill.classList.toggle('set', !!(amb && amb.active));
+            }
             q('.bk-lv-err').textContent = s.error || '';
             const chOk = !!(b.chapters && b.chapters.length > 1);
             q('[data-k="prev"]').classList.toggle('dim', !chOk);
@@ -770,6 +779,11 @@
             } else paintListen();
         };
         const offModel = M().onChange(onModel);
+        // the Ambience pill (HOME-104): repaint when it changes from its own
+        // panel, not just from this screen's own model
+        const offAmbient = window.HomerAmbientModel
+            ? window.HomerAmbientModel.onChange(() => { if (view === 'listen') paintListen(); })
+            : () => {};
 
         // ----- loading / empty -----
         const setState = (kind) => {
@@ -1027,6 +1041,7 @@
                 // leaving Books pauses the book (Jellyfin gets told where you are)
                 safe(() => player().pause());
                 offModel();
+                offAmbient();
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('wheel', onWheel, { capture: true });
                 window.removeEventListener('resize', fit);
