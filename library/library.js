@@ -820,11 +820,15 @@
                 }
                 return list;
             }
+            // A movie opens its details page first (like a show opens Episodes) —
+            // Play/Resume/Restart stay one step over as secondary actions.
             if (posOf(it) > 0) {
-                return [{ id: 'resume', icon: 'play_arrow', label: 'Resume', item: it },
+                return [{ id: 'open', icon: 'info', label: 'Details', item: it },
+                    { id: 'resume', icon: 'play_arrow', label: 'Resume', item: it },
                     { id: 'restart', icon: 'replay', label: 'Restart', item: it }];
             }
-            return [{ id: 'play', icon: 'play_arrow', label: 'Play', item: it }];
+            return [{ id: 'open', icon: 'info', label: 'Details', item: it },
+                { id: 'play', icon: 'play_arrow', label: 'Play', item: it }];
         };
 
         const drawActions = () => {

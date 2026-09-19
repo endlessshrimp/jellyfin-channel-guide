@@ -9,6 +9,11 @@
   picture and the bulb cameras' wider ones never get cropped or squeezed.
   Up and down now move between rows on the remote and keyboard, landing on
   roughly the same camera you were under.
+- **Selecting a movie in the Movies grid opens its details page** instead of
+  starting playback straight away — the same as selecting a show already did.
+  The details page has the poster, cast, genre, rating and a More Like This
+  row. Play, Resume and Restart are still right there as the next option over
+  in the Actions strip.
 
 ## v0.4.42
 
