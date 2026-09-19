@@ -331,6 +331,10 @@
 .mup-np-t { margin: 20px 0 0; font-size: 22px; font-weight: 800; line-height: 1.2; }
 .mup-np-a { margin-top: 4px; font-size: 15px; color: var(--dim, #8ea3bd); }
 
+/* Clickable artist/album names: Now Playing and the album page's sub line */
+.mup-name-link { color: inherit; text-decoration: underline; text-decoration-color: rgba(244, 247, 251, 0.35); text-underline-offset: 2px; }
+.mup-name-link:active { color: #fff; }
+
 /* "Get this album" from a radio track (shared/arr.js + Lidarr) */
 .mup-np-lidarr { width: 100%; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .mup-np-lidarr .mup-note.small { font-size: 13px; }
