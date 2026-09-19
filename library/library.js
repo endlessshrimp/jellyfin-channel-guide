@@ -363,7 +363,10 @@
             if (ev.target.closest('[data-action="home"]')) goHome();
             else if (ev.target.closest('[data-action="fullscreen"]') && P()) P().fullscreen();
         });
-        $('.hl-meta').addEventListener('click', (ev) => {
+        // delegated on stage, not .hl-meta directly: .hl-meta lives inside
+        // .hl-body, which is still empty at this point (createLibrary/
+        // createShow/createMovie fill it in after createShell returns)
+        stage.addEventListener('click', (ev) => {
             const b = ev.target.closest('.hl-chip.genre');
             if (b) onGenre({ genre: b.dataset.genre, lib: b.dataset.lib });
         });
