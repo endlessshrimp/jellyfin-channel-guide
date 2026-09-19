@@ -64,7 +64,7 @@
     layer.innerHTML = `
         <div class="am-scrim"></div>
         <div class="am-sheet" role="dialog" aria-label="Ambience">
-            <div class="am-head">${icon('cloud')}<span>Ambience</span><span class="am-head-sub">background sound alongside the book</span></div>
+            <div class="am-head">${icon('cloud')}<span>Ambience</span><span class="am-head-sub">background sound alongside the book</span><span class="am-close" role="button" aria-label="Close">${icon('close')}</span></div>
             <div class="am-hint" hidden></div>
             <div class="am-body">
                 <div class="am-list"></div>
@@ -335,6 +335,7 @@
         }
     };
     const onClick = (ev) => {
+        if (ev.target.closest('.am-close')) { closePanel(); return; }
         if (ev.target.closest('.am-sheet')) {
             const row = ev.target.closest('.am-source, .am-off');
             if (row && typeof row._ok === 'function') { row._ok(); }
@@ -372,17 +373,67 @@
 
     // Reachable from anywhere a book or track is loaded, not just Books' own
     // screen — this is what makes it work for Music too without editing
-    // music.js. Books also gets an explicit pill (books/books.js).
+    // music.js. Books also gets an explicit pill (books/books.js). When
+    // ambience is actually playing, a second entry stops it outright, even
+    // from a screen with no book/track loaded at all (HOME-104: ambience
+    // could outlive the thing it started alongside — Now Playing showing
+    // nothing while ambience kept going — so "stop" has to be reachable
+    // independent of "open").
     const offAction = window.HomerActions ? window.HomerActions.provide(() => {
         const bp = window.HomerBooksModel && window.HomerBooksModel.player;
         const mp = window.HomerMusicModel && window.HomerMusicModel.player;
-        const active = !!((bp && bp.state().book) || (mp && mp.state().track));
-        if (!active) return [];
-        return [{
-            id: 'ambience', key: 'A', icon: 'cloud', label: 'Ambience',
-            sub: 'Background sound', run: openPanel,
-        }];
+        const fgActive = !!((bp && bp.state().book) || (mp && mp.state().track));
+        const model = AM();
+        const cur = model && model.current();
+        const ambActive = !!(cur && cur.active);
+        if (!fgActive && !ambActive) return [];
+        const out = [];
+        if (fgActive) {
+            out.push({
+                id: 'ambience', key: 'A', icon: 'cloud', label: 'Ambience',
+                sub: 'Background sound', run: openPanel,
+            });
+        }
+        if (ambActive) {
+            out.push({
+                id: 'ambience-stop', icon: 'stop_circle', label: 'Stop ambience',
+                sub: cur.sourceLabel || '', run: () => model.stop(),
+            });
+        }
+        return out;
     }, { id: 'ambience', global: true }) : () => {};
+
+    // ---------- Persistent indicator: "Ambience — <preset>" ----------
+    //
+    // The picker sheet only exists while it's open; this is a small,
+    // always-there badge (every screen — it's fixed over the whole window,
+    // like the picker itself) so ambience is never invisible once you've
+    // closed the picker and moved on. HOME-104: Jason's report was exactly
+    // that — it kept playing, unnoticed, after he'd wandered off. One press
+    // on its own stop icon kills it from wherever you are; clicking the
+    // rest of it opens the picker.
+    ensureCss();
+    const indicator = document.createElement('div');
+    indicator.id = 'am-indicator';
+    indicator.hidden = true;
+    indicator.innerHTML = `${icon('cloud')}<span class="am-ind-label"></span>`
+        + `<span class="am-ind-stop" role="button" aria-label="Stop ambience">${icon('stop_circle')}</span>`;
+    document.body.appendChild(indicator);
+    const updateIndicator = () => {
+        const model = AM();
+        const cur = model && model.current();
+        if (!cur || !cur.active) { indicator.hidden = true; return; }
+        indicator.hidden = false;
+        indicator.querySelector('.am-ind-label').textContent = 'Ambience — ' + (cur.sourceLabel || 'On');
+        indicator.querySelector('.material-icons').textContent = cur.sourceKind === 'radio' ? 'radio' : 'cloud';
+    };
+    const onIndicatorClick = (ev) => {
+        if (ev.target.closest('.am-ind-stop')) { ev.stopPropagation(); if (AM()) AM().stop(); return; }
+        openPanel();
+    };
+    indicator.addEventListener('click', onIndicatorClick);
+    const offIndicator = (AM() && AM().onChange) ? AM().onChange(updateIndicator) : () => {};
+    updateIndicator();
 
     window.HomerAmbient = {
         version: VERSION,
@@ -393,9 +444,12 @@
         destroy() {
             closePanel();
             offAction();
+            offIndicator();
             document.removeEventListener('keydown', onKey, true);
             window.removeEventListener('resize', scale);
             layer.removeEventListener('click', onClick);
+            indicator.removeEventListener('click', onIndicatorClick);
+            indicator.remove();
             layer.remove();
             document.getElementById('am-css')?.remove();
         },

@@ -895,6 +895,7 @@
         const onKey = (ev) => {
             wake();
             if (document.getElementById('cg-root')) return; // the guide is on top
+            if (window.HomerAmbient && window.HomerAmbient.isOpen()) return; // Ambience is on top, and has its own keys
             if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
             if (isTyping(ev.target) && !root.contains(ev.target)) return;
             const k = ev.key;
@@ -926,6 +927,7 @@
         };
         const onWheel = (ev) => {
             if (document.getElementById('cg-root')) return;
+            if (window.HomerAmbient && window.HomerAmbient.isOpen()) return; // let the picker's own list scroll natively
             const col = ev.target.closest && ev.target.closest('.bk-scroll-y, .bk-scroll-x');
             if (col) { col.scrollBy({ top: ev.deltaY, left: ev.deltaX || (col.classList.contains('bk-scroll-x') ? ev.deltaY : 0) }); }
             ev.preventDefault();

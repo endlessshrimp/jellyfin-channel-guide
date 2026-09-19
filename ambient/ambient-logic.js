@@ -14,7 +14,7 @@
  *     at 1am when Jason is trying to fall asleep
  *
  * window.HomerAmbientLogic = { clamp01, mulberry32, fadeMultiplier, sleepPhase,
- *   randRange, pickWeighted, generateNoiseBuffer, formatMinutes,
+ *   randRange, pickWeighted, generateNoiseBuffer, formatMinutes, shouldAutoStop,
  *   SLEEP_MINUTES, DISTANCE_PARAMS, PRESETS, ASSETS, validateCatalog }
  */
 (function (root, factory) {
@@ -92,6 +92,22 @@
     };
 
     var SLEEP_MINUTES = [15, 30, 45, 60, 90];
+
+    // ---------- Lifecycle ----------
+    //
+    // Should ambience auto-stop right now, given what the foreground (the
+    // book or music track it's playing alongside) looks like? `fg` = { book,
+    // track }, each true when something is actually *loaded* there — a
+    // paused book/track still counts as loaded, so pausing never triggers
+    // this. Ambience stops the moment neither is loaded any more: the book
+    // was stopped/closed, its chapter ended, or the Books/Music player was
+    // left with nothing playing. (HOME-104: Jason hit this by closing a book
+    // out and navigating to Now Playing — ambience kept going because
+    // nothing was watching for this.)
+    var shouldAutoStop = function (fg) {
+        fg = fg || {};
+        return !fg.book && !fg.track;
+    };
 
     var formatMinutes = function (min) {
         if (min == null) return 'Off';
@@ -342,6 +358,7 @@
         pickWeighted: pickWeighted,
         fadeMultiplier: fadeMultiplier,
         sleepPhase: sleepPhase,
+        shouldAutoStop: shouldAutoStop,
         SLEEP_MINUTES: SLEEP_MINUTES,
         formatMinutes: formatMinutes,
         generateNoiseBuffer: generateNoiseBuffer,

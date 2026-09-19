@@ -209,7 +209,32 @@
     // ---------- The engine: one preset playing at a time ----------
 
     let engine = null; // { masterGain, nodes: [], timers: [], degraded: bool, preset }
+
+    // A generation counter bumped every time the engine is torn down —
+    // including by a stop that lands *while* a streamed bed's <audio> is
+    // still mid-load (see streamedBedNode below). A bed load in flight
+    // captures the generation it started under; if that no longer matches
+    // by the time the load settles, the engine it was loading for is gone
+    // and the element must never be attached/played, only torn down. Fixes
+    // the known orphan: stop() during a bed's <audio> load used to leave an
+    // untracked looping element playing forever, because the element only
+    // ever got added to engine.nodes *after* the load finished — too late if
+    // stop() already ran.
+    let engineGen = 0;
+    // <audio> elements currently mid-load for a streamed bed, not yet
+    // resolved into any engine.nodes — stopEngine tears these down too.
+    const pendingStreamEls = new Set();
+    const killPendingStreamEls = () => {
+        pendingStreamEls.forEach((el) => {
+            try { el.pause(); } catch { /* already stopped */ }
+            try { el.removeAttribute('src'); el.load(); } catch { /* fine */ }
+            try { el.remove(); } catch { /* already gone */ }
+        });
+        pendingStreamEls.clear();
+    };
     const stopEngine = () => {
+        engineGen++;
+        killPendingStreamEls();
         if (!engine) return;
         engine.timers.forEach(clearTimeout);
         engine.nodes.forEach((n) => {
@@ -241,18 +266,29 @@
     // WebKit taints the node and it plays silently through Web Audio.
     const streamedBedNode = (bed, asset, masterGain) => new Promise((resolve) => {
         const file = ASSET_FILES[bed.id];
-        const fallback = () => resolve(proceduralBedNode(bed, asset, masterGain, true));
+        const myGen = engineGen; // captured now: stale by the time we settle => abandoned
+        // A fallback (no file, a stream error, or a timeout) still has to
+        // respect abandonment: stopEngine() may have run while this was in
+        // flight, and a fresh procedural node started now would connect to
+        // a masterGain that's already disconnected — live, silent, leaked.
+        const fallback = () => {
+            if (myGen !== engineGen) { resolve({ nodes: [], degraded: false, gustGain: null, aborted: true }); return; }
+            resolve(proceduralBedNode(bed, asset, masterGain, true));
+        };
         if (!file) { fallback(); return; }
         const el = document.createElement('audio');
         el.crossOrigin = 'anonymous';
         el.loop = true;
         el.preload = 'auto';
         el.style.display = 'none';
+        pendingStreamEls.add(el);
         let settled = false;
-        const timeout = setTimeout(() => { if (!settled) { settled = true; try { el.remove(); } catch { /* fine */ } fallback(); } }, STREAM_READY_TIMEOUT_MS);
+        const settle = () => { pendingStreamEls.delete(el); };
+        const timeout = setTimeout(() => { if (!settled) { settled = true; settle(); try { el.remove(); } catch { /* fine */ } fallback(); } }, STREAM_READY_TIMEOUT_MS);
         const onError = () => {
             if (settled) return;
             settled = true;
+            settle();
             clearTimeout(timeout);
             warn('bed stream', bed.id, el.error && el.error.message);
             try { el.remove(); } catch { /* fine */ }
@@ -261,7 +297,19 @@
         const onReady = () => {
             if (settled) return;
             settled = true;
+            settle();
             clearTimeout(timeout);
+            if (myGen !== engineGen) {
+                // stopEngine() already ran while this was loading — the
+                // engine (and its masterGain) this was headed for is gone.
+                // Tear down instead of attaching, so nothing orphaned keeps
+                // looping outside engine.nodes.
+                try { el.pause(); } catch { /* fine */ }
+                try { el.removeAttribute('src'); el.load(); } catch { /* fine */ }
+                try { el.remove(); } catch { /* fine */ }
+                resolve({ nodes: [], degraded: false, gustGain: null, aborted: true });
+                return;
+            }
             try { if (el.duration > 1 && isFinite(el.duration)) el.currentTime = Math.random() * el.duration; } catch { /* seek not ready yet, fine */ }
             document.body.appendChild(el);
             const src = ctx.createMediaElementSource(el);
@@ -419,6 +467,7 @@
             scheduleGusts(preset, gustGains, engine.timers);
         }
         store.set(LAST_KEY, { kind: 'preset', id: presetId });
+        updateMediaSession();
         emit('change');
         return true;
     };
@@ -468,6 +517,7 @@
             if (err && err.name !== 'AbortError') warn('radio play', err.message);
         }
         store.set(LAST_KEY, { kind: 'radio', id: station.id });
+        updateMediaSession();
         emit('change');
         return true;
     };
@@ -527,6 +577,7 @@
         applyFade(0);
         stopEngine();
         stopRadio();
+        clearMediaSession();
         const fg = foreground();
         if (fg) {
             try { fg.api.pause(); } catch { /* nothing to pause */ }
@@ -651,8 +702,82 @@
         stopEngine();
         stopRadio();
         setSleep(null);
+        clearMediaSession();
         emit('change');
     };
+
+    // ---------- Lifecycle: don't outlive what it's ambience *for* ----------
+    //
+    // Jason's HOME-104 report: he stopped the book, navigated Books -> Home
+    // -> Now Playing (which said nothing was playing), and ambience was
+    // still going the whole time — nothing here was ever listening for the
+    // book going away. Decided behavior: pausing the book/track keeps
+    // ambience going (it's still "loaded"), but ambience stops the moment
+    // neither a book nor a track is loaded any more (stopped/closed, ended,
+    // or the player left with nothing in it) — see
+    // ambient-logic.js's shouldAutoStop for the actual (unit-tested) rule.
+    // Books/music load before this file (homer.js), so both are available
+    // to subscribe to here at init.
+    const checkLifecycle = () => {
+        const bp = window.HomerBooksModel && window.HomerBooksModel.player;
+        const mp = window.HomerMusicModel && window.HomerMusicModel.player;
+        const book = !!(bp && bp.state().book);
+        const track = !!(mp && mp.state().track);
+        if (L.shouldAutoStop({ book, track }) && (engine || (radioAudio && radioStation))) stop();
+    };
+    const offBooksLifecycle = (window.HomerBooksModel && window.HomerBooksModel.onChange)
+        ? window.HomerBooksModel.onChange(checkLifecycle) : () => {};
+    const offMusicLifecycle = (window.HomerMusicModel && window.HomerMusicModel.onChange)
+        ? window.HomerMusicModel.onChange(checkLifecycle) : () => {};
+
+    // ---------- navigator.mediaSession: so the Mac's (or a phone's) Now
+    // Playing/lock-screen widget shows "HOMER Ambience" with a working
+    // stop/pause, instead of either nothing or stale metadata from
+    // whatever last claimed the session. ----------
+    const MS = () => (typeof navigator !== 'undefined' && navigator.mediaSession) || null;
+    const updateMediaSession = () => {
+        const ms = MS();
+        if (!ms) return;
+        const label = engine ? engine.preset.label : radioStation ? radioStation.name : '';
+        if (!label) return;
+        try {
+            ms.metadata = new MediaMetadata({ title: 'HOMER Ambience', artist: label, album: 'Background sound' });
+            ms.setActionHandler('pause', () => stop());
+            ms.setActionHandler('stop', () => stop());
+            ms.playbackState = 'playing';
+        } catch (err) { warn('mediaSession', err && err.message); }
+    };
+    const clearMediaSession = () => {
+        const ms = MS();
+        if (!ms) return;
+        try {
+            if (ms.metadata && ms.metadata.title === 'HOMER Ambience') ms.metadata = null;
+            ms.setActionHandler('pause', null);
+            ms.setActionHandler('stop', null);
+            ms.playbackState = 'none';
+        } catch { /* fine */ }
+    };
+
+    // ---------- pagehide/unload: always a hard stop ----------
+    //
+    // Jason's other report: ambience kept playing after he closed the
+    // window (a stray second HOMER tab, most likely — but the lifecycle
+    // above only watches *this* tab's book/music, so this is the backstop
+    // regardless of why). visibilitychange->hidden is deliberately NOT used
+    // for this: switching tabs/apps while ambience is meant to keep playing
+    // in the background is normal, expected use, not a reason to stop.
+    // pagehide (and its unload fallback) means the page is actually going
+    // away, so this always stops and closes the AudioContext rather than
+    // just tearing down the engine — the context itself shouldn't outlive
+    // the page either.
+    const onPageHide = () => {
+        stopEngine();
+        stopRadio();
+        setSleep(null);
+        clearMediaSession();
+        if (ctx) { try { ctx.close(); } catch { /* already closing */ } ctx = null; }
+    };
+    window.addEventListener('pagehide', onPageHide);
 
     window.HomerAmbientModel = {
         version: VERSION,
@@ -675,13 +800,19 @@
             contextState: ctx ? ctx.state : null,
             nodeCount: engine ? engine.nodes.length : 0,
             radioSrc: radioAudio ? radioAudio.src : '',
+            pendingStreamEls: pendingStreamEls.size,
+            engineGen,
         }),
         destroy() {
             stopEngine();
             stopRadio();
+            clearMediaSession();
             clearInterval(sleepTimer);
             listeners.clear();
             bufferCache.clear();
+            offBooksLifecycle();
+            offMusicLifecycle();
+            window.removeEventListener('pagehide', onPageHide);
             if (radioAudio) { radioAudio.remove(); radioAudio = null; }
             if (ctx) { try { ctx.close(); } catch { /* already closing */ } ctx = null; }
         },

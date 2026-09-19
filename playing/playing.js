@@ -134,7 +134,7 @@
     const rooms = (c) => (c.rooms && c.rooms.length ? c.rooms.join(' + ') : '');
 
     const STATE_TEXT = { playing: 'Playing', paused: 'Paused', buffering: 'Loading', on: 'On' };
-    const SOURCE_TEXT = { jellyfin: 'Jellyfin', ha: 'Home Assistant', homer: 'HOMER' };
+    const SOURCE_TEXT = { jellyfin: 'Jellyfin', ha: 'Home Assistant', homer: 'HOMER', ambience: 'HOMER' };
 
     // the buttons a card offers, in the order a remote walks them
     const BUTTONS = [
@@ -429,7 +429,7 @@
             node.querySelector('.hn-sub').textContent = c.sub || '';
             node.querySelector('.hn-sub').hidden = !c.sub;
             const where = [c.grouped ? rooms(c) : c.where, c.room, c.who].filter(Boolean);
-            node.querySelector('.hn-where').innerHTML = `${icon(c.kind === 'ha' ? 'home' : c.kind === 'homer' ? 'graphic_eq' : 'cast')}`
+            node.querySelector('.hn-where').innerHTML = `${icon(c.kind === 'ha' ? 'home' : c.kind === 'ambience' ? 'cloud' : c.kind === 'homer' ? 'graphic_eq' : 'cast')}`
                 + where.map((w, i) => `<span${i ? ' class="hn-dim"' : ''}>${esc(w)}</span>`).join('<i>·</i>')
                 + `<span class="hn-src">${esc(SOURCE_TEXT[c.kind] || '')}</span>`;
             paintControls(node, c);

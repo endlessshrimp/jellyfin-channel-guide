@@ -1758,6 +1758,7 @@
             wake();
             if (document.getElementById('cg-root')) return; // the guide is on top
             if (PO() && PO().isOpen()) return; // Play on… is on top, and has its own keys
+            if (window.HomerAmbient && window.HomerAmbient.isOpen()) return; // Ambience is on top, and has its own keys
             // Typing in the Radio tab's search box: the letters are the search,
             // not HOMER's shortcuts. Enter searches, Esc or ▼ gives the keys back.
             if (ev.target && ev.target.classList && ev.target.classList.contains('mu-radio-input')) {
@@ -1832,6 +1833,7 @@
         };
         const onWheel = (ev) => {
             if (document.getElementById('cg-root')) return;
+            if (window.HomerAmbient && window.HomerAmbient.isOpen()) return; // let the picker's own list scroll natively
             const col = ev.target.closest && ev.target.closest('.mu-scroll-y, .mu-scroll-x');
             if (col) col.scrollBy({ top: ev.deltaY, left: ev.deltaX || (col.classList.contains('mu-scroll-x') ? ev.deltaY : 0) });
             ev.preventDefault();

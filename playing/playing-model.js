@@ -447,6 +447,66 @@
         return Promise.resolve();
     };
 
+    // ---------- HOME-104: ambience (ambient/ambient-model.js) ----------
+    //
+    // Jason's report: he stopped a book and wandered through several screens
+    // to Now Playing, which said nothing was playing — while ambience kept
+    // going, invisible. It has no position/duration of its own (a preset
+    // loops indefinitely) and nothing to skip, so its card is minimal: what
+    // it is, its own volume, and Stop.
+
+    const AM = () => window.HomerAmbientModel || null;
+
+    let ambientSince = 0; // when the current run started, for sort order
+    let ambientWasActive = false;
+
+    const ambientCard = () => {
+        const a = AM();
+        if (!a) return null;
+        let cur;
+        try { cur = a.current(); } catch { return null; }
+        if (!cur || !cur.active) { ambientWasActive = false; return null; }
+        if (!ambientWasActive) { ambientWasActive = true; ambientSince = Date.now(); }
+        return {
+            key: 'homer:ambience',
+            kind: 'ambience',
+            title: 'Ambience',
+            sub: cur.sourceLabel || '',
+            badge: 'Ambience',
+            art: '',
+            shape: 'square',
+            where: 'HOMER',
+            who: '',
+            via: 'this browser',
+            room: '',
+            icon: cur.sourceKind === 'radio' ? 'radio' : 'cloud',
+            state: 'playing',
+            live: false,
+            position: 0,
+            duration: 0,
+            at: Date.now(),
+            volume: Math.round((cur.ambientVolume != null ? cur.ambientVolume : 1) * 100),
+            muted: false,
+            canPlay: false,
+            canStop: true,
+            canPrev: false,
+            canNext: false,
+            canVolume: true,
+            canMute: false,
+            remote: '',
+            started: ambientSince,
+            _id: 'ambience',
+        };
+    };
+
+    const doAmbient = (card, what, arg) => {
+        const a = AM();
+        if (!a) return Promise.resolve();
+        if (what === 'stop') a.stop();
+        else if (what === 'volume') a.setAmbientVolume(arg / 100);
+        return Promise.resolve();
+    };
+
     // ---------- Made-up sessions, for screenshots ----------
     // DEV ONLY, with the made-up house (localStorage['homer-ha-mock'] = '1'):
     // Jellyfin's real sessions are whatever the family is watching, which is
@@ -499,6 +559,7 @@
     let timer = null;
     let offHA = () => {};
     let offMusic = () => {};
+    let offAmbient = () => {};
     let inFlight = false;
 
     const emitters = new Set();
@@ -551,7 +612,8 @@
             if (c && c._active) house.push(c);
         }
         const music = musicCard();
-        const all = sessions.concat(house, music ? [music] : []);
+        const ambient = ambientCard();
+        const all = sessions.concat(house, music ? [music] : [], ambient ? [ambient] : []);
         all.sort((a, b) => (b.started || 0) - (a.started || 0));
         return all;
     };
@@ -597,7 +659,7 @@
     const act = (card, what, arg) => {
         if (!card) return Promise.resolve();
         if (card._mock) return Promise.resolve(); // the made-up house: nothing to send
-        const run = card.kind === 'jellyfin' ? doSession : card.kind === 'ha' ? doHouse : doMusic;
+        const run = card.kind === 'jellyfin' ? doSession : card.kind === 'ha' ? doHouse : card.kind === 'ambience' ? doAmbient : doMusic;
         let p;
         try { p = run(card, what, arg); } catch (err) { p = Promise.reject(err); }
         return Promise.resolve(p).then(() => {
@@ -620,6 +682,7 @@
         // Home Assistant pushes; the music tells us when it changes
         offHA = h && h.onChange ? h.onChange(emit) : () => {};
         offMusic = MM() && MM().onChange ? MM().onChange(emit) : () => {};
+        offAmbient = AM() && AM().onChange ? AM().onChange(emit) : () => {};
         document.addEventListener('visibilitychange', onVisible);
         poll();
         schedule();
@@ -631,7 +694,8 @@
         timer = null;
         offHA();
         offMusic();
-        offHA = offMusic = () => {};
+        offAmbient();
+        offHA = offMusic = offAmbient = () => {};
         document.removeEventListener('visibilitychange', onVisible);
     };
 

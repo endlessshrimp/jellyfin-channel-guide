@@ -209,6 +209,29 @@ test('DISTANCE_PARAMS: close is louder and brighter than distant', () => {
     assert.ok(L.DISTANCE_PARAMS.close.lowpassHz > L.DISTANCE_PARAMS.distant.lowpassHz);
 });
 
+// ---------- lifecycle: shouldAutoStop ----------
+
+test('shouldAutoStop: true when neither a book nor a track is loaded', () => {
+    assert.strictEqual(L.shouldAutoStop({ book: false, track: false }), true);
+    assert.strictEqual(L.shouldAutoStop({}), true);
+    assert.strictEqual(L.shouldAutoStop(null), true);
+});
+
+test('shouldAutoStop: false as long as a book is loaded, playing or paused', () => {
+    // "loaded" is the whole point: shouldAutoStop only cares whether the
+    // book/track is still there, not whether it's actually playing right
+    // now — a paused book must never trigger a stop.
+    assert.strictEqual(L.shouldAutoStop({ book: true, track: false }), false);
+});
+
+test('shouldAutoStop: false as long as a music track is loaded', () => {
+    assert.strictEqual(L.shouldAutoStop({ book: false, track: true }), false);
+});
+
+test('shouldAutoStop: false when both are loaded', () => {
+    assert.strictEqual(L.shouldAutoStop({ book: true, track: true }), false);
+});
+
 // ---------- catalog ----------
 
 test('the shipped PRESETS catalog is internally consistent', () => {

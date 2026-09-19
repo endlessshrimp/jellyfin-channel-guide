@@ -45,6 +45,10 @@
     opacity: 0;
     transform: translateY(calc(16px * var(--am-s, 1))) scale(0.98);
     transition: opacity 180ms ease, transform 180ms ease;
+    /* belt-and-braces: .am-body is already height-bound and scrolls its own
+       overflow, but this keeps anything from ever visually leaking past the
+       sheet's rounded corners (matches music/playon.css's .po-sheet). */
+    overflow: hidden;
 }
 
 #am-root.show .am-sheet { opacity: 1; transform: none; }
@@ -69,7 +73,26 @@
     font-size: calc(18px * var(--am-s, 1));
     font-weight: 600;
     color: var(--homer-dim, #8ea3bd);
+    flex: 1 1 auto;
 }
+
+#am-root .am-close {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: calc(36px * var(--am-s, 1));
+    height: calc(36px * var(--am-s, 1));
+    border-radius: 50%;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#am-root .am-close .material-icons {
+    color: var(--homer-text, #f4f7fb) !important;
+    font-size: calc(20px * var(--am-s, 1));
+}
+
+#am-root .am-close:hover { background: rgba(255, 255, 255, 0.16); }
 
 #am-root .am-hint {
     flex: 0 0 auto;
@@ -289,3 +312,50 @@
 }
 
 #am-root.phone .am-legend { display: none; }
+
+/* ---------- The persistent "Ambience — <preset>" indicator ----------
+ * Lives outside #am-root (it has to survive the picker being closed) so
+ * it's a top-level fixed element, visible on every screen while ambience
+ * is actually playing. Same font/color tokens as the picker; positioned
+ * clear of music/music-strip.css's now-playing strip (bottom-right) and
+ * under the guide/Actions strip/quick panel's z-indexes.
+ */
+#am-indicator {
+    position: fixed;
+    top: calc(2vh + env(safe-area-inset-top, 0px));
+    right: calc(2vh + env(safe-area-inset-right, 0px));
+    z-index: 99996;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px 8px 12px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(14, 30, 54, 0.96), rgba(6, 14, 28, 0.96));
+    box-shadow: 0 0 0 1px var(--homer-line-strong, rgba(160, 190, 230, 0.24)), 0 10px 30px rgba(0, 0, 0, 0.45);
+    color: var(--homer-text, #f4f7fb);
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+#am-indicator[hidden] { display: none; }
+#am-indicator .material-icons { color: var(--homer-accent, #2f8cff); font-size: 18px; }
+#am-indicator .am-ind-label { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#am-indicator .am-ind-stop {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+}
+#am-indicator .am-ind-stop .material-icons { color: var(--homer-live, #ff3b3b); font-size: 18px; }
+#am-indicator .am-ind-stop:hover { background: rgba(255, 255, 255, 0.18); }
+
+@media (max-width: 640px) {
+    #am-indicator { top: calc(1.5vh + env(safe-area-inset-top, 0px)); right: calc(1.5vh + env(safe-area-inset-right, 0px)); font-size: 13px; }
+    #am-indicator .am-ind-label { max-width: 42vw; }
+}
