@@ -196,47 +196,115 @@
     // this file only knows asset *ids*, so it stays testable without ever
     // fetching anything.
 
+    // Real beds (`stream: true`) are several-minutes-long CC0 recordings
+    // (256kbps Opus, ~8-17MB each) sourced for HOME-104's follow-up pass —
+    // see ~/Media-staging/homer-ambience/README.md for the source table and
+    // ~/.claude/projects/-Users-jason/memory/homer-ambience-poc.md. They're
+    // *streamed* by ambient-model.js (an <audio> element + createMediaElement
+    // Source), never decodeAudioData'd whole into memory: a 9-minute stereo
+    // bed decoded to Float32 PCM is ~200MB, and Apple TV's WKWebView budget
+    // does not have room for several of those alive at once. `fallback`
+    // names the procedural noise kind ambient-model.js should synthesize
+    // instead if the real file 404s or the network stalls, so a preset never
+    // goes fully silent. One-shots (thunder) stay on decodeAudioData — each
+    // is only ~10-25s (a few hundred KB to ~2MB decoded), small enough that
+    // decoding is the simpler, correct choice: one-shots need per-strike
+    // gain/lowpass/pan processing that only makes sense as a fresh
+    // BufferSourceNode per fire.
     var ASSETS = {
-        rain: { kind: 'bed' },
-        ocean: { kind: 'bed' },
-        wind: { kind: 'bed', synthetic: true }, // no CC0 recording found yet; ambient-model.js synthesizes it
-        'thunder-a': { kind: 'oneshot' },
-        'thunder-b': { kind: 'oneshot' },
+        'light-rain': { kind: 'bed', stream: true, fallback: 'pink' },
+        'steady-rain': { kind: 'bed', stream: true, fallback: 'pink' },
+        'heavy-downpour': { kind: 'bed', stream: true, fallback: 'pink' },
+        'rain-on-roof': { kind: 'bed', stream: true, fallback: 'pink' },
+        'rain-on-tent': { kind: 'bed', stream: true, fallback: 'pink' },
+        'wind-strong': { kind: 'bed', stream: true, fallback: 'brown' },
+        'wind-gusty': { kind: 'bed', stream: true, fallback: 'brown' },
+        'ocean-gentle': { kind: 'bed', stream: true, fallback: 'brown' },
+        'ocean-rough': { kind: 'bed', stream: true, fallback: 'brown' },
+        'creek-stream': { kind: 'bed', stream: true, fallback: 'pink' },
+        'full-storm': { kind: 'bed', stream: true, fallback: 'pink' },
+        'thunder-672776': { kind: 'oneshot' },
+        'thunder-338093': { kind: 'oneshot' },
+        'thunder-338089': { kind: 'oneshot' },
+        'thunder-338088': { kind: 'oneshot' },
+        'thunder-338091': { kind: 'oneshot' },
+        'thunder-338090': { kind: 'oneshot' },
+        'thunder-534023': { kind: 'oneshot' },
+        'thunder-458015': { kind: 'oneshot' },
+        'thunder-17059': { kind: 'oneshot' },
+        'thunder-613276': { kind: 'oneshot' },
+        'thunder-581125': { kind: 'oneshot' },
+        'thunder-200990': { kind: 'oneshot' },
+        'thunder-729539': { kind: 'oneshot' },
+        'thunder-347853': { kind: 'oneshot' },
+        'thunder-347854': { kind: 'oneshot' },
+        'thunder-840628': { kind: 'oneshot' },
+        'thunder-328391': { kind: 'oneshot' },
+        'thunder-243780': { kind: 'oneshot' },
+        'thunder-486557': { kind: 'oneshot' },
+        'thunder-393634': { kind: 'oneshot' },
+    };
+
+    // The 20-clip thunder pool, grouped by character (per the README's QC
+    // pass) so presets can weight "mostly distant rumbles" vs. "mostly close
+    // cracks" instead of alternating between two clips like the POC did.
+    var THUNDER_CLOSE = ['thunder-672776', 'thunder-338093', 'thunder-338089', 'thunder-338088',
+        'thunder-338091', 'thunder-338090', 'thunder-534023', 'thunder-458015', 'thunder-613276', 'thunder-840628'];
+    var THUNDER_SHARP = ['thunder-200990', 'thunder-729539', 'thunder-347853', 'thunder-347854'];
+    var THUNDER_ROLLING = ['thunder-328391', 'thunder-243780'];
+    var THUNDER_DISTANT = ['thunder-581125', 'thunder-486557', 'thunder-393634'];
+    var THUNDER_ODD = ['thunder-17059']; // "weird_thunder_clap" — used sparingly, for character
+
+    var poolShots = function (ids, weight) {
+        return ids.map(function (id) { return { id: id, weight: weight }; });
     };
 
     var PRESETS = [
         {
             id: 'summer-distant', label: 'Distant summer storm', group: 'Storms',
-            beds: [{ id: 'rain', gain: 0.45 }],
-            oneShots: [{ id: 'thunder-a', weight: 1 }, { id: 'thunder-b', weight: 2 }],
+            beds: [{ id: 'light-rain', gain: 0.5 }],
+            oneShots: poolShots(THUNDER_DISTANT, 3).concat(poolShots(THUNDER_ROLLING, 1)),
             strikeEverySec: [25, 70], distanceMix: 0.9,
         },
         {
             id: 'steady-far', label: 'Steady rain, far rumble', group: 'Storms',
-            beds: [{ id: 'rain', gain: 0.7 }],
-            oneShots: [{ id: 'thunder-a', weight: 1 }],
+            beds: [{ id: 'steady-rain', gain: 0.8 }],
+            oneShots: poolShots(THUNDER_DISTANT, 2).concat(poolShots(THUNDER_ROLLING, 1)),
             strikeEverySec: [45, 100], distanceMix: 1,
         },
         {
             id: 'heavy-close', label: 'Heavy downpour, close strikes', group: 'Storms',
-            beds: [{ id: 'rain', gain: 1, layers: 2 }], // 2 detuned copies = denser rain
-            oneShots: [{ id: 'thunder-a', weight: 2 }, { id: 'thunder-b', weight: 1 }],
+            beds: [{ id: 'heavy-downpour', gain: 1 }],
+            oneShots: poolShots(THUNDER_CLOSE, 2).concat(poolShots(THUNDER_SHARP, 2)),
             strikeEverySec: [15, 40], distanceMix: 0.35,
         },
         {
             id: 'roof', label: 'Rain on a roof', group: 'Storms',
-            beds: [{ id: 'rain', gain: 0.85, bandpass: [400, 3200] }],
-            oneShots: [{ id: 'thunder-a', weight: 1 }],
+            beds: [{ id: 'rain-on-roof', gain: 0.9 }],
+            oneShots: poolShots(THUNDER_DISTANT, 2).concat(poolShots(THUNDER_SHARP, 1)),
             strikeEverySec: [60, 130], distanceMix: 1,
         },
         {
             id: 'squall', label: 'Windy squall', group: 'Storms',
-            beds: [{ id: 'rain', gain: 0.55 }, { id: 'wind', gain: 0.6, bandpass: [300, 1800] }],
-            oneShots: [{ id: 'thunder-a', weight: 1 }, { id: 'thunder-b', weight: 1 }],
-            strikeEverySec: [40, 90], distanceMix: 0.6,
-            gustEverySec: [18, 40],
+            beds: [{ id: 'light-rain', gain: 0.4 }, { id: 'wind-gusty', gain: 0.7, gust: true }],
+            oneShots: poolShots(THUNDER_CLOSE, 1).concat(poolShots(THUNDER_SHARP, 2)),
+            strikeEverySec: [40, 90], distanceMix: 0.55,
+            gustEverySec: [18, 45],
         },
-        { id: 'ocean', label: 'Ocean waves', group: 'Nature', beds: [{ id: 'ocean', gain: 1 }] },
+        {
+            id: 'real-storm', label: 'Real storm', group: 'Storms',
+            beds: [{ id: 'full-storm', gain: 1 }],
+            // this take already has real thunder baked in; the pool one-shots
+            // fire sparingly here, just to punctuate, not carry the rhythm.
+            oneShots: poolShots(THUNDER_CLOSE, 1).concat(poolShots(THUNDER_ODD, 1)),
+            strikeEverySec: [100, 210], distanceMix: 0.4,
+        },
+        { id: 'light-rain', label: 'Light rain', group: 'Nature', beds: [{ id: 'light-rain', gain: 0.6 }] },
+        { id: 'tent', label: 'Rain on a tent', group: 'Nature', beds: [{ id: 'rain-on-tent', gain: 0.8 }] },
+        { id: 'creek', label: 'Creek / stream', group: 'Nature', beds: [{ id: 'creek-stream', gain: 0.9 }] },
+        { id: 'wind-strong', label: 'Strong wind', group: 'Nature', beds: [{ id: 'wind-strong', gain: 0.65 }] },
+        { id: 'ocean-gentle', label: 'Ocean waves, gentle', group: 'Nature', beds: [{ id: 'ocean-gentle', gain: 1 }] },
+        { id: 'ocean-rough', label: 'Ocean waves, rough', group: 'Nature', beds: [{ id: 'ocean-rough', gain: 1 }] },
         { id: 'brown', label: 'Fan / brown noise', group: 'Noise', noise: 'brown' },
         { id: 'pink', label: 'Pink noise', group: 'Noise', noise: 'pink' },
     ];
@@ -282,5 +350,10 @@
         ASSETS: ASSETS,
         PRESETS: PRESETS,
         validateCatalog: validateCatalog,
+        THUNDER_CLOSE: THUNDER_CLOSE,
+        THUNDER_SHARP: THUNDER_SHARP,
+        THUNDER_ROLLING: THUNDER_ROLLING,
+        THUNDER_DISTANT: THUNDER_DISTANT,
+        THUNDER_ODD: THUNDER_ODD,
     };
 }));

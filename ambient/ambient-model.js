@@ -59,20 +59,20 @@
  *
  * ---------- Assets ----------
  *
- * ambient/assets/ ships 4 small CC0/public-domain samples (rain, two thunder
- * one-shots, ocean) — see ambient/assets/README.md for exact sources and
- * licenses. They're POC quality (short loops, mp3/ogg previews), not the
- * "several-minutes, highest quality that will make a difference" bar Jason
- * asked for — that needs real sourcing/recording time this spike didn't
- * have, and files that size don't belong in this git repo (the injector
- * ships via jsDelivr off this repo — see homer.js's header — and a
- * several-minute 256kbps+ loop times that out fast across several presets).
- * So: `baseUrl()` below is configurable (localStorage override), defaulting
- * to this repo's bundled small samples for tonight, ready to point at
- * NAS-hosted files (e.g. the homer-app Caddy on :8097, or a homerfeeds route)
- * once someone uploads better ones — nothing in the engine changes, only the
- * override. No upload was done this session (nas-io-guardrails: another
- * agent had the NAS tonight).
+ * The real, several-minutes, 256kbps Opus assets sourced in HOME-104's
+ * follow-up pass (11 beds + a 20-clip thunder pool — see
+ * ~/Media-staging/homer-ambience/README.md for the source table and QC
+ * flags) are hosted on the NAS, served by the HOMER app's own Caddy at
+ * :8097/ambient/ — too big for this git repo (the injector ships via
+ * jsDelivr off this repo, see homer.js's header). `baseUrl()` below defaults
+ * to that host and is still overridable (localStorage.homer-ambient-base, or
+ * setBaseUrl()) for testing against a different one. `ambient/assets/` still
+ * has the original 4 tiny POC samples bundled in-repo, unused by the current
+ * catalog now that every preset points at a real file — left in place rather
+ * than deleted, since removing them wasn't asked and they cost nothing.
+ *
+ * Real beds are *streamed*, not decodeAudioData'd — see streamedBedNode()
+ * below for why (Apple TV memory).
  *
  * window.HomerAmbientModel = { presets, radioSources, current, start, stop,
  *   setAmbientVolume, setForegroundVolume, setSleep, sleepOptions, baseUrl,
@@ -90,11 +90,14 @@
 
     const warn = (...a) => console.warn('[HOMER Ambience]', ...a);
 
-    const scriptEl = document.currentScript
-        || [...document.querySelectorAll('script[src*="ambient/ambient-model.js"]')].pop();
-    const scriptSrc = (scriptEl && scriptEl.src) || '';
-    const DEFAULT_BASE = scriptSrc ? scriptSrc.replace(/ambient-model\.js(\?.*)?$/, 'assets/') : 'ambient/assets/';
-    const BASE_KEY = 'homer-ambient-base'; // an override for NAS-hosted assets later
+    // The real, several-minutes-long delivery files (HOME-104 follow-up
+    // pass) are too big to ship in this git repo (the injector goes out via
+    // jsDelivr off this repo — see homer.js's header) so they're hosted on
+    // the NAS instead, served by the HOMER app's own Caddy at :8097. Still
+    // overridable (localStorage.homer-ambient-base, or setBaseUrl()) for
+    // testing against a different host.
+    const DEFAULT_BASE = 'http://192.168.68.100:8097/ambient/';
+    const BASE_KEY = 'homer-ambient-base'; // an override for testing a different host
     const AMB_VOL_KEY = 'homer-ambient-volume';
     const LAST_KEY = 'homer-ambient-last';
     const FADE_MS = 30000;
@@ -120,12 +123,42 @@
         bufferCache.clear(); // re-fetch from the new base next time something plays
     };
 
+    // Filenames match ~/Media-staging/homer-ambience/README.md's delivery
+    // set exactly (256kbps Opus): beds are `<id>-<freesound-id>.opus`, the
+    // thunder pool is `<id>.opus` since the id already carries the
+    // freesound id (thunder-338093.opus, etc).
     const ASSET_FILES = {
-        rain: 'rain.ogg',
-        ocean: 'ocean.mp3',
-        'thunder-a': 'thunder-a.mp3',
-        'thunder-b': 'thunder-b.mp3',
-        // 'wind' has no file — see ASSETS[id].synthetic in ambient-logic.js
+        'light-rain': 'light-rain-592482.opus',
+        'steady-rain': 'steady-rain-723101.opus',
+        'heavy-downpour': 'heavy-downpour-705730.opus',
+        'rain-on-roof': 'rain-on-roof-577507.opus',
+        'rain-on-tent': 'rain-on-tent-592997.opus',
+        'wind-strong': 'wind-strong-754911.opus',
+        'wind-gusty': 'wind-gusty-331222.opus',
+        'ocean-gentle': 'ocean-gentle-417797.opus',
+        'ocean-rough': 'ocean-rough-867645.opus',
+        'creek-stream': 'creek-stream-592995.opus',
+        'full-storm': 'full-storm-278866.opus',
+        'thunder-672776': 'thunder-672776.opus',
+        'thunder-338093': 'thunder-338093.opus',
+        'thunder-338089': 'thunder-338089.opus',
+        'thunder-338088': 'thunder-338088.opus',
+        'thunder-338091': 'thunder-338091.opus',
+        'thunder-338090': 'thunder-338090.opus',
+        'thunder-534023': 'thunder-534023.opus',
+        'thunder-458015': 'thunder-458015.opus',
+        'thunder-17059': 'thunder-17059.opus',
+        'thunder-613276': 'thunder-613276.opus',
+        'thunder-581125': 'thunder-581125.opus',
+        'thunder-200990': 'thunder-200990.opus',
+        'thunder-729539': 'thunder-729539.opus',
+        'thunder-347853': 'thunder-347853.opus',
+        'thunder-347854': 'thunder-347854.opus',
+        'thunder-840628': 'thunder-840628.opus',
+        'thunder-328391': 'thunder-328391.opus',
+        'thunder-243780': 'thunder-243780.opus',
+        'thunder-486557': 'thunder-486557.opus',
+        'thunder-393634': 'thunder-393634.opus',
     };
 
     // ---------- Web Audio ----------
@@ -179,30 +212,61 @@
     const stopEngine = () => {
         if (!engine) return;
         engine.timers.forEach(clearTimeout);
-        engine.nodes.forEach((n) => { try { n.stop && n.stop(); } catch { /* already stopped */ } try { n.disconnect(); } catch { /* already gone */ } });
+        engine.nodes.forEach((n) => {
+            if (n instanceof HTMLMediaElement) {
+                try { n.pause(); } catch { /* already stopped */ }
+                try { n.removeAttribute('src'); n.load(); } catch { /* fine */ }
+                try { n.remove(); } catch { /* already gone */ }
+                return;
+            }
+            try { n.stop && n.stop(); } catch { /* already stopped */ } try { n.disconnect(); } catch { /* already gone */ }
+        });
         try { engine.masterGain.disconnect(); } catch { /* gone */ }
         engine = null;
     };
 
-    const bedNode = async (bed, masterGain) => {
-        const asset = L.ASSETS[bed.id];
-        let buffer = asset && asset.synthetic ? null : await loadBuffer(bed.id);
-        let degraded = false;
-        if (!buffer) {
-            // no recording (wind, by design) or it failed to load (rain/ocean
-            // missing or a network hiccup): fall back to shaped noise so the
-            // preset still makes a sound instead of going silent.
-            degraded = !(asset && asset.synthetic);
-            buffer = noiseBuffer(bed.id === 'ocean' ? 'brown' : 'pink');
-        }
-        const layers = Math.max(1, bed.layers || 1);
-        const nodes = [];
-        for (let i = 0; i < layers; i++) {
-            const src = ctx.createBufferSource();
-            src.buffer = buffer;
-            src.loop = true;
-            if (i > 0) src.playbackRate.value = 1 + (i % 2 ? 0.03 : -0.025); // detuned copies = denser, not louder
+    // A short window to hear back from a streamed bed before giving up and
+    // falling back to procedural noise (a stalled LAN request shouldn't hang
+    // preset startup indefinitely).
+    const STREAM_READY_TIMEOUT_MS = 8000;
+
+    // Real beds (light rain, full storm, etc) are several minutes long —
+    // decodeAudioData-ing one whole into memory is ~200MB of Float32 PCM for
+    // a 9-minute stereo bed, which is a real risk on Apple TV's WKWebView
+    // memory budget. Instead, stream via a plain <audio> element routed into
+    // the Web Audio graph with createMediaElementSource: the browser decodes
+    // incrementally as it plays, nothing is held as one big buffer. This
+    // requires the file to be served with CORS (the HOMER app's Caddy sends
+    // Access-Control-Allow-Origin for :8096) and `el.crossOrigin` set, or
+    // WebKit taints the node and it plays silently through Web Audio.
+    const streamedBedNode = (bed, asset, masterGain) => new Promise((resolve) => {
+        const file = ASSET_FILES[bed.id];
+        const fallback = () => resolve(proceduralBedNode(bed, asset, masterGain, true));
+        if (!file) { fallback(); return; }
+        const el = document.createElement('audio');
+        el.crossOrigin = 'anonymous';
+        el.loop = true;
+        el.preload = 'auto';
+        el.style.display = 'none';
+        let settled = false;
+        const timeout = setTimeout(() => { if (!settled) { settled = true; try { el.remove(); } catch { /* fine */ } fallback(); } }, STREAM_READY_TIMEOUT_MS);
+        const onError = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            warn('bed stream', bed.id, el.error && el.error.message);
+            try { el.remove(); } catch { /* fine */ }
+            fallback();
+        };
+        const onReady = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            try { if (el.duration > 1 && isFinite(el.duration)) el.currentTime = Math.random() * el.duration; } catch { /* seek not ready yet, fine */ }
+            document.body.appendChild(el);
+            const src = ctx.createMediaElementSource(el);
             let tail = src;
+            const nodes = [el, src];
             if (bed.bandpass) {
                 const f = ctx.createBiquadFilter();
                 f.type = 'bandpass';
@@ -214,14 +278,56 @@
                 nodes.push(f);
             }
             const gain = ctx.createGain();
-            gain.gain.value = (bed.gain != null ? bed.gain : 1) / layers;
+            gain.gain.value = bed.gain != null ? bed.gain : 1;
             tail.connect(gain);
             gain.connect(masterGain);
-            const offset = buffer.duration > 1 ? Math.random() * buffer.duration : 0;
-            src.start(0, offset);
-            nodes.push(src, gain);
+            nodes.push(gain);
+            el.play().catch((err) => { if (err && err.name !== 'AbortError') warn('bed play', bed.id, err.message); });
+            resolve({ nodes, degraded: false, gustGain: bed.gust ? gain : null });
+        };
+        el.addEventListener('loadedmetadata', onReady, { once: true });
+        el.addEventListener('error', onError, { once: true });
+        el.src = baseUrl() + file;
+        el.load();
+    });
+
+    // No file (shouldn't happen — validateCatalog checks this), or a
+    // streamed bed's fetch/network failed: fall back to shaped procedural
+    // noise so the preset still makes *a* sound instead of going silent.
+    const proceduralBedNode = (bed, asset, masterGain, degraded) => {
+        const kind = (asset && asset.fallback) || 'pink';
+        const buffer = noiseBuffer(kind);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.loop = true;
+        let tail = src;
+        const nodes = [];
+        if (bed.bandpass) {
+            const f = ctx.createBiquadFilter();
+            f.type = 'bandpass';
+            const [lo, hi] = bed.bandpass;
+            f.frequency.value = Math.sqrt(lo * hi);
+            f.Q.value = f.frequency.value / Math.max(1, hi - lo);
+            tail.connect(f);
+            tail = f;
+            nodes.push(f);
         }
-        return { nodes, degraded, gustGain: nodes.find((n) => n instanceof GainNode) };
+        const gain = ctx.createGain();
+        gain.gain.value = bed.gain != null ? bed.gain : 1;
+        tail.connect(gain);
+        gain.connect(masterGain);
+        src.start(0, buffer.duration > 1 ? Math.random() * buffer.duration : 0);
+        nodes.push(src, gain);
+        return { nodes, degraded: !!degraded, gustGain: bed.gust ? gain : null };
+    };
+
+    const bedNode = (bed, masterGain) => {
+        const asset = L.ASSETS[bed.id];
+        if (asset && asset.stream) return streamedBedNode(bed, asset, masterGain);
+        // no real asset for this id (shouldn't happen for current presets —
+        // every bed the catalog ships is a real streamed file) — straight to
+        // procedural noise.
+        return Promise.resolve(proceduralBedNode(bed, asset, masterGain, false));
     };
 
     const scheduleOneShots = (preset, masterGain, timers) => {
@@ -307,7 +413,7 @@
                 if (!engine) return true; // stopped while awaiting a decode
                 engine.nodes.push(...nodes);
                 engine.degraded = engine.degraded || degraded;
-                if (bed.id === 'wind' && gustGain) gustGains.push(gustGain);
+                if (bed.gust && gustGain) gustGains.push(gustGain);
             }
             scheduleOneShots(preset, masterGain, engine.timers);
             scheduleGusts(preset, gustGains, engine.timers);

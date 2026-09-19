@@ -227,4 +227,38 @@ test('every preset group is one of Storms/Nature/Noise', () => {
     L.PRESETS.forEach((p) => assert.ok(['Storms', 'Nature', 'Noise'].includes(p.group), p.id));
 });
 
+// ---------- real-asset mapping (HOME-104 follow-up: real delivery files) ----------
+
+test('catalog has the 11 real beds and 20 real thunder one-shots from the delivery README', () => {
+    const beds = Object.keys(L.ASSETS).filter((id) => L.ASSETS[id].kind === 'bed');
+    const shots = Object.keys(L.ASSETS).filter((id) => L.ASSETS[id].kind === 'oneshot');
+    assert.strictEqual(beds.length, 11, 'bed count: ' + beds.join(','));
+    assert.strictEqual(shots.length, 20, 'one-shot count: ' + shots.join(','));
+});
+
+test('every streamed bed asset declares a fallback noise kind', () => {
+    Object.keys(L.ASSETS).forEach((id) => {
+        const a = L.ASSETS[id];
+        if (a.kind === 'bed' && a.stream) {
+            assert.ok(a.fallback === 'brown' || a.fallback === 'pink', id + ' has a real fallback kind');
+        }
+    });
+});
+
+test('the thunder pool groups partition the 20 one-shots exactly once each', () => {
+    const groups = [L.THUNDER_CLOSE, L.THUNDER_SHARP, L.THUNDER_ROLLING, L.THUNDER_DISTANT, L.THUNDER_ODD];
+    const seen = new Map();
+    groups.forEach((g) => g.forEach((id) => seen.set(id, (seen.get(id) || 0) + 1)));
+    const shots = Object.keys(L.ASSETS).filter((id) => L.ASSETS[id].kind === 'oneshot');
+    assert.strictEqual(seen.size, shots.length, 'every thunder asset appears in some group');
+    shots.forEach((id) => assert.strictEqual(seen.get(id), 1, id + ' appears in exactly one group'));
+});
+
+test('a preset with a gusty bed also sets gustEverySec', () => {
+    L.PRESETS.forEach((p) => {
+        const hasGust = (p.beds || []).some((b) => b.gust);
+        if (hasGust) assert.ok(p.gustEverySec, p.id + ': gusty bed needs gustEverySec');
+    });
+});
+
 console.log(`${pass} passed${process.exitCode ? ', see FAILs above' : ''}`);
