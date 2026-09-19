@@ -26,6 +26,11 @@
   album's own page; a track with several artists links each one separately.
   The artist chip above the title on an album page does the same. Radio still
   isn't linked - a live station's track has no Jellyfin id to send it to.
+- **Sports and News no longer start playing a channel the moment you open them.**
+  Opening either used to tune ESPN or CNN right away, whether you wanted it or
+  not. Now the TV window just shows the channel waiting there - press OK
+  (click it, or tap) to actually start watching, same as picking any other
+  game or channel.
 
 ## v0.4.42
 
