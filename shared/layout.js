@@ -53,7 +53,7 @@
  *
  * window.HomerLayout = { platform, isPhone, isTouch, onChange, register, usePhone,
  *                        stageBox, chromeShown, force, setScreenHome,
- *                        screenHome, canScreenHome, destroy, version }
+ *                        screenHome, canScreenHome, goLibrary, destroy, version }
  */
 (() => {
     const VERSION = '0.3.0';
@@ -296,9 +296,15 @@
         }
         return viewsP;
     };
-    const goLibrary = async (type) => {
+    // genre: a genre badge elsewhere (a movie's page, a show's, the grid's own
+    // info panel) hands this the genre it was on, so the grid it opens arrives
+    // with that genre already the filter bar's own chip — pre-set before the
+    // grid loads, the same state F.restore() reads on the way in
+    // (library/library-model.js).
+    const goLibrary = async (type, genre) => {
         const v = (await views()).find((x) => x.CollectionType === type);
         if (!v) return;
+        if (genre && window.HomerLibraryModel) window.HomerLibraryModel.filters.set('lib:' + v.Id, { genre });
         go(type === 'movies'
             ? `#/movies?topParentId=${v.Id}&collectionType=movies`
             : `#/tv?topParentId=${v.Id}&collectionType=tvshows`);
@@ -500,6 +506,7 @@
         setScreenHome,
         screenHome,
         canScreenHome,
+        goLibrary,
         destroy() {
             screenHomes.length = 0;
             clearInterval(hereTimer);

@@ -159,7 +159,18 @@
         };
 
         const pillsHtml = (list) => list.filter((c) => c && c.text)
-            .map((c) => `<span class="lp-pill${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`).join('');
+            .map((c) => (c.genre
+                ? `<button type="button" class="lp-pill genre" data-genre="${esc(c.genre)}" data-lib="${esc(c.lib)}">${esc(c.text)}</button>`
+                : `<span class="lp-pill${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`))
+            .join('');
+
+        // a genre pill: the same genre filter the grid's own chip bar sets
+        // (library/library-model.js), through the Movies/TV Shows tab
+        const pressGenre = (b) => {
+            if (window.HomerLayout && typeof window.HomerLayout.goLibrary === 'function') {
+                window.HomerLayout.goLibrary(b.dataset.lib, b.dataset.genre);
+            }
+        };
 
         // [{ act, icon, label, primary }]
         const actsHtml = (list) => list.map((a) => `<button type="button" class="lp-act${a.primary ? ' primary' : ''}" data-act="${a.act}">${icon(a.icon)}<span>${esc(a.label)}</span></button>`).join('');
@@ -522,7 +533,7 @@
                     { text: runtime(it) }
                 ];
                 if (it.CommunityRating) chips.push({ text: `★ ${it.CommunityRating.toFixed(1)}`, cls: 'score' });
-                for (const g of (it.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre' });
+                for (const g of (it.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre', genre: g, lib: 'movies' });
                 drawHero(page, { art: backdropUrl(it, 1280), poster: posterUrl(it, 420), badge: badgeFor(it), pct: pctOf(it) });
                 page.querySelector('.lp-kicker').innerHTML = it.Taglines && it.Taglines[0] ? `<i>${esc(it.Taglines[0])}</i>` : '';
                 page.querySelector('.lp-title').textContent = it.Name || '';
@@ -559,6 +570,8 @@
             page.addEventListener('click', (ev) => {
                 if (ev.target.closest('.lp-retry')) { load(); return; }
                 if (ev.target.closest('.lp-more')) { onMore(page); return; }
+                const genre = ev.target.closest('.lp-pill.genre');
+                if (genre) { pressGenre(genre); return; }
                 const a = ev.target.closest('.lp-act');
                 if (!a || status !== 'ready') return;
                 if (a.dataset.act === 'playon') {
@@ -622,7 +635,7 @@
                 const chips = [{ text: yearsOf(s) }, { text: s.OfficialRating }];
                 if (s.ChildCount) chips.push({ text: plural(s.ChildCount, 'season') });
                 if (s.CommunityRating) chips.push({ text: `★ ${s.CommunityRating.toFixed(1)}`, cls: 'score' });
-                for (const g of (s.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre' });
+                for (const g of (s.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre', genre: g, lib: 'tvshows' });
                 const n = (s.UserData && s.UserData.UnplayedItemCount) || 0;
                 const badge = series ? (n ? `<span class="lp-flag new">${n} unwatched</span>` : '<span class="lp-flag">Watched</span>') : '';
                 drawHero(page, { art: series ? backdropUrl(series, 1280) : null, poster: series ? posterUrl(series, 420) : null, badge, pct: 0 });
@@ -742,6 +755,8 @@
             page.addEventListener('click', (ev) => {
                 if (ev.target.closest('.lp-retry')) { load(); return; }
                 if (ev.target.closest('.lp-more')) { onMore(page); return; }
+                const genre = ev.target.closest('.lp-pill.genre');
+                if (genre) { pressGenre(genre); return; }
                 const chip = ev.target.closest('.lp-seasons .lp-chip');
                 if (chip) {
                     focusId = null;

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Genre badges are clickable.** On a movie or show's page, the grid's own
+  info panel, and the phone layout, clicking (or pressing OK, or tapping) a
+  genre opens Movies or TV Shows filtered to it — the same filter the chip
+  bar at the top of the grid already has, so it shows selected there and
+  clears the usual way. On TV, arrow past the leftmost button to reach the
+  badges with the remote. Music's genres are a different system and aren't
+  part of this.
+
 ## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other

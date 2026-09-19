@@ -183,6 +183,16 @@
             <div class="hl-actions"></div>
         </div>`;
 
+    // A genre badge (a chip in the info panel's .hl-meta, tagged with which
+    // genre and which library it belongs to) opens that library, filtered to
+    // it — the same filter the chip bar itself sets (library-model.js), so the
+    // grid arrives with the chip already lit and clearable the usual way.
+    const pressGenre = (g) => {
+        if (g && g.genre && window.HomerLayout && typeof window.HomerLayout.goLibrary === 'function') {
+            window.HomerLayout.goLibrary(g.lib, g.genre);
+        }
+    };
+
     const createShell = ({ kind, brand, search }) => {
         const root = el('div');
         root.id = 'hl-root';
@@ -294,7 +304,10 @@
             title.textContent = info.title || '';
             title.classList.toggle('long', (info.title || '').length > 34);
             $('.hl-meta').innerHTML = (info.chips || []).filter((c) => c && c.text)
-                .map((c) => `<span class="hl-chip${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`).join('');
+                .map((c) => (c.genre
+                    ? `<button type="button" class="hl-chip genre" data-genre="${esc(c.genre)}" data-lib="${esc(c.lib)}">${esc(c.text)}</button>`
+                    : `<span class="hl-chip${c.cls ? ' ' + c.cls : ''}">${esc(c.text)}</span>`))
+                .join('');
             $('.hl-desc').textContent = info.desc || '';
             $('.hl-desc').classList.toggle('empty', !info.desc);
             setArt(info.art);
@@ -314,8 +327,15 @@
                 <span class="material-icons" aria-hidden="true">${a.icon}</span><span>${esc(a.label)}</span></div>`).join('');
         };
 
+        // which genre badge (if any) the remote is on — the same idea as a
+        // button's 'focus' class, just living over in .hl-meta instead
+        const markGenreFocus = (idx) => {
+            [...$('.hl-meta').querySelectorAll('.hl-chip.genre')].forEach((c, i) => c.classList.toggle('foc', i === idx));
+        };
+
         let onKey = null;
         let onWheel = null;
+        let onGenre = pressGenre; // a screen already showing that genre's own grid overrides this
         const keyHandler = (ev) => {
             // the guide opens on top of us; it gets the keys while it's up
             if (document.getElementById('cg-root')) return;
@@ -343,6 +363,10 @@
             if (ev.target.closest('[data-action="home"]')) goHome();
             else if (ev.target.closest('[data-action="fullscreen"]') && P()) P().fullscreen();
         });
+        $('.hl-meta').addEventListener('click', (ev) => {
+            const b = ev.target.closest('.hl-chip.genre');
+            if (b) onGenre({ genre: b.dataset.genre, lib: b.dataset.lib });
+        });
         root.addEventListener('wheel', wheelHandler, { passive: false });
 
         // don't leave a Jellyfin control underneath focused (Space/Enter would hit it)
@@ -359,8 +383,10 @@
             setAmbient,
             renderInfo,
             renderActions,
+            markGenreFocus,
             setKeys(fn) { onKey = fn; },
             setWheel(fn) { onWheel = fn; },
+            setGenrePress(fn) { onGenre = fn; },
             show() { root.style.visibility = ''; },
             teardown() {
                 document.removeEventListener('keydown', keyHandler, true);
@@ -608,6 +634,8 @@
         let zone = 'list'; // list | actions | bar
         let act = 0;
         let actions = [];
+        let genres = []; // the current title's genre badges: { text, genre, lib }
+        let genreFocus = -1; // which one the remote is on, in the actions zone (-1: none)
         let query = '';
         let status = 'loading'; // loading | ready | error
         // The chips above the list: one genre, one decade, Unwatched,
@@ -782,6 +810,17 @@
             rememberFilters();
             applyView(current() && current().Id);
         };
+        // a genre badge for a title already in this grid: no other screen to
+        // go to, so just set the bar's own filter, the way pressing its chip
+        // would (a badge for the other library still hops there as usual)
+        const pressGenreHere = (g) => {
+            if (!g || !g.genre) return;
+            if (g.lib !== (isTv ? 'tvshows' : 'movies')) return pressGenre(g);
+            F.state.genre = F.state.genre === g.genre ? '' : g.genre;
+            rememberFilters();
+            applyView(current() && current().Id);
+            setZone('list');
+        };
 
         const select = (i, { scroll = true } = {}) => {
             if (!rows[i] || view.indexOf(i) < 0) return;
@@ -829,7 +868,8 @@
 
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
-            shell.renderActions(actions, act, zone === 'actions');
+            shell.renderActions(actions, act, zone === 'actions' && genreFocus < 0);
+            shell.markGenreFocus(zone === 'actions' ? genreFocus : -1);
         };
 
         const updateLegend = () => {
@@ -852,7 +892,7 @@
             if (!view.length) {
                 return shell.setLegend([{ key: '▲', label: 'Filters' }, { key: '/', label: 'Search', action: 'filter' }, ...back]);
             }
-            const ok = actions[zone === 'actions' ? act : 0];
+            const ok = zone === 'actions' && genreFocus >= 0 ? { label: genres[genreFocus].text } : actions[zone === 'actions' ? act : 0];
             if (zone === 'get' || actOn === 'get') {
                 return shell.setLegend([
                     { key: '▲▼', label: 'Browse' },
@@ -879,7 +919,9 @@
                 chips.push({ text: it.ProductionYear ? String(it.ProductionYear) : '' }, { text: it.OfficialRating }, { text: runtime(it) });
             }
             if (it.CommunityRating) chips.push({ text: `★ ${it.CommunityRating.toFixed(1)}` });
-            for (const g of (it.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre' });
+            genres = (it.Genres || []).slice(0, 3).map((g) => ({ text: g, cls: 'genre', genre: g, lib: it.Type === 'Series' ? 'tvshows' : 'movies' }));
+            chips.push(...genres);
+            genreFocus = -1; // a new title: start back on the actions, not a stale badge index
 
             let badge = '';
             let barRight = '';
@@ -913,6 +955,8 @@
 
         const showEmptyInfo = () => {
             actions = [];
+            genres = [];
+            genreFocus = -1;
             shell.renderInfo({ title: '', chips: [], desc: '' });
             drawActions();
             updateLegend();
@@ -964,6 +1008,7 @@
 
         const setZone = (z) => {
             zone = z;
+            if (z !== 'actions') genreFocus = -1; // leaving: a stray badge index doesn't survive it
             root.classList.remove('hl-zone-list', 'hl-zone-actions', 'hl-zone-bar', 'hl-zone-get');
             root.classList.add('hl-zone-' + z);
             markBar();
@@ -1065,6 +1110,11 @@
             const v = t ? (t.peek(card) || t.asView(card)) : null;
             const soon = t ? t.when(card) : '';
             const lead = soon ? (card.kind === 'movie' ? `In theaters ${soon}` : `Starts ${soon}`) : '';
+            // this info panel carries no genre chips (what's out there has no
+            // genre of its own to filter your library by) — a stale one from
+            // the title he was on before would otherwise still be one Left away
+            genres = [];
+            genreFocus = -1;
             shell.renderInfo({
                 kicker: `<b>${esc(g.sec.label)}</b>${esc(lead)}`,
                 title: card.title,
@@ -1442,10 +1492,17 @@
                     setZone('actions');
                 } else if (k === 'Enter') run(actions[0]);
             } else if (zone === 'actions') {
-                if (k === 'ArrowRight') { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
-                else if (k === 'ArrowLeft') {
-                    if (act === 0) setZone(actOn === 'get' ? 'get' : 'list');
-                    else { act -= 1; drawActions(); updateLegend(); }
+                // the genre badges sit just past the leftmost button — arrowing
+                // off the left of Play (or Options) reaches them before the list
+                if (k === 'ArrowRight') {
+                    if (genreFocus >= 0) { genreFocus = genreFocus < genres.length - 1 ? genreFocus + 1 : -1; drawActions(); updateLegend(); }
+                    else { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
+                } else if (k === 'ArrowLeft') {
+                    if (genreFocus > 0) { genreFocus -= 1; drawActions(); updateLegend(); }
+                    else if (genreFocus === 0) setZone(actOn === 'get' ? 'get' : 'list');
+                    else if (act > 0) { act -= 1; drawActions(); updateLegend(); }
+                    else if (genres.length) { genreFocus = genres.length - 1; drawActions(); updateLegend(); }
+                    else setZone(actOn === 'get' ? 'get' : 'list');
                 } else if (k === 'ArrowUp' || k === 'ArrowDown') {
                     if (actOn === 'get') {
                         setZone('get');
@@ -1454,13 +1511,17 @@
                         setZone('list');
                         step(k === 'ArrowDown' ? 1 : -1);
                     }
-                } else if (k === 'Enter') run(actions[act]);
+                } else if (k === 'Enter') {
+                    if (genreFocus >= 0) pressGenreHere(genres[genreFocus]);
+                    else run(actions[act]);
+                }
             }
         });
 
         shell.setWheel((ev) => {
             if (rowsView.contains(ev.target) && view.length) scroller.wheel(ev);
         });
+        shell.setGenrePress(pressGenreHere);
 
         rowsView.addEventListener('mousemove', (ev) => {
             if (!moved(ev)) return;
@@ -1498,8 +1559,9 @@
             const b = ev.target.closest('.hl-btn');
             if (!b) return;
             const i = Number(b.dataset.i);
-            if (zone === 'actions' && i === act) return;
+            if (zone === 'actions' && i === act && genreFocus < 0) return;
             act = i;
+            genreFocus = -1;
             setZone('actions');
         });
         actionsBox.addEventListener('click', (ev) => {
@@ -1633,6 +1695,8 @@
         let lastBelow = 'episodes'; // where Down from the buttons goes back to
         let act = 0;
         let actions = [];
+        let genres = []; // the show's genre badges: { text, genre, lib }
+        let genreFocus = -1; // which one the remote is on, in the actions zone (-1: none)
         let status = 'loading';
         let alive = true;
         let loadToken = 0;
@@ -1675,7 +1739,8 @@
         };
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
-            shell.renderActions(actions, act, zone === 'actions' || zone === 'likes');
+            shell.renderActions(actions, act, (zone === 'actions' || zone === 'likes') && genreFocus < 0);
+            shell.markGenreFocus(zone === 'actions' ? genreFocus : -1);
         };
         const updateLegend = () => {
             const items = [];
@@ -1691,7 +1756,8 @@
                 items.push({ key: '◀▶', label: 'Season' }, { key: '▼', label: 'Episodes' });
             } else {
                 items.push({ key: '◀▶', label: 'Options' }, { key: '▼', label: 'Episodes' });
-                if (actions[act]) items.push({ key: 'OK', label: actions[act].label, action: 'ok' });
+                if (genreFocus >= 0) items.push({ key: 'OK', label: genres[genreFocus].text, action: 'ok' });
+                else if (actions[act]) items.push({ key: 'OK', label: actions[act].label, action: 'ok' });
             }
             items.push('spacer', { key: 'ESC', label: 'Back', action: 'back' });
             shell.setLegend(items);
@@ -1706,13 +1772,20 @@
             updateLegend();
         }) : () => {};
 
+        // the show's own genres — an episode doesn't carry any, so every
+        // badge on this screen (in either info panel below) is the series'
+        const seriesGenres = () => (series && series.Genres ? series.Genres : []).slice(0, 3)
+            .map((g) => ({ text: g, cls: 'genre', genre: g, lib: 'tvshows' }));
+
         const showInfo = (ep) => {
+            genres = seriesGenres();
+            genreFocus = -1; // a new title: start back on the actions, not a stale badge index
             if (!ep) {
                 actions = [];
                 shell.renderInfo({
                     kicker: series ? `<b>${esc(yearsOf(series))}</b>${esc(series.Name)}` : '',
                     title: series ? series.Name : '',
-                    chips: series ? [{ text: series.OfficialRating }, ...(series.Genres || []).slice(0, 3).map((g) => ({ text: g, cls: 'genre' }))] : [],
+                    chips: series ? [{ text: series.OfficialRating }, ...genres] : [],
                     desc: series ? series.Overview : '',
                     art: series ? backdropUrl(series, 900) : null,
                     poster: series ? posterUrl(series, 420) : null
@@ -1728,6 +1801,7 @@
                 { text: ep.OfficialRating || (series && series.OfficialRating) }
             ];
             if (ep.CommunityRating) chips.push({ text: `★ ${ep.CommunityRating.toFixed(1)}` });
+            chips.push(...genres);
             let badge = '';
             let barRight = runtime(ep);
             if (posOf(ep) > 0) {
@@ -1862,6 +1936,7 @@
         const setZone = (z) => {
             if (z !== 'actions' && z !== 'likes') lastBelow = z;
             if (z !== 'likes') likes.leave();
+            if (z !== 'actions') genreFocus = -1; // leaving: a stray badge index doesn't survive it
             zone = z;
             root.classList.remove('hl-zone-actions', 'hl-zone-seasons', 'hl-zone-episodes', 'hl-zone-likes');
             root.classList.add('hl-zone-' + z);
@@ -1947,12 +2022,22 @@
                 else if ((k === 'ArrowDown' || k === 'Enter') && eps.length) setZone('episodes');
                 else if (k === 'ArrowUp' && actions.length) setZone('actions');
             } else if (zone === 'actions') {
-                if (k === 'ArrowRight') { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
-                else if (k === 'ArrowLeft') {
-                    if (act > 0) { act -= 1; drawActions(); updateLegend(); }
+                // the genre badges sit just past the leftmost button — arrowing
+                // off the left of Play (or Options) reaches them before the episodes
+                if (k === 'ArrowRight') {
+                    if (genreFocus >= 0) { genreFocus = genreFocus < genres.length - 1 ? genreFocus + 1 : -1; drawActions(); updateLegend(); }
+                    else { act = Math.min(actions.length - 1, act + 1); drawActions(); updateLegend(); }
+                } else if (k === 'ArrowLeft') {
+                    if (genreFocus > 0) { genreFocus -= 1; drawActions(); updateLegend(); }
+                    else if (genreFocus === 0) { if (eps.length) setZone('episodes'); }
+                    else if (act > 0) { act -= 1; drawActions(); updateLegend(); }
+                    else if (genres.length) { genreFocus = genres.length - 1; drawActions(); updateLegend(); }
                     else if (eps.length) setZone('episodes');
                 } else if (k === 'ArrowDown') setZone(lastBelow === 'seasons' || !eps.length ? 'seasons' : 'episodes');
-                else if (k === 'Enter') run(actions[act]);
+                else if (k === 'Enter') {
+                    if (genreFocus >= 0) pressGenre(genres[genreFocus]);
+                    else run(actions[act]);
+                }
             }
         });
 
@@ -1992,8 +2077,9 @@
             const b = ev.target.closest('.hl-btn');
             if (!b) return;
             const i = Number(b.dataset.i);
-            if (zone === 'actions' && i === act) return;
+            if (zone === 'actions' && i === act && genreFocus < 0) return;
             act = i;
+            genreFocus = -1;
             setZone('actions');
         });
         actionsBox.addEventListener('click', (ev) => {
@@ -2115,6 +2201,8 @@
         let it = item;
         let act = 0;
         let actions = [];
+        let genres = []; // the movie's genre badges: { text, genre, lib }
+        let genreFocus = -1; // which one the remote is on, in the actions zone (-1: none)
         let status = 'loading';
         let alive = true;
         let zone = 'actions'; // actions | likes
@@ -2143,19 +2231,22 @@
 
         const setZone = (z) => {
             zone = z;
+            if (z !== 'actions') genreFocus = -1; // leaving: a stray badge index doesn't survive it
             root.classList.remove('hl-zone-actions', 'hl-zone-likes');
             root.classList.add('hl-zone-' + z);
         };
 
         const drawActions = () => {
             act = clamp(act, 0, Math.max(0, actions.length - 1));
-            shell.renderActions(actions, act, true);
+            shell.renderActions(actions, act, genreFocus < 0);
+            shell.markGenreFocus(genreFocus);
             const many = actions.length > 1;
             shell.setLegend([
                 ...(status === 'error' ? [{ key: 'OK', label: 'Try again', action: 'ok' }] : [
                     ...(zone === 'likes' ? [{ key: '▲▼', label: 'More like this' }] : []),
                     ...(many || zone !== 'likes' ? [{ key: '◀▶', label: 'Options' }] : []),
-                    ...(actions[act] ? [{ key: 'OK', label: actions[act].label, action: 'ok' }] : []),
+                    ...(genreFocus >= 0 ? [{ key: 'OK', label: genres[genreFocus].text, action: 'ok' }]
+                        : actions[act] ? [{ key: 'OK', label: actions[act].label, action: 'ok' }] : []),
                     ...(zone === 'actions' && likes.count() ? [{ key: '▼', label: 'More like this' }] : [])
                 ]),
                 'spacer',
@@ -2170,7 +2261,8 @@
                 { text: runtime(it) }
             ];
             if (it.CommunityRating) chips.push({ text: `★ ${it.CommunityRating.toFixed(1)}` });
-            for (const g of (it.Genres || []).slice(0, 3)) chips.push({ text: g, cls: 'genre' });
+            genres = (it.Genres || []).slice(0, 3).map((g) => ({ text: g, cls: 'genre', genre: g, lib: 'movies' }));
+            chips.push(...genres);
             let badge = '';
             let barRight = runtime(it);
             if (posOf(it) > 0) {
@@ -2243,9 +2335,16 @@
                 return;
             }
             if (ev.repeat && k === 'Enter') return;
-            if (k === 'ArrowRight') act = Math.min(actions.length - 1, act + 1);
-            else if (k === 'ArrowLeft') act = Math.max(0, act - 1);
-            else if (k === 'ArrowDown') {
+            // the genre badges sit just past the leftmost button — arrowing
+            // off the left of Play (or Options) reaches them before it clamps
+            if (k === 'ArrowRight') {
+                if (genreFocus >= 0) genreFocus = genreFocus < genres.length - 1 ? genreFocus + 1 : -1;
+                else act = Math.min(actions.length - 1, act + 1);
+            } else if (k === 'ArrowLeft') {
+                if (genreFocus > 0) genreFocus -= 1;
+                else if (genreFocus < 0 && act > 0) act -= 1;
+                else if (genreFocus < 0 && genres.length) genreFocus = genres.length - 1;
+            } else if (k === 'ArrowDown') {
                 if (zone === 'likes') { likes.step(1); return; }
                 if (likes.count()) { setZone('likes'); likes.enter(); return; }
             } else if (k === 'ArrowUp') {
@@ -2258,14 +2357,18 @@
                 }
                 likes.step(-1);
                 return;
-            } else if (k === 'Enter') return run(actions[act]);
+            } else if (k === 'Enter') {
+                if (genreFocus >= 0) return pressGenre(genres[genreFocus]);
+                return run(actions[act]);
+            }
             drawActions();
         });
         const actionsBox = $('.hl-actions');
         actionsBox.addEventListener('mousemove', (ev) => {
             const b = ev.target.closest('.hl-btn');
-            if (!b || Number(b.dataset.i) === act) return;
+            if (!b || (Number(b.dataset.i) === act && genreFocus < 0)) return;
             act = Number(b.dataset.i);
+            genreFocus = -1;
             drawActions();
         });
         actionsBox.addEventListener('click', (ev) => {
