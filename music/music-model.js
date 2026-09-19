@@ -287,9 +287,10 @@
     };
 
     const albumById = (id) => lists.albums.find((a) => a.id === id) || null;
+    const artistById = (id) => lists.artists.find((a) => a.id === id) || null;
     const trackById = (id) => lists.songs.find((t) => t.id === id) || null;
     const find = (id) => albumById(id) || trackById(id)
-        || lists.artists.find((a) => a.id === id)
+        || artistById(id)
         || lists.playlists.find((a) => a.id === id)
         || lists.genres.find((a) => a.id === id)
         || null;
@@ -944,6 +945,7 @@
         toggleFavorite,
         find,
         albumById,
+        artistById,
         trackById,
         albumTracks,
         artistAlbums,

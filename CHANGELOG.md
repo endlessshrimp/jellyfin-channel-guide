@@ -21,6 +21,11 @@
   clears the usual way. On TV, arrow past the leftmost button to reach the
   badges with the remote. Music's genres are a different system and aren't
   part of this.
+- **Artist and album names in Music are links.** On Now Playing (TV and
+  phone), the artist name and the album name each jump to that artist's or
+  album's own page; a track with several artists links each one separately.
+  The artist chip above the title on an album page does the same. Radio still
+  isn't linked - a live station's track has no Jellyfin id to send it to.
 
 ## v0.4.42
 
