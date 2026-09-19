@@ -580,6 +580,17 @@
     color: #cfe9ff;
 }
 
+/* a genre pill is a real button (opens that genre's library): reset what
+   <button> brings, and give a tap something to show for itself */
+button.lp-pill.genre {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    cursor: pointer;
+}
+
+button.lp-pill.genre:active { background: rgba(47, 140, 255, 0.34); }
+
 .hl-phone .lp-pill.score { color: var(--homer-needle); }
 
 .hl-phone .lp-when {
