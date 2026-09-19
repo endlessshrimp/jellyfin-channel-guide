@@ -909,6 +909,21 @@
     flex-direction: column;
 }
 
+/* HOME-104 layout pass: .bk-lv-text is a column flex container, so its
+   children default to flex-shrink:1 - when .bk-lv-ctl needed a second row
+   at narrow widths, the flex column shrank *everything* to make room,
+   crushing the title down past even one line's height (a -webkit-box +
+   line-clamp element clipped mid-glyph rather than degrading gracefully).
+   These never shrink now; .bk-title's own line-clamp is still what lets it
+   degrade to fewer lines when its own text is long, on its own terms. */
+.bk-lv-text > .bk-eyebrow,
+.bk-lv-text > .bk-title,
+.bk-lv-text > .bk-people,
+.bk-lv-text > .bk-lv-chapter,
+.bk-lv-text > .bk-lv-book,
+.bk-lv-text > .bk-lv-ctl,
+.bk-lv-text > .bk-lv-err { flex-shrink: 0; }
+
 .bk-lv-text .bk-title { font-size: 64px; }
 .bk-lv-text .bk-title.long { font-size: 56px; }
 
@@ -969,13 +984,29 @@
 
 .bk-lv-bookline b { color: var(--text); }
 
+/* HOME-104 layout pass: .bk-lv-ctl used to be one flat flex-wrap row of 9
+   items (5 buttons, the gap spacer, 3 pills) - at narrow widths the wrap
+   point could fall in the middle of the transport buttons (Next stranding
+   itself on the pills' row) since flex-wrap only knows about individual
+   items, not the two logical groups they belong to. Now there are two
+   explicit groups (.bk-lv-transport, .bk-lv-pills), each its own
+   non-wrapping row; .bk-lv-ctl only ever wraps between the two groups as a
+   whole, never inside one. */
 .bk-lv-ctl {
     margin-top: auto;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 22px;
+    column-gap: 22px;
     row-gap: 16px;
+}
+
+.bk-lv-transport,
+.bk-lv-pills {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 22px;
 }
 
 .bk-lv-gap { flex: 1 1 0; min-width: 0; }
@@ -1062,10 +1093,15 @@
 .bk-pill.focus .bk-pill-k,
 .bk-pill.focus .bk-pill-v { color: #fff; }
 
+/* HOME-104 layout pass: was position:absolute; bottom:-56px, anchored to
+   .bk-lv-text's own (fixed-height) box on the assumption of a single-row
+   .bk-lv-ctl - a wrapped, two-row .bk-lv-ctl legitimately taller than that
+   landed this text right on top of the pills. It already sits right after
+   .bk-lv-ctl in the DOM, so normal flow (a top margin instead of an
+   absolute offset) puts it right under the controls regardless of how
+   many rows they take, with no separate anchor to keep in sync. */
 .bk-lv-err {
-    position: absolute;
-    left: 0;
-    bottom: -56px;
+    margin-top: 16px;
     font-size: 24px;
     font-weight: 600;
     color: #ff9c9c;

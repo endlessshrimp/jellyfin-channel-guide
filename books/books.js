@@ -648,15 +648,19 @@
                         <div class="bk-lv-bookline"><span class="bk-lv-in"></span><span class="bk-lv-left"></span></div>
                     </div>
                     <div class="bk-lv-ctl">
-                        <div class="bk-round" data-k="prev">${icon('skip_previous')}</div>
-                        <div class="bk-round" data-k="back">${icon('replay_30')}</div>
-                        <div class="bk-round big" data-k="play">${icon('play_arrow')}</div>
-                        <div class="bk-round" data-k="fwd">${icon('forward_30')}</div>
-                        <div class="bk-round" data-k="next">${icon('skip_next')}</div>
+                        <div class="bk-lv-transport">
+                            <div class="bk-round" data-k="prev">${icon('skip_previous')}</div>
+                            <div class="bk-round" data-k="back">${icon('replay_30')}</div>
+                            <div class="bk-round big" data-k="play">${icon('play_arrow')}</div>
+                            <div class="bk-round" data-k="fwd">${icon('forward_30')}</div>
+                            <div class="bk-round" data-k="next">${icon('skip_next')}</div>
+                        </div>
                         <span class="bk-lv-gap"></span>
-                        <div class="bk-pill" data-k="rate"><span class="bk-pill-k">Speed</span><span class="bk-pill-v"></span></div>
-                        <div class="bk-pill" data-k="sleep"><span class="bk-pill-k">Sleep</span><span class="bk-pill-v"></span></div>
-                        <div class="bk-pill" data-k="ambience"><span class="bk-pill-k">Ambience</span><span class="bk-pill-v"></span></div>
+                        <div class="bk-lv-pills">
+                            <div class="bk-pill" data-k="rate"><span class="bk-pill-k">Speed</span><span class="bk-pill-v"></span></div>
+                            <div class="bk-pill" data-k="sleep"><span class="bk-pill-k">Sleep</span><span class="bk-pill-v"></span></div>
+                            <div class="bk-pill" data-k="ambience"><span class="bk-pill-k">Ambience</span><span class="bk-pill-v"></span></div>
+                        </div>
                     </div>
                     <div class="bk-lv-err"></div>
                 </div>`;
