@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.44
 
 - **Every track row on the phone can be sent to a speaker or TV before it
   plays.** Songs, Favorites, and the tracks inside an album or playlist page
