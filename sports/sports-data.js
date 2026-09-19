@@ -413,11 +413,21 @@
     // own. Rounding down (never up, never to the nearest) also means the
     // real delay is always at least what's configured, never less.
     const DELAY_KEY = 'homer-sports-mlb-delay';
-    const DELAY_DEFAULT = 25;
+    // HOME-62: raised from 25 to 60 -- Jason's broadcast runs closer to a
+    // minute behind StatsAPI than the original guess. One-time migration
+    // below moves a saved '25' (the old default; nobody picked it on
+    // purpose) up to 60, marked so it only ever runs once -- someone who
+    // deliberately dials it back to 25 afterward keeps that choice.
+    const DELAY_DEFAULT = 60;
+    const DELAY_MIGRATED_KEY = 'homer-sports-mlb-delay-v2';
     // seconds; 0 means off. Keep in step with settings/settings.js, which
     // draws its labels from this same list.
     const DELAY_OPTIONS = [0, 10, 15, 20, 25, 30, 45, 60];
     const DELAY_BUCKET = 5000;
+    if (!lsGet(DELAY_MIGRATED_KEY)) {
+        if (lsGet(DELAY_KEY) === '25') lsSet(DELAY_KEY, '60');
+        lsSet(DELAY_MIGRATED_KEY, '1');
+    }
     const delaySeconds = () => {
         const v = parseInt(lsGet(DELAY_KEY), 10);
         return DELAY_OPTIONS.includes(v) ? v : DELAY_DEFAULT;

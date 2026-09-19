@@ -14,6 +14,10 @@
   exclusively streaming used to sometimes print the streaming service's
   name as if it were an unresolved TV network ("Apple TV · not tunable") —
   it gets the proper streaming badge now.
+- **MLB's live scores delay default is 60 seconds now, up from 25.** Jason's
+  broadcast runs closer to a minute behind MLB's own data than the original
+  guess. If you never touched this setting it just moves to 60; if you'd
+  deliberately picked 25 seconds, that choice sticks.
 
 ## v0.4.43
 
