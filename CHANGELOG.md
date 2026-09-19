@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Every track row on the phone can be sent to a speaker or TV before it
+  plays.** Songs, Favorites, and the tracks inside an album or playlist page
+  each get the same cast icon Now Playing and the album page's Play on…
+  button already use — tap it and the same device picker opens for just that
+  one track, so picking a speaker doesn't mean starting the whole list to
+  reach it. Tapping the row itself still plays it here, same as always. The
+  icon is off the same way the page's Play on… button already is, when Home
+  Assistant or Music Assistant isn't ready.
+
 ## v0.4.43
 
 - **The Cameras wall is a grid now, not a single row.** Every camera is
