@@ -92,7 +92,18 @@
         // channel (when the guide's confirmed one), a finished one routes to
         // its box score instead (see gameRoute). g.channel only ever exists
         // when resolveChannels() found exactly one guide-confirmed match.
-        const tuneGame = (hub, g) => (g && g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null);
+        //
+        // HOME-13: when there's no channel to tune, a game that's only on a
+        // streaming service (g.stream — sports-data.js, set only when the
+        // game isn't on any TV channel at all) opens that service instead,
+        // in a new tab. Not on the sideloaded tvOS app: it can't open an
+        // outside site, so it just names the service there — see
+        // window.HOMER_TVAPP and HomerHub.ui.watchOf (shared/hub.js).
+        const watchAct = (hub, g) => {
+            if (g && g.channel && g.state === 'in') return () => hub.watch(g.channel.ch);
+            if (g && g.stream && g.stream.url && !window.HOMER_TVAPP) return () => window.open(g.stream.url, '_blank', 'noopener');
+            return null;
+        };
         // A finished game's card routes to a box-score page (box scores,
         // stats) that doesn't exist yet — Jason's building it separately.
         // gameRoute is the address it'll read (?game=<id>) once it does.
@@ -112,8 +123,39 @@
             if (detail && typeof detail.open === 'function') { detail.open(g, gameRoute(g)); return; }
             ctx.toast('Box score isn’t built yet');
         };
-        // what OK says when there's nothing to tune
-        const offMsg = (g) => (g.network ? `${g.network} · not tunable` : 'Not on TV here');
+        // what OK says when there's nothing to tune (or open)
+        const offMsg = (g) => {
+            if (g.stream) return window.HOMER_TVAPP ? `${g.stream.name} · open it on your phone` : (g.stream.url ? g.stream.name : `${g.stream.name} · no link for that yet`);
+            return g.network ? `${g.network} · not tunable` : 'Not on TV here';
+        };
+        // The where-to-watch badge every card/live view draws: a channel
+        // (always wins, via HomerHub.ui.watchOf — shared/hub.js), else the
+        // streaming fallback, else just the network name as text
+        // (unresolved/ambiguous TV — unchanged from before HOME-13). `cls`
+        // is the caller's existing class prefix (sp-live-tv, sp-match-tv,
+        // …) so every screen's badge stays visually identical; "on" is the
+        // same modifier that already meant "tunable", now also "openable".
+        // netSpan: sp-match-tv wraps the network name in its own <span
+        // class="net"> so a narrow card can hide it and keep just the
+        // channel number (sports.css, "the channel number says it") — only
+        // for a real channel, which has a number to fall back to. A stream
+        // badge has no number, so its name is never wrapped/hidden that way.
+        const watchBadge = (g, cls, { netSpan = false } = {}) => {
+            const w = ui.watchOf(g);
+            if (w.kind === 'channel') {
+                const label = netSpan ? `<span class="net">${esc(w.label)}</span>` : esc(w.label);
+                return `<span class="${cls} on">${ui.icon('live_tv')}${label} <b>${esc(w.number)}</b></span>`;
+            }
+            // an openable stream gets the same "on"/icon chip treatment as a
+            // tunable channel (it's a real thing OK can do); one HOMER can't
+            // open (the tvOS app, or a service without a mapped URL) reads
+            // as plain text, same as an unresolved network name always has
+            if (w.kind === 'stream' && w.openable) return `<span class="${cls} on">${ui.icon('live_tv')}${esc(w.label)}</span>`;
+            if (w.kind === 'stream' || w.kind === 'network') return `<span class="${cls}">${esc(w.label)}</span>`;
+            return '';
+        };
+        // "Watch X" for the OK hint — X is whatever watchBadge just named
+        const watchLabel = (g) => ui.watchOf(g).label || '';
         const grid = (min = 330) => {
             const g = el('div', 'hb-grid sp-grid');
             g.style.gridTemplateColumns = `repeat(auto-fill, minmax(${min}px, 1fr))`;
@@ -125,7 +167,7 @@
         // of tuning anything
         const scoreCard = (ctx, g, opts = {}) => {
             const finished = g.state === 'post';
-            const act = finished ? () => openGame(ctx, g) : tuneGame(ctx.hub, g);
+            const act = finished ? () => openGame(ctx, g) : watchAct(ctx.hub, g);
             const c = ui.scoreCard(g, Object.assign({ ok: act || (() => ctx.toast(offMsg(g))), small: finished }, opts));
             c.dataset.key = 'g' + g.id;
             if (finished) c.dataset.okLabel = 'Box score';
@@ -311,9 +353,7 @@
             const c2 = hex(lv.home.color) || '#16243c';
             box.style.setProperty('--c1', c1);
             box.style.setProperty('--c2', c2);
-            const tv = g && g.channel
-                ? `<span class="sp-live-tv on">${ui.icon('live_tv')}${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
-                : g && g.network ? `<span class="sp-live-tv">${esc(g.network)}</span>` : '';
+            const tv = watchBadge(g, 'sp-live-tv');
             const team = (ha) => {
                 const t = lv[ha];
                 const bat = live && !mid && ((ha === 'home') === battingHome);
@@ -392,9 +432,9 @@
                     </div>`).join('');
                 box.appendChild(p);
             }
-            const act = g && g.channel && g.state === 'in' ? () => ctx.hub.watch(g.channel.ch) : null;
+            const act = g ? watchAct(ctx.hub, g) : null;
             ctx.focusable(box, act || (() => ctx.toast(g ? offMsg(g) : 'Not on TV here')),
-                act ? `Watch ${(g.network || g.channel.name)}` : '');
+                act ? `Watch ${watchLabel(g)}` : '');
             box.dataset.key = 'live' + lv.pk;
             return box;
         };
@@ -646,9 +686,7 @@
                 mid = `<div class="sp-match-score"><span class="${l.winner ? 'w' : ''}">${esc(l.score)}</span><i>–</i><span class="${r.winner ? 'w' : ''}">${esc(r.score)}</span></div>
                        <div class="sp-match-status ${g.state}">${g.state === 'in' ? '<i></i>' : ''}${esc(g.status)}</div>`;
             }
-            const tv = g.channel
-                ? `<span class="sp-match-tv on">${ui.icon('live_tv')}<span class="net">${esc(g.network || g.channel.name)}</span> <b>${esc(g.channel.number)}</b></span>`
-                : g.network ? `<span class="sp-match-tv">${esc(g.network)}</span>` : '';
+            const tv = watchBadge(g, 'sp-match-tv', { netSpan: true });
             // under it: the last result (when the card shows the next game)
             let lastLine = '';
             if (tg.last && g !== tg.last) {
@@ -682,9 +720,9 @@
                 <div class="sp-match-foot">${lastLine}${tv}</div>`;
             if (mlbRow) card.classList.add('has-mlb');
             void mine;
-            const live = g.channel && g.state === 'in';
-            const act = live ? () => ctx.hub.watch(g.channel.ch) : () => ctx.hub.showTab(f.league === 'epl' ? 'soccer' : f.league);
-            ctx.focusable(card, act, live ? `Watch ${g.network || g.channel.name}` : `${L0 ? L0.label : ''}`);
+            const watchable = watchAct(ctx.hub, g);
+            const act = watchable || (() => ctx.hub.showTab(f.league === 'epl' ? 'soccer' : f.league));
+            ctx.focusable(card, act, watchable ? `Watch ${watchLabel(g)}` : `${L0 ? L0.label : ''}`);
             return card;
         };
         // most relevant first: live, then the soonest game, then the rest
@@ -945,7 +983,7 @@
                 return {
                     label: Lg.label === 'College FB' ? 'NCAAF' : Lg.label === 'Premier League' ? 'Prem' : Lg.label === 'Champions League' ? 'UCL' : Lg.label,
                     logo: Lg.logo,
-                    items: pick.map((g) => HomerTicker.score(tickerGame(g), { act: g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null }))
+                    items: pick.map((g) => HomerTicker.score(tickerGame(g), { act: watchAct(hub, g) }))
                 };
             });
             // the favorites' own next (or live) game and last result, wherever
@@ -964,7 +1002,7 @@
             await D.resolveChannels(extraGames).catch(() => null);
             const extra = extraGames.map((g) => {
                 if (g.state === 'in') live = true;
-                return HomerTicker.score(tickerGame(g), { priority: true, act: g.channel && g.state === 'in' ? () => hub.watch(g.channel.ch) : null });
+                return HomerTicker.score(tickerGame(g), { priority: true, act: watchAct(hub, g) });
             });
             if (extra.length) segs.push({ label: 'My Teams', hidden: true, items: extra });
             D.noteLive(live);

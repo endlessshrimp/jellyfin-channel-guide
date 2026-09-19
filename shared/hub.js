@@ -491,11 +491,25 @@
     // an <img>; fb is a second address to try if the first one fails
     const IMG_ERR = "if(this.dataset.fb){this.src=this.dataset.fb;this.dataset.fb=''}else{this.classList.add('hb-broken')}";
     const img = (url, cls, alt = '', fb = '') => (url || fb ? `<img class="${cls}" src="${esc(url || fb)}"${fb && url ? ` data-fb="${esc(fb)}"` : ''} alt="${esc(alt)}" draggable="false" decoding="async" onerror="${IMG_ERR}">` : '');
+    // The where-to-watch part of a normalized game (see the shape above
+    // scoreCard): a resolved channel always wins; the streaming fallback
+    // (HOME-13, g.stream from sports/sports-data.js) only ever shows up
+    // when there's no TV network at all. `openable`: a stream with a real
+    // URL, and not the sideloaded tvOS app (window.HOMER_TVAPP) — it can't
+    // open an outside site, so there it's just named, not linked.
+    const watchOf = (g) => {
+        if (!g) return { kind: 'none' };
+        if (g.channel) return { kind: 'channel', label: g.network || g.channel.name, number: g.channel.number };
+        if (g.stream) return { kind: 'stream', label: g.stream.name, openable: !!g.stream.url && !window.HOMER_TVAPP };
+        if (g.network) return { kind: 'network', label: g.network };
+        return { kind: 'none' };
+    };
     const ui = {
         el,
         esc,
         icon,
         img,
+        watchOf,
         // a section: a heading (and a note at its right) over a body
         section(title, { note = '', cls = '', badge = '' } = {}) {
             const s = el('section', 'hb-sec' + (cls ? ' ' + cls : ''));
@@ -508,7 +522,9 @@
         },
         // A game, normalized:
         //   { id, league, state: 'pre'|'in'|'post', status ('Final', 'Top 7th', '7:05 PM'),
-        //     start (Date), network, channel ({ number, name, ch }), note, priority,
+        //     start (Date), network, channel ({ number, name, ch }),
+        //     stream ({ name, url } — HOME-13, only set when there's no TV
+        //     network at all: see watchOf() above), note, priority,
         //     homeFirst (soccer: the home side on top), short (a shorter status),
         //     away / home: { abbr, name, short, logo, logoFb, score, rank, record, winner, color } }
         // small: a finished game shown for the score, not as a watch pick —
@@ -528,9 +544,14 @@
             };
             const a = g.away || {};
             const h = g.home || {};
-            const net = small ? '' : g.channel
-                ? `<span class="hb-score-ch" title="Channel ${esc(g.channel.number)}">${icon('live_tv')}<b>${esc(g.channel.number)}</b><span>${esc(g.network || g.channel.name)}</span></span>`
-                : g.network ? `<span class="hb-score-net">${esc(g.network)}</span>` : '';
+            const w = watchOf(g);
+            // an openable stream reads like a channel (a chip: OK can act on
+            // it); one HOMER can't open (the tvOS app, or no mapped URL)
+            // reads as plain text, same as an unresolved network always has
+            const net = small ? '' : w.kind === 'channel'
+                ? `<span class="hb-score-ch" title="Channel ${esc(w.number)}">${icon('live_tv')}<b>${esc(w.number)}</b><span>${esc(w.label)}</span></span>`
+                : (w.kind === 'stream' && w.openable) ? `<span class="hb-score-ch" title="${esc(w.label)}">${icon('live_tv')}<span>${esc(w.label)}</span></span>`
+                    : (w.kind === 'stream' || w.kind === 'network') ? `<span class="hb-score-net">${esc(w.label)}</span>` : '';
             card.innerHTML = `
                 <div class="hb-score-top">
                     <span class="hb-score-status ${esc(g.state || '')}">${g.state === 'in' ? '<i></i>' : ''}${esc(g.status || '')}</span>
@@ -539,7 +560,8 @@
                 </div>
                 ${g.homeFirst ? row(h, a) + row(a, h) : row(a, h) + row(h, a)}
                 ${g.note ? `<div class="hb-score-note">${esc(g.note)}</div>` : ''}`;
-            if (g.channel) card.dataset.okLabel = `Watch ${g.channel.name || ''}`.trim();
+            if (w.kind === 'channel') card.dataset.okLabel = `Watch ${w.label || ''}`.trim();
+            else if (w.kind === 'stream' && w.openable) card.dataset.okLabel = `Watch ${w.label}`;
             if (ok) card._hbOk = ok;
             return card;
         },

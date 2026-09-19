@@ -88,6 +88,47 @@
             });
         };
 
+        // Play on…, for one row: the same glyph, the same picker
+        // (music/playon.js) and the same single-track call shape as the
+        // album page's Play on… button and Now Playing's own cast icon
+        // (playOnPage/playOnHere below) — just scoped to this one track, so
+        // picking a speaker doesn't restart the whole list to reach it.
+        // `playHere` is the row's own tap handler, passed straight through as
+        // "play on this phone", so choosing that from the picker does exactly
+        // what tapping the row does. Sits beside the row like the star, off
+        // by the same canPlayOn() check the page button uses, kept in step
+        // by paintCastRows() rather than torn down and rebuilt per row.
+        const castRowBtn = (t, playHere) => {
+            const ready = canPlayOn();
+            const b = el('button', `mup-track-cast${ready ? '' : ' off'}`, icon('cast'));
+            b.type = 'button';
+            b.setAttribute('aria-label', 'Play on…');
+            b.tabIndex = ready ? 0 : -1;
+            b._playHere = playHere;
+            b.onclick = (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                const p = PO();
+                if (!p || b.classList.contains('off')) return;
+                p.open(document.body, {
+                    tv: false,
+                    item: t,
+                    tracks: [t],
+                    onHere: b._playHere,
+                    onNowPlaying: () => { push('playing'); drawPlaying(); syncSheets(); },
+                });
+            };
+            return b;
+        };
+
+        const paintCastRows = () => {
+            const ready = canPlayOn();
+            document.querySelectorAll('.mu-phone .mup-track-cast').forEach((b) => {
+                b.classList.toggle('off', !ready);
+                b.tabIndex = ready ? 0 : -1;
+            });
+        };
+
         const root = el('div', 'homer-screen mu-phone' + (onRadio ? ' mu-radio-only' : ''));
         root.id = 'mu-root';
         root.style.visibility = 'hidden';
@@ -324,13 +365,15 @@
                         <span class="mup-song-t"><b>${esc(s.name)}</b><i>${esc(s.artist || '')}</i></span>
                         <span class="mup-song-d">${f().clock(s.duration)}</span>`);
                     btn.type = 'button';
-                    btn.onclick = () => {
+                    const playHere = () => {
                         player().play(list, i, { source: { kind: tab, name } });
                         push('playing');
                         drawPlaying();
                         syncSheets();
                     };
+                    btn.onclick = playHere;
                     row.appendChild(btn);
+                    row.appendChild(castRowBtn(s, playHere));
                     row.appendChild(starBtn(s));
                     box.appendChild(row);
                 });
@@ -526,13 +569,15 @@
                     <span class="mup-track-t"><b>${esc(t.name)}</b>${t.artist && t.artist !== it.artist ? `<i>${esc(t.artist)}</i>` : ''}</span>
                     <span class="mup-track-d">${f().clock(t.duration)}</span>`);
                 row.type = 'button';
-                row.onclick = () => {
+                const playHere = () => {
                     player().play(pageTracks, i, { source: { kind: it.kind, id: it.id, name: it.name } });
                     push('playing');
                     drawPlaying();
                     syncSheets();
                 };
+                row.onclick = playHere;
                 line.appendChild(row);
+                line.appendChild(castRowBtn(t, playHere));
                 line.appendChild(starBtn(t));
                 body.appendChild(line);
             });
@@ -1008,7 +1053,7 @@
         // and the device button's highlight — independent of anything HOMER
         // itself is doing.
         const offHA = window.HomerHA && window.HomerHA.onChange
-            ? window.HomerHA.onChange(() => { syncPlayer(); syncPageActs(); if (open === 'playing') syncCastTop(); })
+            ? window.HomerHA.onChange(() => { syncPlayer(); syncPageActs(); paintCastRows(); if (open === 'playing') syncCastTop(); })
             : () => {};
 
         const onKey = (ev) => {

@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- **Every track row on the phone can be sent to a speaker or TV before it
+  plays.** Songs, Favorites, and the tracks inside an album or playlist page
+  each get the same cast icon Now Playing and the album page's Play on…
+  button already use — tap it and the same device picker opens for just that
+  one track, so picking a speaker doesn't mean starting the whole list to
+  reach it. Tapping the row itself still plays it here, same as always. The
+  icon is off the same way the page's Play on… button already is, when Home
+  Assistant or Music Assistant isn't ready.
+- **Sports games that are only on a streaming service now name it and link
+  to it, the same way a card names a TV channel.** A game that isn't on any
+  channel in the lineup — a Peacock- or Prime Video-exclusive game, an
+  ESPN+/ACC Network Extra college game, MLB's Apple TV+ Friday game — shows
+  the service's name and, where it opens on the web, a link to it, instead
+  of sitting there blank or naming a network you can't tune. A channel
+  always wins when there is one; this only ever shows up when there isn't.
+  On the Apple TV app, which can't open an outside site, it just names the
+  service instead of a dead link. Also fixed: a favorite team's game that's
+  exclusively streaming used to sometimes print the streaming service's
+  name as if it were an unresolved TV network ("Apple TV · not tunable") —
+  it gets the proper streaming badge now.
+- **MLB's live scores delay default is 60 seconds now, up from 25.** Jason's
+  broadcast runs closer to a minute behind MLB's own data than the original
+  guess. If you never touched this setting it just moves to 60; if you'd
+  deliberately picked 25 seconds, that choice sticks.
+- **Fixed: a track's Play on… picker said "The whole album, queued"** even
+  when it was sending just that one track (a row's cast icon, or Now
+  Playing's). The device list describes what a speaker does with whatever
+  it's handed, and that text was really about the album page's own Play
+  on… button; a single track now reads "This track" there instead.
+
 ## v0.4.43
 
 - **The Cameras wall is a grid now, not a single row.** Every camera is

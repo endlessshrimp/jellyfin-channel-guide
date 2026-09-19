@@ -509,7 +509,11 @@
                 id: 'sportsdelay', icon: 'timer', label: 'Live scores delay', scope: 'device',
                 desc: 'MLB’s own data can run ahead of a broadcast by a few seconds — long enough to see a home run coming before your TV shows it. This holds the live game, the scores and the ticker back to match. Off shows it the moment the league does, which can beat some streams to a play.',
                 options: () => (SD() ? SD().DELAY_OPTIONS.map((v) => ({ value: v, label: delayLabel(v), sub: v === SD().DELAY_DEFAULT ? 'Suggested' : '' })) : []),
-                current: () => (SD() ? SD().delaySeconds() : 25),
+                // this row is only offered at all once SD() is loaded (see
+                // `offered` below); the 60 here just keeps it in step with
+                // sports-data.js's DELAY_DEFAULT (HOME-62) for the moment
+                // before that
+                current: () => (SD() ? SD().delaySeconds() : 60),
                 matches: (o, v) => o.value === v,
                 // sports-data.js reads this straight from localStorage on every
                 // poll, so a live panel already on screen picks it up on its

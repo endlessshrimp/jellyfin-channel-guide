@@ -144,10 +144,13 @@
 .mup-song-row + .mup-song-row,
 .mup-track-row + .mup-track-row { border-top: 1px solid var(--line, rgba(160, 190, 230, 0.12)); }
 
-/* ---------- The favorite star ---------- */
-/* Jellyfin's own star. 44px so a thumb hits it and not the row behind it. */
+/* ---------- The favorite star, and the row's own Play on… ---------- */
+/* Jellyfin's own star. 44px so a thumb hits it and not the row behind it.
+   The cast button (music-phone.js castRowBtn) shares the same box so it's
+   as easy to hit and doesn't read as a different kind of control. */
 
-.mup-star {
+.mup-star,
+.mup-track-cast {
     flex: none;
     display: inline-flex;
     align-items: center;
@@ -165,9 +168,16 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-.mup-star .material-icons { font-size: inherit; }
+.mup-star .material-icons,
+.mup-track-cast .material-icons { font-size: inherit; }
 .mup-star.on { color: var(--needle, #ffb020); }
-.mup-star:active { background: rgba(255, 255, 255, 0.1); }
+.mup-star:active,
+.mup-track-cast:active { background: rgba(255, 255, 255, 0.1); }
+/* Off the same way the album page's Play on… button is: no Home Assistant
+   or no Music Assistant devices, so nothing to send to. A plain class
+   rather than the [hidden] attribute — an author display rule always beats
+   the UA's [hidden] one, so [hidden] alone would render it anyway. */
+.mup-track-cast.off { display: none; }
 
 .mup-page-star { margin-top: 10px; display: flex; justify-content: center; }
 .mup-page-star .mup-star { width: 52px; height: 52px; font-size: 28px; }
