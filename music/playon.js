@@ -484,8 +484,19 @@
         } else if (!all.length) {
             addRow('none', 'speaker', 'No speakers', 'Nothing here takes music', null, { off: true, dim: true });
         }
+        // d.note describes what the device does with a whole album/playlist
+        // behind it (it's built once in devices(), which has no idea what a
+        // given open() call is actually sending) — right for the album
+        // page's own Play on… button, wrong when this call is really just
+        // one track (a row's cast icon, HOME-7): a device that plays "the
+        // whole album" off an M3U plays a one-track M3U the very same way,
+        // so it's really just this one track, not the whole album, queued
+        // or otherwise. "The first track only" families are unaffected —
+        // that's already true of an album send too.
+        const singleTrack = Array.isArray(opts.tracks) && opts.tracks.length === 1;
         all.forEach((d) => {
-            const bits = [d.note];
+            const note = singleTrack && d.plays === 'all' ? (d.via === 'enqueue' ? 'This track, queued' : 'This track') : d.note;
+            const bits = [note];
             if (d.away) bits.push('not reachable');
             else if (d.busy) bits.push(d.state === 'playing' ? 'playing now' : 'paused mid-something');
             if (d.members.length > 1) bits.push(`${d.members.length} speakers`);

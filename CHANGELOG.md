@@ -26,6 +26,11 @@
   broadcast runs closer to a minute behind MLB's own data than the original
   guess. If you never touched this setting it just moves to 60; if you'd
   deliberately picked 25 seconds, that choice sticks.
+- **Fixed: a track's Play on… picker said "The whole album, queued"** even
+  when it was sending just that one track (a row's cast icon, or Now
+  Playing's). The device list describes what a speaker does with whatever
+  it's handed, and that text was really about the album page's own Play
+  on… button; a single track now reads "This track" there instead.
 
 ## v0.4.43
 
