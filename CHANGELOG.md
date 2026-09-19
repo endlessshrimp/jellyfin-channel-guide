@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **The Cameras wall is a grid now, not a single row.** Every camera is
+  bigger than before — the wall works out how many rows makes the most of
+  the screen (trying every option, one row through one per camera) and
+  still draws each camera in its own real shape, so the doorbell's narrower
+  picture and the bulb cameras' wider ones never get cropped or squeezed.
+  Up and down now move between rows on the remote and keyboard, landing on
+  roughly the same camera you were under.
+
 ## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other
