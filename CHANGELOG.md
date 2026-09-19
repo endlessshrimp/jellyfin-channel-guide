@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Selecting a movie in the Movies grid opens its details page** instead of
+  starting playback straight away — the same as selecting a show already did.
+  The details page has the poster, cast, genre, rating and a More Like This
+  row. Play, Resume and Restart are still right there as the next option over
+  in the Actions strip.
+
 ## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other
