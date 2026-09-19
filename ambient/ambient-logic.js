@@ -15,7 +15,8 @@
  *
  * window.HomerAmbientLogic = { clamp01, mulberry32, fadeMultiplier, sleepPhase,
  *   randRange, pickWeighted, generateNoiseBuffer, formatMinutes, shouldAutoStop,
- *   SLEEP_MINUTES, DISTANCE_PARAMS, PRESETS, ASSETS, validateCatalog }
+ *   SLEEP_MINUTES, DISTANCE_PARAMS, PRESETS, ASSETS, validateCatalog,
+ *   initialSectionState, sectionHeaderSuffix }
  */
 (function (root, factory) {
     var mod = factory();
@@ -113,6 +114,40 @@
         if (min == null) return 'Off';
         if (min === 'chapter') return 'End of chapter';
         return min + ' min';
+    };
+
+    // ---------- Panel sections (collapsible groups, HOME-104 layout pass) ----------
+    //
+    // Pure helpers for ambient-ui.js's collapsible section headers (Storms/
+    // Nature/Noise, Local/Favorites/SomaFM). Per-device remembered
+    // expand/collapse state lives in localStorage (ambient-ui.js), keyed by
+    // section name; these two functions only cover the parts that don't
+    // touch storage or the DOM: the one-time default (before any section has
+    // ever been touched on this device) and a collapsed header's "currently
+    // playing" suffix text.
+
+    // names: the section names actually present (non-empty), in display
+    // order. playingName: the section the active source belongs to, or null
+    // if nothing's playing. Exactly one section starts expanded: the one
+    // that's playing, or (nothing playing, or it's not in `names`) the
+    // first. An empty `names` returns {}.
+    var initialSectionState = function (names, playingName) {
+        var out = {};
+        var list = names || [];
+        list.forEach(function (n) { out[n] = false; });
+        if (!list.length) return out;
+        var pick = (playingName && list.indexOf(playingName) !== -1) ? playingName : list[0];
+        out[pick] = true;
+        return out;
+    };
+
+    // What a collapsed section's header appends after its name when it's the
+    // one actually playing, e.g. "Heavy downpour, close strikes" ->
+    // " — Heavy downpour, close strikes · playing". Falsy label (this isn't
+    // the playing section, or the section is expanded so the row itself
+    // already says "Playing") -> no suffix.
+    var sectionHeaderSuffix = function (playingLabel) {
+        return playingLabel ? ' — ' + playingLabel + ' · playing' : '';
     };
 
     // ---------- Procedural noise ----------
@@ -361,6 +396,8 @@
         shouldAutoStop: shouldAutoStop,
         SLEEP_MINUTES: SLEEP_MINUTES,
         formatMinutes: formatMinutes,
+        initialSectionState: initialSectionState,
+        sectionHeaderSuffix: sectionHeaderSuffix,
         generateNoiseBuffer: generateNoiseBuffer,
         DISTANCE_PARAMS: DISTANCE_PARAMS,
         pickDistance: pickDistance,

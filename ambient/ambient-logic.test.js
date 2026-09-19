@@ -284,4 +284,36 @@ test('a preset with a gusty bed also sets gustEverySec', () => {
     });
 });
 
+// ---------- panel sections (HOME-104 layout pass: collapsible headers) ----------
+
+test('initialSectionState: expands the playing section, collapses the rest', () => {
+    const st = L.initialSectionState(['Storms', 'Nature', 'Noise'], 'Nature');
+    assert.deepStrictEqual(st, { Storms: false, Nature: true, Noise: false });
+});
+
+test('initialSectionState: nothing playing -> the first section expands', () => {
+    const st = L.initialSectionState(['Local', 'Favorites', 'SomaFM'], null);
+    assert.deepStrictEqual(st, { Local: true, Favorites: false, SomaFM: false });
+});
+
+test('initialSectionState: a playing section not in the list falls back to the first', () => {
+    const st = L.initialSectionState(['Storms', 'Nature'], 'SomaFM');
+    assert.deepStrictEqual(st, { Storms: true, Nature: false });
+});
+
+test('initialSectionState: an empty list returns an empty object', () => {
+    assert.deepStrictEqual(L.initialSectionState([], 'Storms'), {});
+    assert.deepStrictEqual(L.initialSectionState(null, null), {});
+});
+
+test('sectionHeaderSuffix: a playing label gets the " — label · playing" suffix', () => {
+    assert.strictEqual(L.sectionHeaderSuffix('Heavy downpour'), ' — Heavy downpour · playing');
+});
+
+test('sectionHeaderSuffix: no label -> no suffix', () => {
+    assert.strictEqual(L.sectionHeaderSuffix(''), '');
+    assert.strictEqual(L.sectionHeaderSuffix(null), '');
+    assert.strictEqual(L.sectionHeaderSuffix(undefined), '');
+});
+
 console.log(`${pass} passed${process.exitCode ? ', see FAILs above' : ''}`);
