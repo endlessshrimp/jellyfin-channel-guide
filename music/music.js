@@ -393,8 +393,17 @@
         };
 
         // ----- views -----
+        // viewFrom holds a whole snapshot per step back, not just the view's
+        // name: album and artist pages own pageItem/pageTracks/pageAlbums, and
+        // without saving those too, backing out of an artist reached from an
+        // album chip (or an album reached from an artist's own wall) would
+        // return to the right view showing the WRONG thing's tracks.
+        const pushHistory = (v) => {
+            if (v === view) return;
+            viewFrom.push({ view, item: pageItem, tracks: pageTracks, albums: pageAlbums });
+        };
         const showView = (v, opts = {}) => {
-            if (v !== view && !opts.back) viewFrom.push(view);
+            if (!opts.back && !opts.pushed) pushHistory(v);
             view = v;
             root.dataset.view = v;
             stage.querySelectorAll('.mu-view').forEach((x) => x.classList.toggle('on', x === viewEl(v)));
@@ -407,8 +416,9 @@
         };
         const back = () => {
             if (view !== 'browse' || viewFrom.length) {
-                const to = viewFrom.pop() || 'browse';
-                showView(to === view ? 'browse' : to, { back: true });
+                const frame = viewFrom.pop() || { view: 'browse' };
+                if ('item' in frame) { pageItem = frame.item; pageTracks = frame.tracks; pageAlbums = frame.albums; }
+                showView(frame.view === view ? 'browse' : frame.view, { back: true });
                 return;
             }
             goBack();
@@ -558,18 +568,58 @@
         const openItem = (it) => {
             if (!it) return;
             if (it.kind === 'station') { playStation(it); return; }
+            // snapshot whatever page we're leaving (if any) before pageItem
+            // is overwritten below, so Back can put it back - see pushHistory
+            if (it.kind === 'album' || it.kind === 'playlist') pushHistory('album');
+            else if (it.kind === 'artist' || it.kind === 'genre') pushHistory('artist');
             pageItem = it;
             pageTracks = null;
             pageAlbums = null;
             if (it.kind === 'album' || it.kind === 'playlist') {
                 remembered.album = null;
-                showView('album');
+                showView('album', { pushed: true });
             } else if (it.kind === 'artist' || it.kind === 'genre') {
                 remembered.artist = null;
-                showView('artist');
+                showView('artist', { pushed: true });
             } else if (it.kind === 'track') {
                 playItem(it);
             }
+        };
+
+        // A name that jumps straight to its own artist/album page - Now
+        // Playing and the album eyebrow chip. Radio's live tracks carry no
+        // Jellyfin ids (the Lidarr "Get it" offer already covers those), so a
+        // name without one just isn't a link.
+        const openArtistById = (id, name) => {
+            if (!id) return;
+            openItem(M().artistById(id) || { kind: 'artist', id, name: name || '' });
+        };
+        const openAlbumById = (id, name) => {
+            if (!id) return;
+            openItem(M().albumById(id) || { kind: 'album', id, name: name || '' });
+        };
+        const artistLinksHtml = (names, ids) => (names || []).map((name, i) => {
+            const id = (ids || [])[i];
+            return id
+                ? `<span class="mu-name-link" data-artist-id="${esc(id)}" data-artist-name="${esc(name)}">${esc(name)}</span>`
+                : esc(name);
+        }).join(', ');
+        const albumLinkHtml = (name, id) => (id
+            ? `<span class="mu-name-link" data-album-id="${esc(id)}" data-album-name="${esc(name)}">${esc(name)}</span>`
+            : esc(name || ''));
+        // Turns the data-artist-id/data-album-id spans a template just
+        // rendered into real remote-focusable targets. Safe to call more than
+        // once on the same box.
+        const wireNameLinks = (box) => {
+            if (!box) return;
+            box.querySelectorAll('[data-artist-id]').forEach((e, i) => {
+                focusable(e, `nl:ar:${e.dataset.artistId}:${i}`,
+                    () => openArtistById(e.dataset.artistId, e.dataset.artistName), 'Open artist');
+            });
+            box.querySelectorAll('[data-album-id]').forEach((e, i) => {
+                focusable(e, `nl:al:${e.dataset.albumId}:${i}`,
+                    () => openAlbumById(e.dataset.albumId, e.dataset.albumName), 'Open album');
+            });
         };
 
         // ============ Browse ============
@@ -947,7 +997,8 @@
                     <div class="mu-pg-acts"></div>
                 </div>
                 <div class="mu-pg-right">
-                    <div class="mu-eyebrow"><span class="mu-chip">${esc(subOf(it))}</span>${starHtml(it)}</div>
+                    <div class="mu-eyebrow"><span class="mu-chip">${it.kind === 'album' && it.artists && it.artists.length
+                        ? artistLinksHtml(it.artists, it.artistIds) : esc(subOf(it))}</span>${starHtml(it)}</div>
                     <h1 class="mu-title">${esc(it.name)}</h1>
                     <div class="mu-pg-sub">${esc(it.kind === 'album' ? it.artist || '' : '')}</div>
                     <div class="mu-meta">${metaOf(it).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
@@ -957,6 +1008,7 @@
                 </div>`;
             box.querySelector('.mu-title').classList.toggle('long', it.name.length > 26);
             bindStar(box.querySelector('.mu-eyebrow'), it);
+            wireNameLinks(box.querySelector('.mu-eyebrow'));
             const acts = box.querySelector('.mu-pg-acts');
             const btn = (key, ic, label, fn, primary) => {
                 const e = el('div', `mu-btn${primary ? ' primary' : ''}`, `${icon(ic)}<span>${esc(label)}</span>`);
@@ -1417,8 +1469,22 @@
                 q('.mu-pl-from').textContent = liveNote(t, np);
                 checkLidarr(t);
             } else {
-                q('.mu-pl-artist').textContent = t.artists.join(', ') || t.artist || '';
-                q('.mu-pl-album').textContent = [t.album, t.year].filter(Boolean).join(' · ');
+                // rebuilt only when the track itself changes, not every tick
+                // - otherwise a focused name would lose its ring a second in
+                const artistBox = q('.mu-pl-artist');
+                if (artistBox.dataset.tid !== t.id) {
+                    artistBox.dataset.tid = t.id;
+                    artistBox.innerHTML = t.artists.length ? artistLinksHtml(t.artists, t.artistIds) : esc(t.artist || '');
+                }
+                const albumBox = q('.mu-pl-album');
+                if (albumBox.dataset.tid !== t.id) {
+                    albumBox.dataset.tid = t.id;
+                    albumBox.innerHTML = t.album
+                        ? albumLinkHtml(t.album, t.albumId) + (t.year ? ` · ${esc(String(t.year))}` : '')
+                        : '';
+                }
+                wireNameLinks(artistBox);
+                wireNameLinks(albumBox);
                 q('.mu-pl-from').textContent = s.source ? `From ${s.source.name} · ${s.index + 1} of ${s.count}` : '';
                 lidarrAsked = '';
                 lidarrState = null;
@@ -1593,10 +1659,10 @@
             if (openWith) {
                 const w = openWith;
                 openWith = null;
-                if (w.np && player().state().track) { view = 'playing'; viewFrom = ['browse']; }
+                if (w.np && player().state().track) { view = 'playing'; viewFrom = [{ view: 'browse' }]; }
                 else if (w.id) {
                     const it = M().find(w.id);
-                    if (it) { pageItem = it; viewFrom = ['browse']; view = (it.kind === 'artist' || it.kind === 'genre') ? 'artist' : 'album'; }
+                    if (it) { pageItem = it; viewFrom = [{ view: 'browse' }]; view = (it.kind === 'artist' || it.kind === 'genre') ? 'artist' : 'album'; }
                 }
             }
             const k = focused ? keyOf(focused) : null;

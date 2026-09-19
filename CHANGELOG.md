@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- **The Cameras wall is a grid now, not a single row.** Every camera is
+  bigger than before — the wall works out how many rows makes the most of
+  the screen (trying every option, one row through one per camera) and
+  still draws each camera in its own real shape, so the doorbell's narrower
+  picture and the bulb cameras' wider ones never get cropped or squeezed.
+  Up and down now move between rows on the remote and keyboard, landing on
+  roughly the same camera you were under.
+- **Selecting a movie in the Movies grid opens its details page** instead of
+  starting playback straight away — the same as selecting a show already did.
+  The details page has the poster, cast, genre, rating and a More Like This
+  row. Play, Resume and Restart are still right there as the next option over
+  in the Actions strip.
+- **Genre badges are clickable.** On a movie or show's page, the grid's own
+  info panel, and the phone layout, clicking (or pressing OK, or tapping) a
+  genre opens Movies or TV Shows filtered to it — the same filter the chip
+  bar at the top of the grid already has, so it shows selected there and
+  clears the usual way. On TV, arrow past the leftmost button to reach the
+  badges with the remote. Music's genres are a different system and aren't
+  part of this.
+- **Artist and album names in Music are links.** On Now Playing (TV and
+  phone), the artist name and the album name each jump to that artist's or
+  album's own page; a track with several artists links each one separately.
+  The artist chip above the title on an album page does the same. Radio still
+  isn't linked - a live station's track has no Jellyfin id to send it to.
+- **Sports and News no longer start playing a channel the moment you open them.**
+  Opening either used to tune ESPN or CNN right away, whether you wanted it or
+  not. Now the TV window just shows the channel waiting there - press OK
+  (click it, or tap) to actually start watching, same as picking any other
+  game or channel.
+
 ## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other

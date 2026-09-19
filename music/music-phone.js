@@ -372,6 +372,38 @@
                 drawPage();
             }).catch(() => { if (pageItem === it) { pageTracks = []; drawPage(); } });
         };
+        // A name that jumps straight to its own artist/album page - Now
+        // Playing and the album page's artist line. Radio's live tracks
+        // carry no Jellyfin ids (the Lidarr "Get it" offer already covers
+        // those), so a name without one just isn't a link.
+        const openArtistById = (id, name) => {
+            if (!id) return;
+            showPage(M().artistById(id) || { kind: 'artist', id, name: name || '' });
+        };
+        const openAlbumById = (id, name) => {
+            if (!id) return;
+            showPage(M().albumById(id) || { kind: 'album', id, name: name || '' });
+        };
+        const artistLinksHtml = (names, ids) => (names || []).map((name, i) => {
+            const id = (ids || [])[i];
+            return id
+                ? `<span class="mup-name-link" data-artist-id="${esc(id)}" data-artist-name="${esc(name)}">${esc(name)}</span>`
+                : esc(name);
+        }).join(', ');
+        const albumLinkHtml = (name, id) => (id
+            ? `<span class="mup-name-link" data-album-id="${esc(id)}" data-album-name="${esc(name)}">${esc(name)}</span>`
+            : esc(name || ''));
+        // Wires up the spans a template just rendered with real taps; safe to
+        // call more than once on the same box.
+        const wireNameLinks = (box) => {
+            if (!box) return;
+            box.querySelectorAll('[data-artist-id]').forEach((e) => {
+                e.onclick = (ev) => { ev.stopPropagation(); openArtistById(e.dataset.artistId, e.dataset.artistName); };
+            });
+            box.querySelectorAll('[data-album-id]').forEach((e) => {
+                e.onclick = (ev) => { ev.stopPropagation(); openAlbumById(e.dataset.albumId, e.dataset.albumName); };
+            });
+        };
         const playPage = (shuffle) => {
             const it = pageItem;
             if (!it) return;
@@ -449,7 +481,8 @@
                     <div class="mup-page-head">
                         <div class="mup-page-art${it.kind === 'artist' ? ' round' : ''}">${artImg(it, 600, 'mu-img')}</div>
                         <h1>${esc(it.name)}</h1>
-                        <div class="mup-page-sub">${esc(it.kind === 'album' ? it.artist || '' : subOf(it))}</div>
+                        <div class="mup-page-sub">${it.kind === 'album' && it.artists && it.artists.length
+                            ? artistLinksHtml(it.artists, it.artistIds) : esc(it.kind === 'album' ? it.artist || '' : subOf(it))}</div>
                         <div class="mup-page-meta">${metaOf(it).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
                         <div class="mup-page-star"></div>
                         <div class="mup-page-acts">
@@ -463,6 +496,7 @@
                 </div>`;
             box.querySelector('.mup-back').onclick = closeSheet;
             box.querySelector('.mup-page-star').appendChild(starBtn(it));
+            wireNameLinks(box.querySelector('.mup-page-sub'));
             box.querySelector('[data-a="play"]').onclick = () => playPage(false);
             box.querySelector('[data-a="shuffle"]').onclick = () => playPage(true);
             box.querySelector('[data-a="mix"]').onclick = mixPage;
@@ -736,9 +770,19 @@
             const live = s.track.live;
             const np = live ? liveNow[s.track.stationId] : null;
             q('.mup-np-t').textContent = s.track.name;
-            q('.mup-np-a').textContent = live
-                ? (np && (np.title || np.artist) ? [np.artist, np.title].filter(Boolean).join(' — ') : (s.track.artist || ''))
-                : [s.track.artist, s.track.album].filter(Boolean).join(' · ');
+            const artistBox = q('.mup-np-a');
+            if (live) {
+                artistBox.textContent = np && (np.title || np.artist)
+                    ? [np.artist, np.title].filter(Boolean).join(' — ') : (s.track.artist || '');
+            } else if (artistBox.dataset.tid !== s.track.id) {
+                // rebuilt only when the track itself changes, not every tick
+                artistBox.dataset.tid = s.track.id;
+                const names = s.track.artists && s.track.artists.length
+                    ? artistLinksHtml(s.track.artists, s.track.artistIds) : esc(s.track.artist || '');
+                const album = s.track.album ? albumLinkHtml(s.track.album, s.track.albumId) : '';
+                artistBox.innerHTML = [names, album].filter(Boolean).join(' · ');
+                wireNameLinks(artistBox);
+            }
             if (live) checkLidarr(s.track); else { lidarrAsked = ''; lidarrState = null; }
             paintLidarrSection();
             const dur = s.duration || (live ? 0 : s.track.duration) || 0;

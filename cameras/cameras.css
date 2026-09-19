@@ -18,25 +18,37 @@
 .hc-waiting .hc-body,
 .hc-waiting .hc-view { visibility: hidden; }
 
-/* One row, each tile the shape of its own camera's real picture (--ar, set
-   once a still or stream has loaded — see shared/homeassistant.js keepStill
-   and playCamera — 16:9 until then). A tile is exactly as wide as its height
-   times that ratio, so nothing is ever cropped or stretched to fit a cell;
-   centered as a group so three cameras or four both sit properly on the
-   wall, and a fifth needs no new CSS. Only if they'd overflow the width does
-   the row shrink them, evenly, still at their own shape. */
+/* A grid, not a single row: cameras.js's fitWall() decides how many rows
+   make every camera as big as possible (see the packWall() comment there),
+   then builds one .hc-row per row and sets each tile's height in pixels —
+   the row's own shared height, since rows can differ from each other when
+   the cameras don't share a shape. A tile stays the shape of its own
+   camera's real picture (--ar, set once a still or stream has loaded — see
+   shared/homeassistant.js keepStill and playCamera — 16:9 until then); it's
+   exactly as wide as its height times that ratio, so nothing is ever
+   cropped or stretched to fit a cell. Both gaps here are read back by
+   fitWall() (as the wall's row-gap) and reused as every row's column-gap,
+   so the two stay equal without hand-copying a number. */
 .hc-wall {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 22px;
     height: 100%;
 }
 
+.hc-row {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+}
+
 .hc-tile {
     position: relative;
-    flex: 0 1 auto;
-    height: 100%;
+    flex: 0 0 auto;
     aspect-ratio: var(--ar, 16 / 9);
     border-radius: 16px;
     overflow: hidden;

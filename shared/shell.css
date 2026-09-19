@@ -339,6 +339,27 @@
     color: #cfe9ff;
 }
 
+/* a genre badge is a real button (opens that genre's library): reset the
+   defaults a <button> brings, and give it the same focus language as the
+   filter chips it sets (library/library.js) */
+button.hl-chip.genre {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+button.hl-chip.genre:hover { background: rgba(47, 140, 255, 0.24); }
+
+button.hl-chip.genre.foc,
+button.hl-chip.genre:focus-visible {
+    background: var(--focus-fill);
+    border-color: transparent;
+    color: var(--focus-text, #1d1200);
+    outline: none;
+}
+
 /* ---------- Buttons (focus: the remote's highlight) ---------- */
 
 .hl-btn,

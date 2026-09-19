@@ -900,6 +900,27 @@
     text-overflow: ellipsis;
 }
 
+/* ---------- Clickable artist/album names (Now Playing, the album chip) --- */
+.mu-name-link {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0 4px;
+    margin: 0 -4px;
+    text-decoration-line: underline;
+    text-decoration-color: rgba(244, 247, 251, 0.35);
+    text-underline-offset: 3px;
+    transition: color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.mu-name-link:hover { color: #fff; text-decoration-color: currentColor; }
+
+.mu-name-link.focus {
+    background: var(--focus-fill);
+    box-shadow: var(--focus-ring);
+    color: #fff;
+    text-decoration: none;
+}
+
 .mu-pl-from {
     margin-top: auto;
     font-family: var(--cond);

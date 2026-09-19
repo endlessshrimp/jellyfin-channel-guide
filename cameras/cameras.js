@@ -340,15 +340,6 @@
                 <div class="hc-tile-note"></div>
             </div>`;
 
-        // The wall's own height (--ar and flex-shrink alone can't do this
-        // together): flexbox only shrinks a percentage-height item's WIDTH
-        // when a row doesn't fit, which leaves the height wherever it was —
-        // that squashes every tile out of its real shape instead of keeping
-        // it. So the height comes from here instead: each tile at the
-        // wall's full height, its own real ratio (--ar, 16:9 until known);
-        // if that's wider than the wall, one shared height — still fit to
-        // every tile's own shape — that makes them all fit, is used
-        // instead, so the row is never wider than the screen.
         // The declared aspect-ratio (--ar, or the 16:9 fallback) read back as
         // a plain number — what both fits below size their boxes to.
         const ratioOf = (el) => {
@@ -357,20 +348,94 @@
             return isFinite(r) && r > 0 ? r : 16 / 9;
         };
 
+        // Fit every camera's box, in its own real shape, into the wall —
+        // maximized, not just laid out. One row (the old behavior) wastes
+        // space once there are more than a couple of cameras: it can only
+        // grow tiles until the row is as wide as the wall, and whatever
+        // height that leaves unused just sits there empty. So this tries
+        // every row count from one camera per row up to one row for
+        // everyone, splitting the cameras (in their existing order, doorbell
+        // first) into that many rows as evenly as sizes allow, and asks each
+        // arrangement the same question: if every row is justified edge to
+        // edge at its own shared height (a row of 16:9s and a row with the
+        // 4:3 doorbell naturally come out different heights), and then, only
+        // if the rows added together would spill past the wall's height,
+        // every row is shrunk by the same fraction so they don't — how big
+        // does that make the smallest camera? The arrangement with the
+        // biggest "smallest camera" wins; a tie (rare with mixed ratios)
+        // goes to whichever also puts the most total picture on screen.
+        // Recomputed on resize and whenever a camera's --ar changes shape
+        // (fitWall's callers already retry a few times for that).
+        const packWall = (ratios, availW, availH, gap) => {
+            const n = ratios.length;
+            let best = null;
+            for (let rows = 1; rows <= n; rows++) {
+                const base = Math.floor(n / rows);
+                const extra = n % rows;
+                const groups = [];
+                let at = 0;
+                for (let r = 0; r < rows; r++) {
+                    const size = base + (r < extra ? 1 : 0);
+                    if (!size) continue;
+                    groups.push(ratios.slice(at, at + size));
+                    at += size;
+                }
+                const rowInfo = groups.map((g) => ({
+                    count: g.length,
+                    ratios: g,
+                    naturalH: (availW - gap * (g.length - 1)) / g.reduce((s, r) => s + r, 0)
+                }));
+                const naturalTotal = rowInfo.reduce((s, r) => s + r.naturalH, 0) + gap * (rowInfo.length - 1);
+                const scale = naturalTotal > availH ? availH / naturalTotal : 1;
+                let minArea = Infinity;
+                let totalArea = 0;
+                const outRows = rowInfo.map((r) => {
+                    const h = Math.max(0, r.naturalH * scale);
+                    r.ratios.forEach((ratio) => {
+                        const area = h * h * ratio;
+                        if (area < minArea) minArea = area;
+                        totalArea += area;
+                    });
+                    return { count: r.count, height: h };
+                });
+                // a hair of tolerance so a near-identical arrangement doesn't
+                // win purely on floating-point noise
+                if (!best || minArea > best.minArea * 1.001
+                    || (minArea > best.minArea * 0.999 && totalArea > best.totalArea)) {
+                    best = { rows: outRows, minArea, totalArea };
+                }
+            }
+            return best || { rows: [{ count: n, height: availH }] };
+        };
+
+        let wallRows = []; // how many tiles are in each row, for up/down between rows
+
         const fitWall = () => {
             const wall = $('.hc-wall');
             const els = $$('.hc-tile');
-            if (!wall || !els.length) return;
-            const maxH = wall.clientHeight;
+            if (!wall) return;
+            if (!els.length) { wallRows = []; return; }
+            const availH = wall.clientHeight;
             const availW = wall.clientWidth;
-            if (!maxH || !availW) return;
-            const oneGap = parseFloat(getComputedStyle(wall).columnGap) || 22;
-            const gap = oneGap * (els.length - 1);
+            if (!availH || !availW) return;
+            const gap = parseFloat(getComputedStyle(wall).rowGap) || 22;
             const ratios = els.map(ratioOf);
-            const ratioSum = ratios.reduce((s, r) => s + r, 0);
-            const naturalW = maxH * ratioSum + gap;
-            const h = naturalW > availW ? Math.max(0, (availW - gap) / ratioSum) : maxH;
-            els.forEach((t) => { t.style.height = h + 'px'; });
+            const pack = packWall(ratios, availW, availH, gap);
+            const frag = document.createDocumentFragment();
+            let idx = 0;
+            pack.rows.forEach((row) => {
+                const rowEl = el('div', 'hc-row');
+                rowEl.style.gap = gap + 'px';
+                for (let k = 0; k < row.count; k++) {
+                    const t = els[idx++];
+                    t.style.height = row.height + 'px';
+                    rowEl.appendChild(t); // moves the existing node — its image/video/listeners are untouched
+                }
+                frag.appendChild(rowEl);
+            });
+            wall.innerHTML = '';
+            wall.appendChild(frag);
+            wallRows = pack.rows.map((r) => r.count);
         };
 
         // Same idea, one box: a grid item with only `aspect-ratio` and no
@@ -840,11 +905,20 @@
                 const n = tiles.length;
                 if (!n) { if (dy < 0) setZone('tabs'); return; }
                 if (dy) {
-                    // the wall is a grid: down/up move about a row at a time
-                    const cols = Math.max(1, Math.round(Math.sqrt(n)));
+                    // the wall is a real grid now (packWall's rows can differ
+                    // in length row to row), so up/down uses wallRows rather
+                    // than guessing a column count: find which row `sel` is
+                    // in and how far along it, then land on the same column
+                    // (clamped) in the row above/below.
+                    const rows = wallRows.length ? wallRows : [n];
+                    let row = 0, col = sel;
+                    for (; row < rows.length - 1 && col >= rows[row]; row++) col -= rows[row];
                     // ▲ off the top row goes up to the House tabs
-                    if (dy < 0 && sel < cols) { setZone('tabs'); return; }
-                    sel = clamp(sel + dy * cols, 0, n - 1);
+                    if (dy < 0 && row === 0) { setZone('tabs'); return; }
+                    const nextRow = clamp(row + dy, 0, rows.length - 1);
+                    let base = 0;
+                    for (let r = 0; r < nextRow; r++) base += rows[r];
+                    sel = clamp(base + clamp(col, 0, rows[nextRow] - 1), 0, n - 1);
                 } else sel = clamp(sel + dx, 0, n - 1);
                 paintWall();
                 updateLegend();
