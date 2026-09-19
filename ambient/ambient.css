@@ -18,6 +18,20 @@
     user-select: none;
 }
 
+/* HOME-104 layout pass: this file never set box-sizing, so every padded box
+   in the panel (the sheet itself, rows, sliders, chips…) rendered wider than
+   its declared width by exactly its own horizontal padding under the
+   browser default content-box — the sheet's own
+   `width: calc(760px * var(--am-s)) + max-width: calc(100vw - 32px)` plus
+   its `padding: 28px` is the one that actually pushed the panel wider than
+   the viewport. Every other HOMER module that pads a sized box already sets
+   this (books.css, shared/alerts.css, shared/phone.css, shared/hub.css) —
+   ambient.css was the one screen that never did. This is the real fix for
+   the horizontal-scroll bug; the overflow-x: hidden on .am-body below is
+   belt-and-braces on top of it. */
+#am-root,
+#am-root * { box-sizing: border-box; }
+
 #am-root[hidden] { display: none; }
 
 #am-root .am-scrim {
@@ -113,6 +127,7 @@
 #am-root .am-body {
     flex: 1 1 auto;
     overflow-y: auto;
+    overflow-x: hidden; /* belt-and-braces: see the box-sizing note above for the real cause. Setting overflow-y alone (nothing for -x) makes the UA compute overflow-x as auto too (CSS Overflow §3), which is what actually made this horizontally scrollable once anything was even a hair wider than the box. */
     overscroll-behavior: contain;
     scrollbar-width: none;
     padding-right: calc(4px * var(--am-s, 1));
@@ -120,6 +135,10 @@
 
 #am-root .am-body::-webkit-scrollbar { width: 0; height: 0; }
 
+/* A plain, non-interactive section label — still used for "Sleep timer",
+   which isn't one of the collapsible sections. The sources/stations groups
+   use .am-section-head below instead (HOME-104 layout pass: those became
+   focusable, collapsible rows). */
 #am-root .am-group {
     margin: calc(14px * var(--am-s, 1)) 0 calc(6px * var(--am-s, 1));
     font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
@@ -131,6 +150,64 @@
 }
 
 #am-root .am-group:first-child { margin-top: 0; }
+
+/* Collapsible section headers (Storms/Nature/Noise, Local/Favorites/SomaFM)
+   — every group is now a focusable row of its own so ▲▼/OK and a click/tap
+   can toggle it, matching .am-row's focus model). */
+#am-root .am-section-head {
+    display: flex;
+    align-items: center;
+    gap: calc(8px * var(--am-s, 1));
+    margin: calc(14px * var(--am-s, 1)) 0 calc(6px * var(--am-s, 1));
+    padding: calc(6px * var(--am-s, 1)) calc(10px * var(--am-s, 1));
+    border-radius: calc(8px * var(--am-s, 1));
+    cursor: pointer;
+}
+
+#am-root .am-section-head:first-child { margin-top: 0; }
+
+#am-root .am-caret {
+    flex: 0 0 auto;
+    font-size: calc(13px * var(--am-s, 1));
+    color: var(--homer-faint, #5a6f89);
+}
+
+#am-root .am-section-title {
+    flex: 0 0 auto;
+    font-family: var(--homer-font-cond, "Barlow Semi Condensed", sans-serif);
+    font-size: calc(16px * var(--am-s, 1));
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--homer-faint, #5a6f89);
+}
+
+/* the "— <label> · playing" suffix on a collapsed-but-active section's
+   header (ambient-logic.js's sectionHeaderSuffix) — not uppercase/tracked
+   like the section name, and the one thing here that can be a long station
+   name, so it's the one that ellipsizes rather than the row. */
+#am-root .am-section-suffix {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--homer-font, "Barlow", "Segoe UI", Roboto, sans-serif);
+    font-size: calc(15px * var(--am-s, 1));
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--homer-dim, #8ea3bd);
+}
+
+#am-root .am-section-head.sel {
+    background: var(--homer-focus-fill, linear-gradient(180deg, #3a95ff, #1c64d8));
+    box-shadow: var(--homer-focus-ring, 0 0 0 3px #fff, 0 10px 30px rgba(47, 140, 255, 0.55));
+}
+
+#am-root .am-section-head.sel .am-caret,
+#am-root .am-section-head.sel .am-section-title,
+#am-root .am-section-head.sel .am-section-suffix { color: #fff; }
 
 #am-root .am-row {
     display: flex;
@@ -192,7 +269,14 @@
 
 /* ---------- Sliders ---------- */
 
-#am-root .am-sliders { margin-top: calc(16px * var(--am-s, 1)); }
+/* HOME-104 layout pass: the mixer moved to the top of the panel, above the
+   sources/stations list, so the sources are second now — a bottom
+   border-and-gap stands in for the top margin this used to have. */
+#am-root .am-sliders {
+    margin-bottom: calc(18px * var(--am-s, 1));
+    padding-bottom: calc(16px * var(--am-s, 1));
+    border-bottom: 1px solid var(--homer-line, rgba(160, 190, 230, 0.12));
+}
 
 #am-root .am-slider { margin-bottom: calc(14px * var(--am-s, 1)); }
 #am-root .am-slider.dim { opacity: 0.45; }
@@ -210,6 +294,11 @@
 #am-root .am-slider-track {
     position: relative;
     height: calc(14px * var(--am-s, 1));
+    /* the handle is 26px wide and centered on its position (margin-left:
+       -13px), so at 0%/100% it would otherwise overhang the track — and the
+       panel's own edge — by half its width on either side. This margin
+       reserves that room instead of letting it bleed out. */
+    margin: 0 calc(13px * var(--am-s, 1));
     border-radius: calc(999px * var(--am-s, 1));
     background: rgba(255, 255, 255, 0.1);
     cursor: pointer;

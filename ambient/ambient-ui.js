@@ -10,12 +10,20 @@
  * strip (hold OK, or M on a keyboard) — registered here as a global action so
  * Music gets it too without editing music.js.
  *
- * Nav: ▲▼ moves between rows (sources, the two sliders, sleep, Stop);
- * ◀▶ adjusts a slider or the sleep choice; Enter/OK plays a source or (on a
- * slider) does nothing special — arrows are how a slider moves. Mouse/touch:
- * click a source row; drag or click-to-position a slider; tap a sleep chip.
- * Esc/Backspace, or a click on the scrim, closes it. The book/music keeps
+ * Nav: ▲▼ moves between rows (the two sliders, section headers and — inside
+ * an expanded one — its sources, sleep, Stop); ◀▶ adjusts a slider or the
+ * sleep choice; Enter/OK plays a source, toggles a section header open/
+ * closed, or (on a slider) does nothing special — arrows are how a slider
+ * moves. A collapsed section's rows are never in the DOM, so ▲▼ skips them
+ * without any special-casing. Mouse/touch: click a source row or a section
+ * header; drag or click-to-position a slider; tap a sleep chip. Esc/
+ * Backspace, or a click on the scrim, closes it. The book/music keeps
  * playing underneath the whole time — this never pauses it.
+ *
+ * Sections (Storms/Nature/Noise, Local/Favorites/SomaFM) remember expanded/
+ * collapsed per section, per device (localStorage, HOME-104 layout pass) —
+ * see the "Section collapse/expand" comment below for the default before
+ * any of that exists yet.
  *
  * window.HomerAmbient = { open, close, toggle, isOpen, destroy, version }
  */
@@ -34,6 +42,7 @@
 
     const AM = () => window.HomerAmbientModel || null;
     const RM = () => window.HomerRadioModel || null;
+    const L = window.HomerAmbientLogic; // pure helpers: initialSectionState, sectionHeaderSuffix
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const icon = (n) => `<span class="material-icons" aria-hidden="true">${n}</span>`;
     const isTyping = (t) => {
@@ -67,8 +76,8 @@
             <div class="am-head">${icon('cloud')}<span>Ambience</span><span class="am-head-sub">background sound alongside the book</span><span class="am-close" role="button" aria-label="Close">${icon('close')}</span></div>
             <div class="am-hint" hidden></div>
             <div class="am-body">
-                <div class="am-list"></div>
                 <div class="am-sliders"></div>
+                <div class="am-list"></div>
                 <div class="am-sleep"></div>
             </div>
             <div class="am-foot">
@@ -155,6 +164,77 @@
     let sel = 0;
     let renderTimer = null;
 
+    // ---------- Section collapse/expand (HOME-104 layout pass) ----------
+    //
+    // Storms/Nature/Noise and Local/Favorites/SomaFM are each a collapsible
+    // section now. Per-device state, namespaced like the rest of this
+    // feature's remembered settings (ambient-model.js's homer-ambient-*).
+    // `sectionState` is null until the first caret is ever touched on this
+    // device — while it's null, render() recomputes a default fresh every
+    // time (ambient-logic.js's initialSectionState, mirroring what's
+    // actually playing), so it keeps tracking playback — including a radio
+    // station that's still loading in when the panel first opens — right up
+    // until the user makes their own choice. The first toggle freezes that
+    // moment's picture into a real preference and it's remembered from then
+    // on (see toggleSection below).
+    const SECTIONS_KEY = 'homer-ambient-sections';
+    const loadSectionState = () => {
+        try { const v = localStorage.getItem(SECTIONS_KEY); return v ? JSON.parse(v) : null; } catch { return null; }
+    };
+    const saveSectionState = (v) => {
+        try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(v)); } catch { /* full or blocked */ }
+    };
+    let sectionState = loadSectionState();
+
+    // Which sections actually have anything in them right now (order:
+    // presets' Storms/Nature/Noise, then radio's Local/Favorites/SomaFM —
+    // same order the list has always rendered in), and which one (if any)
+    // holds the currently-playing source. Shared by render() and a caret
+    // toggle so the two never compute this differently.
+    const computeSections = (model) => {
+        const cur = model.current();
+        const presets = model.presets();
+        const radios = model.radioSources();
+        const byRadioGroup = {};
+        radios.forEach((r) => { (byRadioGroup[r.group] = byRadioGroup[r.group] || []).push(r); });
+        const sectionDefs = [];
+        ['Storms', 'Nature', 'Noise'].forEach((g) => {
+            if (presets[g] && presets[g].length) sectionDefs.push({ name: g, rows: presets[g] });
+        });
+        ['Local', 'Favorites', 'SomaFM'].forEach((g) => {
+            if (byRadioGroup[g] && byRadioGroup[g].length) sectionDefs.push({ name: g, rows: byRadioGroup[g] });
+        });
+        let playingSection = null;
+        if (cur.active) {
+            sectionDefs.forEach((s) => {
+                if (s.rows.some((r) => r.kind === cur.sourceKind && r.id === cur.sourceId)) playingSection = s.name;
+            });
+        }
+        return { cur, presets, radios, sectionDefs, playingSection };
+    };
+
+    const toggleSection = (name) => {
+        const model = AM();
+        if (!model) return;
+        const { sectionDefs, playingSection } = computeSections(model);
+        const presentNames = sectionDefs.map((s) => s.name);
+        const base = sectionState || L.initialSectionState(presentNames, playingSection);
+        sectionState = Object.assign({}, base, { [name]: !base[name] });
+        saveSectionState(sectionState);
+        render();
+    };
+
+    const sectionHead = (name, expanded, playingLabel) => {
+        const h = document.createElement('div');
+        h.className = 'am-section-head' + (expanded ? ' open' : '');
+        h.dataset.section = name;
+        const suffix = (!expanded && playingLabel) ? L.sectionHeaderSuffix(playingLabel) : '';
+        h.innerHTML = `<span class="am-caret" aria-hidden="true">${expanded ? '▾' : '▸'}</span><span class="am-section-title">${esc(name)}</span><span class="am-section-suffix">${esc(suffix)}</span>`;
+        h._ok = () => toggleSection(name);
+        h._move = () => false;
+        return h;
+    };
+
     const setFocus = (i, opts = {}) => {
         if (!items.length) return;
         sel = Math.max(0, Math.min(items.length - 1, i));
@@ -179,20 +259,13 @@
         return row;
     };
 
-    const group = (title) => {
-        const h = document.createElement('div');
-        h.className = 'am-group';
-        h.textContent = title;
-        return h;
-    };
-
     // opts.reset=false (the once-a-second tick, for the sleep countdown and
     // "Playing" tags): rebuilds the same content but keeps whatever the user
     // was looking at — otherwise every tick yanked the list back to the top.
     const render = (opts = {}) => {
         const model = AM();
         if (!model) return;
-        const cur = model.current();
+        const { cur, presets, radios, sectionDefs, playingSection } = computeSections(model);
         const body = layer.querySelector('.am-body');
         const prevScroll = body ? body.scrollTop : 0;
 
@@ -207,42 +280,9 @@
             hintEl.hidden = true;
         }
 
-        // sources
-        listEl.innerHTML = '';
         items = [];
-        const presets = model.presets();
-        ['Storms', 'Nature', 'Noise'].forEach((g) => {
-            if (!presets[g] || !presets[g].length) return;
-            listEl.appendChild(group(g));
-            presets[g].forEach((p) => {
-                const isActive = cur.active && cur.sourceKind === 'preset' && cur.sourceId === p.id;
-                const row = sourceRow(p, isActive);
-                listEl.appendChild(row);
-                items.push(row);
-            });
-        });
-        const radios = model.radioSources();
-        const byGroup = {};
-        radios.forEach((r) => { (byGroup[r.group] = byGroup[r.group] || []).push(r); });
-        ['Local', 'Favorites', 'SomaFM'].forEach((g) => {
-            if (!byGroup[g] || !byGroup[g].length) return;
-            listEl.appendChild(group(g));
-            byGroup[g].forEach((r) => {
-                const isActive = cur.active && cur.sourceKind === 'radio' && cur.sourceId === r.id;
-                const row = sourceRow(r, isActive);
-                listEl.appendChild(row);
-                items.push(row);
-            });
-        });
-        if (!items.length) {
-            const empty = document.createElement('div');
-            empty.className = 'am-empty';
-            empty.textContent = radios.length === 0 && Object.keys(presets).length === 0
-                ? 'Nothing to play yet.' : 'Loading stations…';
-            listEl.appendChild(empty);
-        }
 
-        // sliders
+        // ---- mixer (HOME-104 layout pass: moved above the sources list) ----
         slidersEl.innerHTML = '';
         const fgLabel = cur.foregroundKind === 'music' ? 'Music volume' : 'Book volume';
         const fgSlider = makeSlider(slidersEl, 'vol-fg', fgLabel,
@@ -254,6 +294,34 @@
             () => AM().current().ambientVolume,
             (v) => AM().setAmbientVolume(v));
         items.push(ambSlider);
+
+        // ---- sources, grouped into collapsible sections ----
+        listEl.innerHTML = '';
+        const presentNames = sectionDefs.map((s) => s.name);
+        // sectionState is null until the first-ever toggle on this device —
+        // until then, mirror what's playing (see the note by its
+        // declaration above).
+        const shownState = sectionState || L.initialSectionState(presentNames, playingSection);
+        sectionDefs.forEach((s) => {
+            const expanded = !!shownState[s.name];
+            const head = sectionHead(s.name, expanded, playingSection === s.name ? cur.sourceLabel : '');
+            listEl.appendChild(head);
+            items.push(head);
+            if (!expanded) return; // collapsed: its rows are never in the DOM, so focus can't land on them and ▲▼ skips straight past
+            s.rows.forEach((r) => {
+                const isActive = cur.active && cur.sourceKind === r.kind && cur.sourceId === r.id;
+                const row = sourceRow(r, isActive);
+                listEl.appendChild(row);
+                items.push(row);
+            });
+        });
+        if (!sectionDefs.length) {
+            const empty = document.createElement('div');
+            empty.className = 'am-empty';
+            empty.textContent = radios.length === 0 && Object.keys(presets).length === 0
+                ? 'Nothing to play yet.' : 'Loading stations…';
+            listEl.appendChild(empty);
+        }
 
         // sleep timer
         sleepEl.innerHTML = '<div class="am-group">Sleep timer</div>';
@@ -337,7 +405,7 @@
     const onClick = (ev) => {
         if (ev.target.closest('.am-close')) { closePanel(); return; }
         if (ev.target.closest('.am-sheet')) {
-            const row = ev.target.closest('.am-source, .am-off');
+            const row = ev.target.closest('.am-source, .am-off, .am-section-head');
             if (row && typeof row._ok === 'function') { row._ok(); }
             return;
         }
