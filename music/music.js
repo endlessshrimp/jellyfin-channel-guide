@@ -393,8 +393,17 @@
         };
 
         // ----- views -----
+        // viewFrom holds a whole snapshot per step back, not just the view's
+        // name: album and artist pages own pageItem/pageTracks/pageAlbums, and
+        // without saving those too, backing out of an artist reached from an
+        // album chip (or an album reached from an artist's own wall) would
+        // return to the right view showing the WRONG thing's tracks.
+        const pushHistory = (v) => {
+            if (v === view) return;
+            viewFrom.push({ view, item: pageItem, tracks: pageTracks, albums: pageAlbums });
+        };
         const showView = (v, opts = {}) => {
-            if (v !== view && !opts.back) viewFrom.push(view);
+            if (!opts.back && !opts.pushed) pushHistory(v);
             view = v;
             root.dataset.view = v;
             stage.querySelectorAll('.mu-view').forEach((x) => x.classList.toggle('on', x === viewEl(v)));
@@ -407,8 +416,9 @@
         };
         const back = () => {
             if (view !== 'browse' || viewFrom.length) {
-                const to = viewFrom.pop() || 'browse';
-                showView(to === view ? 'browse' : to, { back: true });
+                const frame = viewFrom.pop() || { view: 'browse' };
+                if ('item' in frame) { pageItem = frame.item; pageTracks = frame.tracks; pageAlbums = frame.albums; }
+                showView(frame.view === view ? 'browse' : frame.view, { back: true });
                 return;
             }
             goBack();
@@ -558,15 +568,19 @@
         const openItem = (it) => {
             if (!it) return;
             if (it.kind === 'station') { playStation(it); return; }
+            // snapshot whatever page we're leaving (if any) before pageItem
+            // is overwritten below, so Back can put it back - see pushHistory
+            if (it.kind === 'album' || it.kind === 'playlist') pushHistory('album');
+            else if (it.kind === 'artist' || it.kind === 'genre') pushHistory('artist');
             pageItem = it;
             pageTracks = null;
             pageAlbums = null;
             if (it.kind === 'album' || it.kind === 'playlist') {
                 remembered.album = null;
-                showView('album');
+                showView('album', { pushed: true });
             } else if (it.kind === 'artist' || it.kind === 'genre') {
                 remembered.artist = null;
-                showView('artist');
+                showView('artist', { pushed: true });
             } else if (it.kind === 'track') {
                 playItem(it);
             }
@@ -1645,10 +1659,10 @@
             if (openWith) {
                 const w = openWith;
                 openWith = null;
-                if (w.np && player().state().track) { view = 'playing'; viewFrom = ['browse']; }
+                if (w.np && player().state().track) { view = 'playing'; viewFrom = [{ view: 'browse' }]; }
                 else if (w.id) {
                     const it = M().find(w.id);
-                    if (it) { pageItem = it; viewFrom = ['browse']; view = (it.kind === 'artist' || it.kind === 'genre') ? 'artist' : 'album'; }
+                    if (it) { pageItem = it; viewFrom = [{ view: 'browse' }]; view = (it.kind === 'artist' || it.kind === 'genre') ? 'artist' : 'album'; }
                 }
             }
             const k = focused ? keyOf(focused) : null;
