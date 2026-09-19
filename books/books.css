@@ -972,11 +972,13 @@
 .bk-lv-ctl {
     margin-top: auto;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 22px;
+    row-gap: 16px;
 }
 
-.bk-lv-gap { flex: 1; }
+.bk-lv-gap { flex: 1 1 0; min-width: 0; }
 
 .bk-round {
     width: 92px;
@@ -1014,6 +1016,7 @@
 .bk-pill {
     height: 80px;
     min-width: 150px;
+    max-width: 300px;
     padding: 0 28px;
     display: flex;
     flex-direction: column;
@@ -1035,7 +1038,18 @@
     color: var(--dim);
 }
 
-.bk-pill-v { font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* a station name (the Ambience pill's value) can be long — HOME-104 layout
+   pass: ellipsize inside the pill rather than growing it (which is what
+   pushed .bk-lv-ctl over the edge at narrow widths); the full name is on
+   the pill's own title attribute (books.js). */
+.bk-pill-v {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 27px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
 .bk-pill.set { border-color: rgba(255, 176, 32, 0.6); }
 .bk-pill.set .bk-pill-v { color: var(--needle); }
 

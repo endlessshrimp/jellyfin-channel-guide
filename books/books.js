@@ -721,7 +721,11 @@
             const amb = AM && AM.current();
             const ambPill = q('[data-k="ambience"]');
             if (ambPill) {
-                ambPill.querySelector('.bk-pill-v').textContent = amb && amb.active ? amb.sourceLabel : 'Off';
+                const ambLabel = amb && amb.active ? amb.sourceLabel : 'Off';
+                ambPill.querySelector('.bk-pill-v').textContent = ambLabel;
+                // a long station name ellipsizes in the pill (books.css); the
+                // full name is here for a hover/long-press tooltip.
+                ambPill.title = amb && amb.active ? amb.sourceLabel : '';
                 ambPill.classList.toggle('set', !!(amb && amb.active));
             }
             q('.bk-lv-err').textContent = s.error || '';
