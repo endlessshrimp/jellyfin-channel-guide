@@ -59,8 +59,12 @@
         if (live) status = `<span class="hb-tk-status live"><i></i>${esc(g.status || 'Live')}</span>`;
         else if (post) status = `<span class="hb-tk-status final">${esc(g.status || 'Final')}</span>`;
         else {
+            // HOME-13: a game with no TV network at all but a streaming
+            // service (g.stream, sports/sports-data.js) names that instead
+            // — same as a channel always winning everywhere else in Sports.
             const net = g.channel ? `<span class="hb-tk-net">${esc(g.network || g.channel.name)} <b>${esc(g.channel.number)}</b></span>`
-                : g.network ? `<span class="hb-tk-net">${esc(g.network)}</span>` : '';
+                : g.network ? `<span class="hb-tk-net">${esc(g.network)}</span>`
+                    : g.stream ? `<span class="hb-tk-net">${esc(g.stream.name)}</span>` : '';
             status = `<span class="hb-tk-status">${esc(g.short || g.status || '')}</span>${net}`;
         }
         // soccer writes the home side first ("ARS v CHE")

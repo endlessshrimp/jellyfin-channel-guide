@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Sports games that are only on a streaming service now name it and link
+  to it, the same way a card names a TV channel.** A game that isn't on any
+  channel in the lineup — a Peacock- or Prime Video-exclusive game, an
+  ESPN+/ACC Network Extra college game, MLB's Apple TV+ Friday game — shows
+  the service's name and, where it opens on the web, a link to it, instead
+  of sitting there blank or naming a network you can't tune. A channel
+  always wins when there is one; this only ever shows up when there isn't.
+  On the Apple TV app, which can't open an outside site, it just names the
+  service instead of a dead link. Also fixed: a favorite team's game that's
+  exclusively streaming used to sometimes print the streaming service's
+  name as if it were an unresolved TV network ("Apple TV · not tunable") —
+  it gets the proper streaming badge now.
+
 ## v0.4.43
 
 - **The Cameras wall is a grid now, not a single row.** Every camera is

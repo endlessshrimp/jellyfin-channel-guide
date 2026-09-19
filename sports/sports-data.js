@@ -142,11 +142,63 @@
         national.concat(local).forEach((n) => push(all, n));
         return { national, local, all };
     };
-    const STREAMING = /^(MLB\.TV|ESPN\+|ESPN Unlmtd|Peacock|Paramount\+|Prime Video|Netflix|Apple TV|DAZN|Fubo|NBA League Pass|NHL Power Play|YouTube|Max|SECN\+|ACCNX|B1G\+|Victory\+)$/i;
+    const STREAMING = /^(MLB\.TV|ESPN\+|ESPN Unlmtd|Peacock|Paramount\+|Prime Video|Netflix|Apple TV\+?|Disney\+|DAZN|Fubo|W?NBA League Pass|NHL Power Play|YouTube( TV)?|Max|SECN\+|ACCNX|B1G\+|Victory\+)$/i;
     // every lineup channel that could carry one of `names` (plural: a
     // network can have more than one regional feed), and the name that hit —
     // see resolveChannels below for how a game picks the right one of them
     const chanLookup = (names) => (H() ? H().channels.forNetworkAllNow(names) : null);
+
+    // ---------- Streaming fallback (HOME-13) ----------
+    //
+    // When a game genuinely isn't on any TV channel Jason has (no national
+    // or local network name at all, so there's nothing to tune or even
+    // guide-resolve), but ESPN's broadcast list names a streaming service,
+    // the where-to-watch badge falls back to naming and linking that
+    // service — never instead of a resolvable channel, only when there
+    // isn't one. streamInfo() below turns a broadcast name into { name,
+    // url }; every screen reads the result off g.stream through the one
+    // shared descriptor, HomerHub.ui.watchOf (shared/hub.js).
+    //
+    // Plain web homepages only (Jason: no "you'd need X" upsell framing,
+    // just name and link it like a channel badge) — never an invented deep
+    // link. A handful of these (SEC Network+, ACC Network Extra, NHL Power
+    // Play) live inside the ESPN app/ESPN+ now rather than as their own
+    // site, so they point at the ESPN+ hub that actually carries them.
+    const STREAM_SERVICES = {
+        'mlb.tv': { name: 'MLB.TV', url: 'https://www.mlb.com/live-stream-games' },
+        'espn+': { name: 'ESPN+', url: 'https://www.espn.com/espnplus/' },
+        'espn unlmtd': { name: 'ESPN', url: 'https://www.espn.com/watch/' },
+        peacock: { name: 'Peacock', url: 'https://www.peacocktv.com' },
+        'paramount+': { name: 'Paramount+', url: 'https://www.paramountplus.com' },
+        'prime video': { name: 'Prime Video', url: 'https://www.amazon.com/primevideo' },
+        netflix: { name: 'Netflix', url: 'https://www.netflix.com' },
+        'apple tv': { name: 'Apple TV+', url: 'https://tv.apple.com' },
+        'apple tv+': { name: 'Apple TV+', url: 'https://tv.apple.com' },
+        'disney+': { name: 'Disney+', url: 'https://www.disneyplus.com' },
+        dazn: { name: 'DAZN', url: 'https://www.dazn.com' },
+        fubo: { name: 'Fubo', url: 'https://www.fubo.tv' },
+        'nba league pass': { name: 'NBA League Pass', url: 'https://www.nba.com/leaguepass' },
+        'wnba league pass': { name: 'WNBA League Pass', url: 'https://www.wnba.com/leaguepass' },
+        'nhl power play': { name: 'ESPN', url: 'https://www.espn.com/espnplus/' },
+        youtube: { name: 'YouTube TV', url: 'https://tv.youtube.com' },
+        'youtube tv': { name: 'YouTube TV', url: 'https://tv.youtube.com' },
+        max: { name: 'Max', url: 'https://www.max.com' },
+        'secn+': { name: 'SEC Network+', url: 'https://www.espn.com/watch/' },
+        accnx: { name: 'ACC Network Extra', url: 'https://www.espn.com/watch/' },
+        'b1g+': { name: 'B1G+', url: 'https://www.bigten.org' },
+        'victory+': { name: 'Victory+', url: 'https://www.victoryplus.com' }
+    };
+    // the first streaming name in `names` (order: national before local,
+    // see networksOf/nets.all), turned into { name, url }. url is null for
+    // a streaming name HOMER doesn't have a mapping for yet — the badge
+    // still names it, it just isn't clickable, same as an unresolved TV
+    // network today. Never guesses a URL.
+    const streamInfo = (names) => {
+        const raw = (names || []).find((n) => STREAMING.test(n));
+        if (!raw) return null;
+        const known = STREAM_SERVICES[raw.trim().toLowerCase()];
+        return known ? Object.assign({}, known) : { name: raw, url: null };
+    };
 
     // An ESPN event -> a HomerHub game (see HomerHub.ui.scoreCard)
     const game = (e, league) => {
@@ -195,8 +247,12 @@
         // one actually is, before this game is ever tunable
         const match = chanLookup(nets.all.filter(isTv).concat(nets.all));
         const favGame = away.fav || home.fav;
-        // the network to name: ours, else national TV, else (for a favorite) the local one
-        const network = match ? match.name : (nets.national.filter(isTv)[0] || (favGame ? nets.local.filter(isTv)[0] || nets.all[0] : '') || '');
+        // the network to name: ours, else national TV, else (for a favorite)
+        // the local one — never a streaming name (that was a real bug: a
+        // favorite's exclusively-streaming game with no other network could
+        // fall all the way through to nets.all[0] unfiltered and print
+        // "Peacock" here as if it were an unresolved TV network)
+        const network = match ? match.name : (nets.national.filter(isTv)[0] || (favGame ? nets.local.filter(isTv)[0] : '') || '');
         const short = state === 'pre' && F && !/TBD|postponed|canceled|cancelled|delayed/i.test(status)
             ? (F.day(start) === 'Today' ? F.time(start) : `${start.toLocaleDateString([], { weekday: 'short' })} ${F.time(start)}`)
             : status;
@@ -217,6 +273,11 @@
             // of _chanCandidates (if any) is really showing this game
             channel: null,
             _chanCandidates: match ? match.chans : [],
+            // the streaming fallback (HOME-13): only set when there's no TV
+            // network at all, so a resolvable-in-theory TV channel (even one
+            // that later turns out ambiguous in the guide) always wins over
+            // naming a streaming service
+            stream: network ? null : streamInfo(nets.all),
             note,
             name: e.shortName || e.name || '',
             priority: away.fav || home.fav,
@@ -579,7 +640,11 @@
         const lookup = nets.all.concat(nets.all.filter((n) => n.includes('/')).flatMap((n) => n.split('/').map((x) => x.trim())));
         const match = chanLookup(lookup);
         const favGame = away.fav || home.fav;
-        const network = match ? match.name : (nets.national[0] || (favGame ? nets.local[0] || '' : '') || '');
+        const isTv = (n) => !STREAMING.test(n);
+        // StatsAPI hands back MLB.TV / Apple TV+ broadcasts with the same
+        // type: 'TV' as a real channel's — never name one here as if it
+        // were an unresolved TV network (that's what stream is for, below)
+        const network = match ? match.name : (nets.national.filter(isTv)[0] || (favGame ? nets.local.filter(isTv)[0] : '') || '');
         const F = H() && H().fmt;
         const short = state === 'pre' && !dead && F && !st.startTimeTBD
             ? (F.day(start) === 'Today' ? F.time(start) : `${start.toLocaleDateString([], { weekday: 'short' })} ${F.time(start)}`)
@@ -599,6 +664,7 @@
             short,
             channel: null,
             _chanCandidates: match ? match.chans : [],
+            stream: network ? null : streamInfo(nets.all),
             note,
             name: `${away.abbr} @ ${home.abbr}`,
             priority: favGame,
