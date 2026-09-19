@@ -15,9 +15,11 @@
  *   └ ticker ───────────────────────────────────────────────────────┘
  *
  * - The TV window is a [data-homer-preview]: HomerPlayer pins the playing
- *   video over it. On open the hub tunes its default channel (by number,
- *   looked up at runtime), unless something is already playing or docked, or
- *   HomerHub.autoplay is false (tests), or it's a phone.
+ *   video over it. On open the hub never tunes anything on its own (HOME-59:
+ *   auto-tuning on open was disorienting) — it just shows the default
+ *   channel's logo (looked up by number at runtime) with "OK to watch X",
+ *   unless something is already playing or docked. OK on the TV window (or
+ *   on any channel/game/story card) tunes it, same as before.
  * - The guide lists the hub's channels (a filter on the lineup), in groups,
  *   with what's on now (and its progress) and next. OK tunes one into the TV
  *   window; F goes full screen. Its rows follow Settings → Guide size
@@ -146,7 +148,6 @@
         const p = HP();
         if (p && typeof p.fullscreen === 'function') p.fullscreen();
     };
-    const isVideoRoute = () => /^#\/video/.test(location.hash);
     const isPhone = () => !!(window.HomerLayout && window.HomerLayout.isPhone());
 
     // ---------- Size: the guide's Standard / Large, shared ----------
@@ -1282,17 +1283,13 @@
         guide.load().catch((err) => {
             console.warn('[HOMER Hub] channels:', err);
             $('.hb-guide-list').appendChild(ui.empty('Channels didn\'t load'));
-        }).then(() => { if (alive) autoTune(); });
-
-        // tune the default channel, unless something's playing already
-        const autoTune = () => {
-            if (!alive || !def.tv || !def.tv.channel) return;
-            if (HomerHub.autoplay === false || def.tv.autoplay === false) return;
-            if (window.HomerLayout && window.HomerLayout.isPhone()) return; // a phone: only when asked
-            if (docked() || nowPlaying() || isVideoRoute() || tuning) return;
-            if (!HP()) return;
-            if (defaultCh) watch(defaultCh);
-        };
+        });
+        // HOME-59: hubs used to auto-tune def.tv.channel here as soon as the
+        // guide loaded. That's gone — opening Sports/News (or any hub) no
+        // longer starts playback on its own. The TV window's idle state
+        // (paintTv, above) already shows the default channel's logo with
+        // "OK to watch X"; OK is what starts it, exactly as OK on any
+        // channel/game/story card always has.
 
         const startTab = Math.max(0, tabs.findIndex((t) => t.key === lastTabs.get(def.id)));
         applySize();
@@ -1422,7 +1419,7 @@
         version: VERSION,
         base: BASE,
         query: QUERY,
-        autoplay: true, // false: never tune the default channel on open (tests)
+        autoplay: true, // vestigial since HOME-59 (hubs never auto-tune on open now); kept so old test scripts that set this defensively before opening a hub still work
         // register a hub (again: replaces it, redrawing it if it's open)
         define(def) {
             if (!def || !def.id || !def.route) throw new Error('HomerHub.define: id and route are required');

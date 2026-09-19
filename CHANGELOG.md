@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Sports and News no longer start playing a channel the moment you open them.**
+  Opening either used to tune ESPN or CNN right away, whether you wanted it or
+  not. Now the TV window just shows the channel waiting there - press OK
+  (click it, or tap) to actually start watching, same as picking any other
+  game or channel.
+
 ## v0.4.42
 
 - **A fourth bulb camera, in the Garage.** Wired the same way as the other
